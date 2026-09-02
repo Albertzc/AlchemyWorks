@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env files
+.env
+.env.*
+
+# Workflow auto-generated state (regenerable via `python .workflow/workflow.py index`)
+.workflow/cache/
+.workflow/manifest.yaml
+.workflow/traceability.json
+.workflow/dashboard/index.html
+.workflow/context-packs/
+.workflow/task-runs/
+.workflow/__pycache__/
+
+# Logs
+logs/

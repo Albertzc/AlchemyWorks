@@ -1,0 +1,69 @@
+{
+  "version": "1.0.0",
+  "theme": "enterprise-light",
+  "colors": {
+    "primary": "#2563EB",
+    "primaryHover": "#1D4ED8",
+    "primarySoft": "#DBEAFE",
+    "background": "#F8FAFC",
+    "surface": "#FFFFFF",
+    "surfaceMuted": "#F1F5F9",
+    "text": "#0F172A",
+    "textMuted": "#64748B",
+    "border": "#E2E8F0",
+    "success": "#16A34A",
+    "successSoft": "#DCFCE7",
+    "warning": "#D97706",
+    "warningSoft": "#FEF3C7",
+    "danger": "#DC2626",
+    "dangerSoft": "#FEE2E2",
+    "info": "#0891B2",
+    "infoSoft": "#CFFAFE",
+    "focus": "#93C5FD",
+    "onPrimary": "#FFFFFF",
+    "overlay": "rgba(15, 23, 42, 0.35)"
+  },
+  "typography": {
+    "fontFamily": "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "fontSizeXs": "12px",
+    "fontSizeSm": "13px",
+    "fontSizeBase": "14px",
+    "fontSizeLg": "16px",
+    "fontSizeXl": "20px",
+    "fontSize2xl": "24px",
+    "fontWeightRegular": 400,
+    "fontWeightMedium": 500,
+    "fontWeightSemibold": 600,
+    "lineHeightNormal": 1.5,
+    "lineHeightTight": 1.25
+  },
+  "spacing": {
+    "unit": "4px",
+    "xs": "4px",
+    "sm": "8px",
+    "md": "12px",
+    "lg": "16px",
+    "xl": "24px",
+    "2xl": "32px",
+    "3xl": "48px"
+  },
+  "layout": {
+    "pageMaxWidth": "1440px",
+    "contentMaxWidth": "1200px",
+    "sidebarWidth": "240px",
+    "topbarHeight": "64px",
+    "mobileBreakpoint": "768px"
+  },
+  "shape": {
+    "radiusSm": "4px",
+    "radiusMd": "8px",
+    "radiusLg": "12px",
+    "radiusPill": "999px",
+    "borderWidth": "1px"
+  },
+  "shadow": {
+    "sm": "0 1px 2px rgba(15, 23, 42, 0.06)",
+    "md": "0 4px 12px rgba(15, 23, 42, 0.08)",
+    "lg": "0 12px 32px rgba(15, 23, 42, 0.12)"
+  }
+}
