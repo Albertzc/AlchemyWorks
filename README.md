@@ -168,14 +168,14 @@ python .workflow/workflow.py dashboard  --iteration v1.0       # 渲染静态 HT
 
 4 个本地脚本，让 LLM 不必亲自 grep / read 多份文档：
 
-| 脚本 | 命令 | 替代的 LLM 行为 | Token 节省（估）|
+| 脚本 | 命令 | 替代的 LLM 行为 |
 |---|---|---|---|
-| `stage_status.py` | `--iteration v1.0` | "v1.0 现在到哪个阶段？能进下一阶段吗？"| ~1500 / 询问 |
-| `id_registry.py` | `--iteration v1.0 --prefix FR` | "下一个可用 FR 是多少？" | ~400 / 询问 |
-| `query_id.py` | `--id FR-005 --iteration v1.0` | "FR-005 出现在哪些文件？" | ~300 / 询问 |
-| `check_links.py` | `--iteration v1.0` | "v1.0 文档里有断链吗？" | ~800 / RC |
+| `stage_status.py` | `--iteration v1.0` | "v1.0 现在到哪个阶段？能进下一阶段吗？" |
+| `id_registry.py` | `--iteration v1.0 --prefix FR` | "下一个可用 FR 是多少？" |
+| `query_id.py` | `--id FR-005 --iteration v1.0` | "FR-005 出现在哪些文件？" |
+| `check_links.py` | `--iteration v1.0` | "v1.0 文档里有断链吗？" |
 
-**约 3000 token / iteration 节省**。所有脚本纯 stdlib，可独立运行：
+所有脚本纯 stdlib，可独立运行：
 
 ```bash
 python .workflow/scripts/stage_status.py --iteration v1.0
