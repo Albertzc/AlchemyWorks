@@ -149,10 +149,8 @@ Keep the following chain synchronized:
 ```text
 Baseline (baseline/)
     ↓
-Product Requirement  (iteration/v{N}/01-product/v{N}-requirement.md)
+Product Requirement  (iteration/v{N}/01-product/v{N}-requirement.md)   # 需求 + 功能规格（FS 作为 FR 子项内嵌）
     ↓
-Feature Specification (iteration/v{N}/01-product/v{N}-feature-specification.md)
-    +
 HTML Prototype       (iteration/v{N}/01-product/v{N}-prototype.html)
     ↓
 Architecture Design   (iteration/v{N}/02-design/v{N}-architecture-design.md)
@@ -165,23 +163,15 @@ Task Plan DAG         (iteration/v{N}/03-planning/v{N}-task-plan-dag.md)
 +
 Validation Plan       (iteration/v{N}/03-planning/v{N}-validation-plan.md)
     ↓
-Source Code           (iteration/v{N}/04-implementation/v{N}-source-code.md)
+Source Code           (iteration/v{N}/04-implementation/v{N}-source-code.md)   # 实施主记录 + ISSUE 列表
 +
 Test Results          (iteration/v{N}/04-implementation/v{N}-test-results.md)
-+
-Issue Fixes           (iteration/v{N}/04-implementation/v{N}-issue-fixes.md)
     ↓
 Pull Request          (iteration/v{N}/05-pull-request/v{N}-pull-request.md)
-+
-Push Record           (iteration/v{N}/05-pull-request/v{N}-push-record.md)
     ↓
-Project Overview      (iteration/v{N}/06-rc-review-release/v{N}-project-overview.md)
-+
-User Guide            (iteration/v{N}/06-rc-review-release/v{N}-user-guide.md)
-+
-Final README          (iteration/v{N}/06-rc-review-release/v{N}-README.md)
+Release Notes         (iteration/v{N}/06-rc-review-release/v{N}-release-notes.md)   # 合并自原 3 份 RC 文档
     ↓
-Iteration Changelog   (iteration/v{N}/01-product/v{N}-iteration-changelog.md)  # 封档说明，RC 完成后产出
+Iteration Changelog   (iteration/v{N}/01-product/v{N}-iteration-changelog.md)    # 封档说明，RC 完成后产出
 ```
 
 Update documentation when implementation changes:
@@ -396,7 +386,7 @@ Iterations use a two-segment identifier **`v{major}.{minor}`** (e.g. `v1.0`, `v1
   - Active versions live under `iteration/v{major}.{minor}/`.
   - All versioned artifacts use the `v{major}.{minor}-` filename prefix.
   - Cross-version references in frontmatter must point to a real existing iteration (e.g. `base_version: v1.0`).
-- **RC-complete** is reached only when `iteration/v{major}.{minor}/<final-stage>/v{major}.{minor}-README.md` has `status: Approved`.
+- **RC-complete** is reached only when `iteration/v{major}.{minor}/06-rc-review-release/v{major}.{minor}-release-notes.md` has `status: Approved`.
 - Upon RC completion of `v{major}.{minor}`:
   1. Move the previous version's directory to `iteration/archive/v{major}.{minor-1}/` (within the same major). When the version is the first minor of a new major, archive the previous major to `iteration/archive/v{prev_major}.0/`.
   2. Create `iteration/v{major}.{minor}/01-product/v{major}.{minor}-iteration-changelog.md` summarizing the cycle.
