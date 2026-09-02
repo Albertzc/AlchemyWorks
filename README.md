@@ -111,7 +111,7 @@ iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 | `manage-iteration` | 创建 / 归档版本 | `iteration/v{N}/` + `archive/v{N}/` |
 | `workflow-governance` | 任意阶段 | 门禁 + 索引 + 追溯 + Context Pack |
 
-所有 Skill 位于 `.agents/skills/<name>/SKILL.md`，触发时由 Hermes 自动加载。
+所有 Skill 位于 `.agents/skills/<name>/SKILL.md`，触发条件命中时自动加载。
 
 ---
 
