@@ -571,7 +571,7 @@ def static_dashboard_fallback(data: dict) -> str:
         for task in data["tasks"]
     ) or '<p class="muted">暂无任务执行记录</p>'
     return (
-        '<div data-dashboard-fallback><section class="summary"><header><div><h1>Nyxigen 项目执行视图</h1>'
+        '<div data-dashboard-fallback><section class="summary"><header><div><h1>Alchemy Works (AW) 软件开发工作流 · 项目执行视图</h1>'
         f'<p class="muted">迭代 {html.escape(data["iteration"])} · 更新时间 {html.escape(data["generated_at"])}</p>'
         f'</div><span class="badge {html.escape(data["gate_status"])}">门禁：{html.escape(data["gate_status"])}</span></header>'
         f'<div class="summary-grid"><section class="summary-item"><h2>最近任务结论</h2>{tasks}</section>'
