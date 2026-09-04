@@ -190,11 +190,49 @@ def required_inputs(iteration: str, stage: str) -> list[str]:
     if stage == "01-product":
         return BASELINE_FILES
     if stage == "02-design":
-        return [
+        # Per templates/product.md §6 + README §10: v1.1+ iterations merge FS
+        # paragraphs into requirement.md, so feature-specification.md is an
+        # optional companion file. We still require it for v1.0 (the only
+        # version where it is independently produced) and allow it to be
+        # absent for later versions. Detect by scanning the frontmatter of
+        # requirement.md: when `product_version` looks like "v1.0" or
+        # `document_version` ends in ".0", the FS file is required.
+        #
+        # Boundary behaviour: when requirement.md itself does not yet
+        # exist (the typical fresh-iteration case), we cannot read its
+        # frontmatter to learn the version, so we conservatively require
+        # the FS file only when the iteration literal looks like a `.0`
+        # release (e.g. v1.0, v2.0). Any `v{major}.{minor>=1}` skips it.
+        requirement_path = (
+            ROOT / f"iteration/{iteration}/01-product/{iteration}-requirement.md"
+        )
+        inputs: list[str] = [
             f"iteration/{iteration}/01-product/{iteration}-requirement.md",
-            f"iteration/{iteration}/01-product/{iteration}-feature-specification.md",
             f"iteration/{iteration}/01-product/{iteration}-prototype.html",
         ]
+        fs_required = True
+        if not requirement_path.exists():
+            # No requirement yet → treat as an incremental iteration: minor
+            # bumps (v1.1, v2.3 …) skip FS; only literal .0 releases keep it.
+            fs_required = iteration.endswith(".0")
+        else:
+            frontmatter, _ = parse_frontmatter(requirement_path.read_text(encoding="utf-8"))
+            version = (
+                frontmatter.get("product_version", "")
+                or frontmatter.get("version", "")
+                or frontmatter.get("document_version", "")
+            )
+            # Allow omission when version explicitly says "MVP" (treated as
+            # iterative) or any minor >= 1. v1.0 still demands the file.
+            if version and not version.endswith(".0"):
+                fs_required = False
+            elif version.lower().startswith("mvp"):
+                fs_required = False
+        if fs_required:
+            inputs.append(
+                f"iteration/{iteration}/01-product/{iteration}-feature-specification.md"
+            )
+        return inputs
     if stage == "03-planning":
         return [
             f"iteration/{iteration}/02-design/{iteration}-architecture-design.md",
