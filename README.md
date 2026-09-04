@@ -131,7 +131,7 @@ iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 
 ## 6. 工作流 CLI（`.workflow/workflow.py`，纯 Python 标准库）
 
-```powershell
+```bash
 # 索引与门禁
 python .workflow/workflow.py index      --iteration v1.0       # 生成 manifest + traceability + 缓存
 python .workflow/workflow.py validate   --iteration v1.0       # 校验全部 stage
@@ -261,6 +261,16 @@ python .workflow/scripts/query_id.py --id FR-005 --iteration v1.0
 #   - iteration/v1.0/01-product/v1.0-requirement.md  (FS 作为 FR 子项内嵌)
 ```
 
+### 9.5 跨版本 ID diff
+
+```bash
+# "v1.0 → v1.1 改了哪些 ID？哪些 FR 被废弃了？"
+python .workflow/scripts/diff_versions.py --from v1.0 --to v1.1
+# 输出：4 个 bucket: added / modified / removed / deprecated
+# - 当有 deprecated ID 时脚本返回 exit 2（便于 CI gate 拦截）
+# - --json 输出完整结构（含每个 modified ID 的 added_in / removed_from）
+```
+
 ---
 
 ## 10. 阶段产物精简（当前状态）
@@ -286,7 +296,7 @@ python .workflow/workflow.py validate --iteration v1.0
 python .workflow/scripts/stage_status.py --iteration v1.0
 
 # 3. 跑单测
-python -m unittest .workflow/tests/test_workflow.py
+python -m unittest discover -s .workflow/tests -p test_workflow.py
 
 # 4. 检查断链
 python .workflow/scripts/check_links.py --iteration v1.0
