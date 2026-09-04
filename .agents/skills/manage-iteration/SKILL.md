@@ -76,7 +76,7 @@ iteration/v{N}/
 
 ### 3. Archive Previous Version
 
-触发条件：`iteration/v{major}.{minor}/06-rc-review-release/v{major}.{minor}-README.md` 标记为 `status: Approved` 时。
+触发条件：`iteration/v{major}.{minor}/06-rc-review-release/v{major}.{minor}-release-notes.md` 标记为 `status: Approved` 时（**注意**：文件名以 README §3 流程图与 `.workflow/workflow.py` 为准；旧文档曾用 `-README.md`，已统一为 `-release-notes.md`）。
 
 执行步骤：
 
@@ -89,7 +89,7 @@ iteration/v{N}/
 
 - archived_at: YYYY-MM-DD
 - superseded_by: v{major}.{minor+1}  (in-major bump)  OR  v{major+1}.0  (major promotion)
-- rc_artifact: iteration/v{N}/06-rc-review-release/v{N}-README.md
+- rc_artifact: iteration/v{N}/06-rc-review-release/v{N}-release-notes.md
 - changelog:    iteration/v{major}.{minor}/01-product/v{major}.{minor}-iteration-changelog.md  (引用)
 - note: 此目录只读，不得修改。
 ```
@@ -100,7 +100,7 @@ iteration/v{N}/
 
 返回最新**已 Approved** 的版本号：
 
-1. 读取 `iteration/` 下所有 `v{major}.{minor}/06-rc-review-release/v{major}.{minor}-README.md` 的 frontmatter `status`。
+1. 读取 `iteration/` 下所有 `v{major}.{minor}/06-rc-review-release/v{major}.{minor}-release-notes.md` 的 frontmatter `status`。
 2. 按 `(major, minor)` 降序，找到首个 `status: Approved` 的迭代。
 3. 若全部未 Approved，返回 `(major, minor)` 最大的迭代（即使是 draft）。
 
