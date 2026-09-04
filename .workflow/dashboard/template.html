@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alchemy Works (AW) · Project Dashboard</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: #f4f6f8;
+      color: #17202a;
+    }
+
+    body {
+      margin: 0;
+      padding: 32px;
+    }
+
+    main {
+      max-width: 1180px;
+      margin: auto;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .summary {
+      background: white;
+      border: 1px solid #e4e7ec;
+      border-radius: 16px;
+      padding: 22px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 2px #1018280d;
+    }
+
+    .summary header {
+      margin-bottom: 18px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1.25fr 1fr 1.35fr;
+      gap: 12px;
+    }
+
+    .summary-item {
+      min-height: 74px;
+      padding: 14px;
+      border: 1px solid #eef0f3;
+      border-radius: 10px;
+      background: #fafbfc;
+    }
+
+    .summary-item h2 {
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+
+    h1,
+    h2,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 28px;
+    }
+
+    h2 {
+      font-size: 18px;
+      margin-bottom: 12px;
+    }
+
+    .muted {
+      color: #667085;
+      font-size: 13px;
+    }
+
+    .badge {
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .passed,
+    .approved,
+    .succeeded {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .blocked,
+    .failed {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .in_progress {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .empty {
+      background: #e5e7eb;
+      color: #4b5563;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid #e4e7ec;
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 1px 2px #1018280d;
+    }
+
+    .stage {
+      min-height: 90px;
+    }
+
+    .stage-head,
+    .task-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .stage-list {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .task-row {
+      padding: 10px 0;
+      border-bottom: 1px solid #eef0f3;
+    }
+
+    .task-row:last-child {
+      border-bottom: 0;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 12px;
+    }
+
+    @media (max-width: 800px) {
+      body {
+        padding: 18px;
+      }
+
+      header {
+        display: block;
+      }
+
+      .summary-grid,
+      .stage-list {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main id="app">__DASHBOARD_FALLBACK__</main>
+  <script>
+    const data = __DASHBOARD_DATA__;
+    const esc = (value) => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+    const label = (value) => ({ passed: '通过', blocked: '阻断', approved: '已批准', in_progress: '进行中', empty: '空', succeeded: '成功', failed: '失败' }[value] || value);
+    const stages = data.stages.map((stage) => `<article class="card stage"><div class="stage-head"><strong>${esc(stage.name)}</strong><span class="badge ${esc(stage.status)}">${label(stage.status)}</span></div><p class="muted">${stage.artifact_count} 个产物</p></article>`).join('');
+    const tasks = data.tasks.length ? data.tasks.map((task) => `<div class="task-row"><code>${esc(task.task_id)}</code><span><span class="badge ${esc(task.result)}">${label(task.result)}</span> <span class="muted">${esc(task.recorded_at || '')}</span></span></div>`).join('') : '<p class="muted">暂无任务执行记录</p>';
+    document.getElementById('app').innerHTML = `<section class="summary"><header><div><h1>Alchemy Works (AW) 软件开发工作流 · 项目执行视图</h1><p class="muted">迭代 ${esc(data.iteration)} · 更新时间 ${esc(data.generated_at)}</p></div><span class="badge ${esc(data.gate_status)}">门禁：${label(data.gate_status)}</span></header><div class="summary-grid"><section class="summary-item"><h2>最近任务结论</h2>${tasks}</section><section class="summary-item"><h2>数据来源</h2><p class="muted"><code>${esc(data.manifest_path)}</code></p><p class="muted"><code>${esc(data.traceability_path)}</code></p></section><section class="summary-item"><h2>使用方式</h2><p class="muted">任务完成后运行 <code>task-finished</code> 刷新本视图，并提交任务结论。</p></section></div></section><section class="stage-list">${stages}</section>`;
+  </script>
+</body>
+
+</html>
