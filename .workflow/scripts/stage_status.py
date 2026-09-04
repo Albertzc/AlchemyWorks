@@ -18,6 +18,7 @@ THIS = Path(__file__).resolve()
 sys.path.insert(0, str(THIS.parents[1]))
 
 from workflow import (  # noqa: E402
+    ALL_STAGES,
     STAGES,
     discover_iteration,
     gate_code,
@@ -27,7 +28,7 @@ from workflow import (  # noqa: E402
 
 def collect(iteration: str) -> dict:
     artifacts = load_artifacts(iteration)
-    by_stage: dict[str, list[dict]] = {s: [] for s in ["00-baseline", *STAGES]}
+    by_stage: dict[str, list[dict]] = {s: [] for s in ALL_STAGES}
     for item in artifacts:
         by_stage[item.stage].append({
             "path": item.path,

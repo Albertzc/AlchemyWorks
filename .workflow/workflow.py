@@ -19,7 +19,24 @@ from typing import Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_DIR = ROOT / ".workflow"
-STAGES = ["01-product", "02-design", "03-planning", "04-implementation", "05-pull-request", "06-rc-review-release"]
+BASELINE_STAGE = "00-baseline"
+STAGES = [
+    "01-product",
+    "02-design",
+    "03-planning",
+    "04-implementation",
+    "05-pull-request",
+    "06-rc-review-release",
+]
+# Canonical display order used by `write_manifest`, `dashboard_data`, and
+# `stage_status`. Use this instead of repeating ["00-baseline", *STAGES].
+ALL_STAGES = (BASELINE_STAGE, *STAGES)
+# Stages whose artifacts are NEVER used as context sources by
+# `context_pack()`. Baseline is config (not task input); 05/06 are
+# post-execution summaries produced only after tasks are finished.
+CONTEXT_PACK_EXCLUDED_STAGES = frozenset(
+    {BASELINE_STAGE, "05-pull-request", "06-rc-review-release"}
+)
 BASELINE_FILES = [
     "baseline/01-product-vision.md",
     "baseline/02-product-charter.md",
@@ -133,7 +150,7 @@ def discover_iteration() -> str:
 
 def artifact_paths(iteration: str) -> Iterable[tuple[str, str]]:
     for relative in BASELINE_FILES:
-        yield relative, "00-baseline"
+        yield relative, BASELINE_STAGE
     base = ROOT / "iteration" / iteration
     if not base.exists():
         return
@@ -341,7 +358,7 @@ def validate(iteration: str, stage: str | None) -> int:
             # FileNotFoundError on the (non-existent) read.
             continue
         text = (ROOT / item.path).read_text(encoding="utf-8")
-        if item.stage != "00-baseline" and item.frontmatter is False and item.path.endswith(".html"):
+        if item.stage != BASELINE_STAGE and item.frontmatter is False and item.path.endswith(".html"):
             warnings.append(f"artifact has no frontmatter status: {item.path}")
         if PLACEHOLDER_RE.search(text) and item.status == "Approved":
             errors.append(f"Approved artifact contains unresolved placeholder: {item.path}")
@@ -469,7 +486,7 @@ def write_manifest(iteration: str, artifacts: list[Artifact]) -> None:
         f"iteration: '{iteration}'",
         "stages:",
     ]
-    for stage in ["00-baseline", *STAGES]:
+    for stage in ALL_STAGES:
         stage_items = [item for item in artifacts if item.stage == stage]
         lines.append(f"  {stage}:")
         if not stage_items:
@@ -521,7 +538,7 @@ def context_pack(iteration: str, task_id: str) -> int:
     identifiers = sorted(set(ID_RE.findall(task_text)))
     selected: list[tuple[str, str, int]] = []
     for item in artifacts:
-        if item.stage in {"00-baseline", "05-pull-request", "06-rc-review-release"}:
+        if item.stage in CONTEXT_PACK_EXCLUDED_STAGES:
             continue
         text = (ROOT / item.path).read_text(encoding="utf-8")
         for heading, content, line in sections(text):
@@ -590,7 +607,7 @@ def gate_code(iteration: str) -> int:
 def dashboard_data(iteration: str) -> dict:
     artifacts = load_artifacts(iteration)
     records = task_records(iteration)
-    by_stage: dict[str, list[dict]] = {stage: [] for stage in ["00-baseline", *STAGES]}
+    by_stage: dict[str, list[dict]] = {stage: [] for stage in ALL_STAGES}
     for item in artifacts:
         by_stage[item.stage].append({"path": item.path, "status": item.status, "lines": item.lines, "sha256": item.sha256})
     stages = []
@@ -598,9 +615,9 @@ def dashboard_data(iteration: str) -> dict:
     for stage, items in by_stage.items():
         if not items:
             status = "empty"
-        elif stage == "00-baseline" and all(item["status"] == "Approved" for item in items):
+        elif stage == BASELINE_STAGE and all(item["status"] == "Approved" for item in items):
             status = "approved" if overall_gate == 0 else "blocked"
-        elif stage != "00-baseline" and all(item["status"] == "Approved" for item in items):
+        elif stage != BASELINE_STAGE and all(item["status"] == "Approved" for item in items):
             status = "approved"
         else:
             status = "in_progress"
