@@ -79,7 +79,17 @@ After each TASK's code and verification work, run:
 python .workflow/workflow.py task-finished --iteration vN --task TASK-XXX-NNN --result succeeded
 ```
 
-Use `failed` when verification fails and `blocked` when a required decision or dependency prevents completion. Do not report the TASK as complete until the command has refreshed `.workflow/dashboard/index.html` and printed the task conclusion for human confirmation.
+Default behaviour (matches the unit test `test_task_finished_records_result_and_refreshes_dashboard`): the call appends one JSON record to `.workflow/task-runs/` and prints the conclusion. It does **not** re-render the dashboard — that was made explicit default-off to keep repeated `task-finished` calls O(1) instead of O(N_artifacts).
+
+To see the new task on the dashboard afterwards, run **one** of:
+
+```powershell
+python .workflow/workflow.py task-finished ... --refresh-dashboard
+# or separately:
+python .workflow/workflow.py dashboard --iteration vN
+```
+
+Use `failed` when verification fails and `blocked` when a required decision or dependency prevents completion. Do not report the TASK as complete until the task-run JSON has been written and the printed conclusion has been confirmed.
 
 ### 单次 prompt 预算红线
 
