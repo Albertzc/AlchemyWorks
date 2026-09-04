@@ -1,4 +1,7 @@
 import json
+import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -140,6 +143,102 @@ class WorkflowTests(unittest.TestCase):
                 )
         finally:
             temp.cleanup()
+
+
+class DiffVersionsTests(unittest.TestCase):
+    """End-to-end diff: a synthetic two-iteration repo driven through a
+    subprocess call to the real script. Exercises the regex parser for
+    `change_set.deprecated`, which the plain workflow pytest harness
+    does not otherwise cover.
+    """
+
+    def _make_two_iter_repo(self, tmp: Path) -> tuple[Path, Path]:
+        """Build a temp repo with v1.0 + v1.1, then return (sandbox, repo)."""
+        sandbox = tmp / "sandbox"
+        repo = sandbox / "repo"
+        (repo / "baseline").mkdir(parents=True)
+        (repo / ".workflow" / "dashboard").mkdir(parents=True)
+        (repo / ".workflow" / "dashboard" / "template.html").write_text(
+            "<x>__DASHBOARD_FALLBACK__</x>", encoding="utf-8"
+        )
+        for name in [
+            "01-product-vision",
+            "02-product-charter",
+            "03-tech-stack-decision",
+            "04-glossary",
+        ]:
+            (repo / "baseline" / f"{name}.md").write_text(
+                f"---\nstatus: Approved\n---\n# {name}\n", encoding="utf-8"
+            )
+
+        v10 = repo / "iteration" / "v1.0" / "01-product"
+        v10.mkdir(parents=True)
+        (v10 / "v1.0-requirement.md").write_text(
+            "---\nstatus: Approved\nproduct_name: demo\n---\n# v1.0\nFR-001 TASK-API-001\n",
+            encoding="utf-8",
+        )
+        (v10 / "v1.0-feature-specification.md").write_text(
+            "---\nstatus: Approved\n---\n# FS\nFR-003\n",
+            encoding="utf-8",
+        )
+
+        v11 = repo / "iteration" / "v1.1" / "01-product"
+        v11.mkdir(parents=True)
+        (v11 / "v1.1-requirement.md").write_text(
+            "---\n"
+            "status: Approved\n"
+            "product_name: demo\n"
+            "product_version: v1.1\n"
+            "change_set:\n"
+            "  added: [FR-005]\n"
+            "  modified: [TASK-API-001]\n"
+            "  deprecated: [FR-003]\n"
+            "---\n"
+            "# v1.1\nFR-001 FR-005 TASK-API-001\n",
+            encoding="utf-8",
+        )
+
+        # Copy the real workflow + the diff script into the sandbox so the
+        # script's `from workflow import` resolves correctly under cwd.
+        shutil.copytree(
+            Path(__file__).resolve().parents[1],
+            repo / ".workflow",
+            dirs_exist_ok=True,
+        )
+        shutil.copy(
+            Path(__file__).resolve().parents[1] / "scripts" / "diff_versions.py",
+            repo / ".workflow" / "scripts" / "diff_versions.py",
+        )
+        return sandbox, repo
+
+    def test_diff_marks_deprecated(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = Path(raw)
+            sandbox, repo = self._make_two_iter_repo(tmp)
+            try:
+                result = subprocess.run(
+                    [sys.executable, ".workflow/scripts/diff_versions.py",
+                     "--from", "v1.0", "--to", "v1.1", "--json"],
+                    cwd=repo, capture_output=True, text=True,
+                )
+                self.assertEqual(
+                    result.returncode, 2,
+                    msg=(
+                        f"exit={result.returncode}\n"
+                        f"stdout={result.stdout!r}\n"
+                        f"stderr={result.stderr!r}"
+                    ),
+                )
+                payload = json.loads(result.stdout)
+                self.assertEqual(payload["deprecated"], ["FR-003"])
+                self.assertIn("FR-005", payload["added"])
+                # FR-001 exists in both but in different files → modified
+                self.assertTrue(
+                    any(m["id"] == "FR-001" for m in payload["modified"]),
+                    msg=f"expected FR-001 in modified, got {payload['modified']!r}",
+                )
+            finally:
+                shutil.rmtree(sandbox, ignore_errors=True)
 
 
 if __name__ == "__main__":

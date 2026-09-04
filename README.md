@@ -172,6 +172,7 @@ python .workflow/workflow.py dashboard  --iteration v1.0       # 渲染静态 HT
 | `id_registry.py` | `--iteration v1.0 --prefix FR` | "下一个可用 FR 是多少？" |
 | `query_id.py` | `--id FR-005 --iteration v1.0` | "FR-005 出现在哪些文件？" |
 | `check_links.py` | `--iteration v1.0` | "v1.0 文档里有断链吗？" |
+| `diff_versions.py` | `--from v1.0 --to v1.1` | "v1.0 → v1.1 改了哪些 ID？哪些 deprecated？" |
 
 所有脚本纯 stdlib，可独立运行：
 
