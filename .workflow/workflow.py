@@ -420,8 +420,46 @@ def primary_prefixes(path: str) -> set[str]:
 
 
 def write_json(path: Path, value: object) -> None:
+    """Write JSON with a parent-directory mkdir.
+
+    Atomicity note: this call is **non-atomic** (write directly to the
+    destination). For state files that are read concurrently by other
+    processes (`cache/context-packs.json`), prefer `write_json_atomic`.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def write_json_atomic(path: Path, value: object) -> None:
+    """Write JSON atomically via a sibling temp file + rename.
+
+    Concurrent readers either see the old content or the new content,
+    never a half-written file. Used for `cache/context-packs.json`,
+    which is read by `context_pack()` on every call and could be
+    written from concurrent agents / CI jobs. Cost is one extra
+    rename per write; this is fine for state files written O(once)
+    per TASK.
+    """
+    import os
+    import tempfile
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(value, ensure_ascii=False, indent=2) + "\n"
+    fd, tmp_path = tempfile.mkstemp(
+        prefix=path.name + ".", suffix=".tmp", dir=str(path.parent)
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(payload)
+        os.replace(tmp_path, path)
+    except Exception:
+        # Best-effort cleanup of the leftover temp file; never raise from cleanup
+        # because the original exception (if any) is more informative.
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def write_manifest(iteration: str, artifacts: list[Artifact]) -> None:
@@ -522,9 +560,8 @@ def context_pack(iteration: str, task_id: str) -> int:
     lines.extend(["## Loading Rules", "", "This pack is task-scoped. Load the full upstream artifact only when a required detail is absent here.", ""])
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text("\n".join(lines), encoding="utf-8")
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache[str(output.relative_to(ROOT))] = cache_key
-    write_json(cache_path, cache)
+    write_json_atomic(cache_path, cache)
     print(f"context pack written: {output.relative_to(ROOT)}")
     print(f"selected excerpts: {len(selected)}, identifiers: {len(identifiers)}")
     return 0
