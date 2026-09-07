@@ -10,7 +10,7 @@ description: Use when creating a new iteration directory (iteration/v{N}/), arch
 集中处理所有版本号相关操作。版本号格式：`v{major}.{minor}`，详见 AGENTS.md §17。
 
 1. **检测下一个迭代号**：扫描 `iteration/` 下现有 `v{N}(.{M})?/` 目录，返回 `v{N+1}.0`（major升级）或 `v{N}.{M+1}`（minor升级）。
-2. **创建新迭代骨架**：在 `iteration/v{N}/` 下创建 6 个阶段的空子目录。
+2. **创建新迭代骨架**：在 `iteration/v{N}/` 下创建 5 个交付阶段的空子目录；用户原始需求统一保存在 `iteration/raw-requirement/`。
 3. **归档旧迭代**：把已 RC 完成的 `iteration/v{N}/` 整体迁移到 `iteration/archive/v{N}/`，记录归档时间。
 4. **解析当前活动迭代**：返回最新已 Approved 的迭代号，供其他 skill 引用。
 
@@ -26,6 +26,17 @@ Project Root
 ```
 
 ## Operations
+
+### 0. Initialize Project and Version
+
+```powershell
+python .workflow/workflow.py init
+python .workflow/workflow.py init-version
+```
+
+`init` 创建 `baseline/raw-requirement/`、`iteration/raw-requirement/`、`iteration/` 和 `workspace/`，并在每个目录写入用途说明 `README.md`。`iteration/raw-requirement/README.md` 是唯一的说明文件；除此之外仅保存用户原始材料。适用于尚未开始的项目，不创建版本目录。
+
+`init-version` 只能在 `validate --stage 00-baseline` 通过后创建下一个连续版本的目录骨架，并自动刷新 manifest。首个版本为 `v1.0`；它只创建五个正式阶段目录，不创建或批准任何产物。
 
 ### 1. Detect Next Version
 
@@ -58,7 +69,7 @@ def next_version(iteration_dir: Path) -> str:
     return f"v{major}.{minor + 1}"
 ```
 
-未通过 `baseline-gate` 时不得调用 `next_version` 返回 `v1.0` 的情况（必须先 baseline）。
+未通过 `stage-gate` 的 `00-baseline` 时不得调用 `next_version` 返回 `v1.0` 的情况（必须先通过基线审核）。
 
 ### 2. Create New Version Skeleton
 
@@ -68,15 +79,14 @@ iteration/v{N}/
 ├── 02-design/
 ├── 03-planning/
 ├── 04-implementation/
-├── 05-pull-request/
-└── 06-rc-review-release/
+└── 05-review-release/
 ```
 
-仅创建空目录；不放任何文件。后续各阶段 skill 自行写入产物。
+仅创建空目录；不放任何文件。用户原始需求集中保存到 `iteration/raw-requirement/`，保持原格式与原文；它是 `normalize-requirement` 的输入，不要求 `status: Approved`。先运行 `route-requirement` 取得其目标版本；原始文件只读，Agent 不得修改、重命名或删除。
 
 ### 3. Archive Previous Version
 
-触发条件：`iteration/v{major}.{minor}/06-rc-review-release/v{major}.{minor}-release-notes.md` 标记为 `status: Approved` 时（**注意**：文件名以 README §3 流程图与 `.workflow/workflow.py` 为准；旧文档曾用 `-README.md`，已统一为 `-release-notes.md`）。
+触发条件：`iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-review-release.md` 标记为 `status: Approved` 时。该产物同时记录评审、合并、发布决定与 release notes。
 
 执行步骤：
 
@@ -89,7 +99,7 @@ iteration/v{N}/
 
 - archived_at: YYYY-MM-DD
 - superseded_by: v{major}.{minor+1}  (in-major bump)  OR  v{major+1}.0  (major promotion)
-- rc_artifact: iteration/v{N}/06-rc-review-release/v{N}-release-notes.md
+- rc_artifact: iteration/v{N}/05-review-release/v{N}-review-release.md
 - changelog:    iteration/v{major}.{minor}/01-product/v{major}.{minor}-iteration-changelog.md  (引用)
 - note: 此目录只读，不得修改。
 ```
@@ -100,7 +110,7 @@ iteration/v{N}/
 
 返回最新**已 Approved** 的版本号：
 
-1. 读取 `iteration/` 下所有 `v{major}.{minor}/06-rc-review-release/v{major}.{minor}-release-notes.md` 的 frontmatter `status`。
+1. 读取 `iteration/` 下所有 `v{major}.{minor}/05-review-release/v{major}.{minor}-review-release.md` 的 frontmatter `status`。
 2. 按 `(major, minor)` 降序，找到首个 `status: Approved` 的迭代。
 3. 若全部未 Approved，返回 `(major, minor)` 最大的迭代（即使是 draft）。
 
@@ -108,7 +118,7 @@ iteration/v{N}/
 
 - **不允许跳过迭代号**（如禁止从 v1.0 直接到 v1.2；major 之间禁止跳号 v1 → v3）。
 - **不允许覆盖** `iteration/archive/` 下的已归档迭代。
-- **不允许创建** `iteration/v1.0/` 而未通过 `baseline-gate`（参见 `baseline-gate` skill）。后续 minor 升级不走 baseline-gate。
+- **不允许创建** `iteration/v1.0/` 而未通过 `stage-gate` 的 `00-baseline` 门禁。后续 minor 升级须先归档其原始需求，再进入 `01-product`。
 - 检测到冲突（如手动创建了 `v{major}.{minor}/` 但未走 skill）时，报告并请求用户决策。
 
 ## Common Mistakes

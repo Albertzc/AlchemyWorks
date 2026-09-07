@@ -14,27 +14,30 @@
 │   ├── 03-tech-stack-decision.md
 │   ├── 04-glossary.md
 │   ├── decisions/                   # 重大架构决策记录
-│   └── raw-requirement/             # 原始需求来源（只读）
+│   └── raw-requirement/             # baseline 为空时归档用户原始需求
+│       └── README.md                 # 原始需求输入说明
 ├── iteration/                       # 版本化产物（每个迭代一个目录）
-│   └── v{major}.{minor}/            # 双段号；简写 v{N} = v{N}.0
+│   ├── README.md                     # 版本目录使用说明
+│   ├── raw-requirement/              # 用户原始需求集中库（只读）
+│   └── v{major}.{minor}/            # 双段号；
 │       ├── 01-product/
 │       ├── 02-design/
 │       ├── 03-planning/
 │       ├── 04-implementation/
-│       ├── 05-pull-request/
-│       └── 06-rc-review-release/
+│       └── 05-review-release/
 ├── templates/                       # 跨版本复用的文档与代码模板（已合并为 3 个）
 ├── workspace/                       # 真实代码仓库（Git；后端 + 前端）
+│   └── README.md                     # 源码工作区说明
 ├── .agents/skills/                  # 阶段化 AI Agent Skill（6 个）
 └── .workflow/                       # 工作流 CLI + 状态 + 缓存
     ├── workflow.py                  # 主 CLI（纯 stdlib）
     ├── manifest.yaml                # 产物索引（自动）
     ├── traceability.json            # 稳定 ID 追溯图（自动）
-    ├── cache/                       # hash 缓存
+    ├── cache/                       # context-pack 缓存
     ├── context-packs/               # TASK-scoped 上下文包
     ├── task-runs/                   # TASK 结论 JSON
     ├── dashboard/                   # 静态 HTML 仪表盘
-    └── scripts/                     # 4 个 LLM 自动化脚本
+    └── scripts/                     # 5 个 LLM 自动化脚本
 ```
 
 ---
@@ -48,20 +51,28 @@
 | **首版** | `v1.0`（与首次 `iteration/` 目录同号）|
 | **小迭代** | `v{major}.{minor+1}`（每次迭代**严格 +1**，不允许跳号如 `v1.2` → `v1.4`）|
 | **重大变更** | `v{major+1}.0`（架构重置、新项目、技术栈变更）|
-| **向后兼容** | `v{N}` 简写 = `v{N}.0`（CLI 与文件系统均接受）|
 | **目录命名** | `iteration/v{major}.{minor}/` |
 | **文件前缀** | `v{major}.{minor}-*.md` / `.html` |
 | **归档** | RC 完成后旧版整体迁移至 `iteration/archive/v{major}.{minor}/` |
 
 详细规则见 `AGENTS.md §17 Versioning and Archive Rules`。
 
+初始化命令：
+
+```powershell
+python .workflow/workflow.py init          # 创建项目级目录，不创建版本
+python .workflow/workflow.py init-version  # baseline 门禁通过后创建下一个版本
+```
+
 ---
 
-## 3. 阶段流水线（每迭代 6 阶段）
+## 3. 阶段流水线（原始需求输入 + 5 个交付阶段）
 
 ```text
-baseline/  status: Approved
-        ↓ baseline-gate 校验
+用户提供的原始需求（格式不限）
+        ↓ route-requirement + normalize-requirement
+baseline/ 为空 → baseline/raw-requirement/ → 起草 baseline → validate 00-baseline
+baseline/ 已初始化 → iteration/raw-requirement/（route-requirement 返回目标版本）→ 起草 01-product
 iteration/v{major}.{minor}/01-product/
         v{major}.{minor}-requirement.md            # 需求 + 功能规格（合并）
         v{major}.{minor}-prototype.html            # 可交互 UI 原型（人类使用）
@@ -80,21 +91,21 @@ iteration/v{major}.{minor}/04-implementation/
         v{major}.{minor}-source-code.md             # 实施主记录（含 ISSUE 列表）
         v{major}.{minor}-test-results.md
         ↓ validate 04-implementation
-iteration/v{major}.{minor}/05-pull-request/
-        v{major}.{minor}-pull-request.md            # PR 摘要
-        ↓ validate 05-pull-request
-iteration/v{major}.{minor}/06-rc-review-release/
-        v{major}.{minor}-release-notes.md            # 合并自原 3 份 RC 文档
-        ↓ validate 06-rc-review-release
+iteration/v{major}.{minor}/05-review-release/
+        v{major}.{minor}-review-release.md           # 评审、合并、发布决定与 release notes
+        ↓ validate 05-review-release
         ↓
 iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 ```
 
 **关键约定**：
 
-- 每份产物需有 `status: Approved` frontmatter 才算"通过"（否则 gate 拒绝）
+- 每份正式阶段产物需有 `status: Approved` frontmatter 才算"通过"（否则 gate 拒绝）；原始需求是来源材料，不要求统一格式或审批状态。`iteration/raw-requirement/` 除 README 外仅保存用户原文件，Agent 只读，不得修改、重命名或删除；`route-requirement` 输出其对应版本。
 - `Approved` 状态下若含占位词（`TODO` / `TBD` / `XXX` / `[待确认]` / `[未提供]` / `占位`），validate 视为 unresolved blocker
 - 上游产物必须 Approved 才能作为下游阶段的正式输入
+- Agent 只能创建或更新 `status: draft` / `status: In Review` 的产物，**不得**写入或修改 `status: Approved`。每个阶段完成时，Agent 必须列出待人工审核的全部必需产物及验证证据；人类手动审核并将各产物改为 `Approved` 后，才可运行该阶段的 `validate` 并开始下一阶段。
+
+每阶段的交接闭环：`Agent 起草产物 → Agent 列出待审产物与验证证据 → 人类手动设为 Approved → validate --stage <当前阶段> 通过 → 开始下一阶段`。
 
 ---
 
@@ -102,7 +113,7 @@ iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 
 | Skill | 触发场景 | 输出 |
 |---|---|---|
-| `baseline-gate` | 创建第一个 `iteration/` 之前 | 校验 baseline/ 完整性 + Approved |
+| `stage-gate` | 开始、交接或审核任一阶段 | 校验完整上游链、人工审核状态与阶段输入 |
 | `normalize-requirement` | 任何新需求文档产出 | `v{major}.{minor}-requirement.md` + change_set |
 | `prototype-design-system` | 01 阶段 UI 原型设计 | 视觉与组件规范参考 |
 | `iterate-implementation` | 04 阶段 TASK 实施 | 源码 + 测试 + ISSUE |
@@ -131,6 +142,51 @@ iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 
 ## 6. 工作流 CLI（`.workflow/workflow.py`，纯 Python 标准库）
 
+> §3 是阶段产物清单，本节是**端到端流程图**——把 baseline gate、5 个 stage gate、横切的 index/dashboard/ID 注册，以及"未通过 → 修产物"的回路一次性画出来。
+
+```mermaid
+flowchart TD
+    Start([用户原始需求]) --> Intake{baseline/ 除 README 外为空?}
+    Intake -- 是 --> Bfix[归档到 baseline/raw-requirement<br/>起草 baseline 文档]
+    Bfix --> B0[00-baseline 全部 Approved?]
+    B0 -- 否 --> Bfix
+    Intake -- 否 --> R0["按 manifest 版本路由<br/>iteration/raw-requirement/（只读）"]
+    B0 -- 是 --> R0
+    R0 --> S1
+
+    S1["01-product<br/>requirement.md (含FS)<br/>prototype.html"]
+    S2["02-design<br/>architecture-design.md<br/>api-spec.md<br/>database-dictionary.md"]
+    S3["03-planning<br/>task-plan-dag.md<br/>validation-plan.md"]
+    S4["04-implementation<br/>source-code.md (ISSUE 列表)<br/>test-results.md<br/>每 TASK: context → 实施 → task-finished"]
+    S5["05-review-release<br/>review-release.md<br/>评审 / 合并 / 发布"]
+    Arch([封档: archive/vN/ + iteration-changelog.md])
+
+    S1 -- 人工审核 → Approved<br/>validate 01 --> S2
+    S2 -- 人工审核 → Approved<br/>validate 02 --> S3
+    S3 -- 人工审核 → Approved<br/>validate 03 --> S4
+    S4 -- 人工审核 → Approved<br/>validate 04 --> S5
+    S5 -- 人工审核 → Approved<br/>validate 05 --> Arch
+
+    subgraph X[横切动作 - 不构成线性阶段]
+        X1["index → manifest.yaml<br/>+ traceability.json<br/>"]
+        X2["dashboard →<br/>dashboard/index.html"]
+        X3["LLM 脚本: stage_status<br/>id_registry / query_id<br/>check_links / diff_versions"]
+    end
+    S1 -.改产物后.-> X1
+    S4 -.TASK 完成.-> X1
+    S5 -.改产物后.-> X1
+    X1 -.-> X2
+
+    S1 -.validate 拒绝.-> R1[修产物 / 人工审核] --> S1
+    S2 -.validate 拒绝.-> R2[修产物] --> S2
+    S3 -.validate 拒绝.-> R3[修产物] --> S3
+    S4 -.validate 拒绝.-> R4[修产物 / 重跑测试] --> S4
+    S5 -.validate 拒绝.-> R5[修复评审 / 发布产物] --> S5
+
+    classDef gate fill:#fff7e6,stroke:#d48806,stroke-width:1px;
+    class S1,S2,S3,S4,S5 gate;
+```
+
 ```bash
 # 索引与门禁
 python .workflow/workflow.py index      --iteration v1.0       # 生成 manifest + traceability + 缓存
@@ -152,10 +208,10 @@ python .workflow/workflow.py dashboard  --iteration v1.0       # 渲染静态 HT
 
 | 子命令 | 功能 | 写入文件 |
 |---|---|---|
-| `index` | 全产物索引 + traceability 图 + hash 缓存 | `manifest.yaml` / `traceability.json` / `cache/index.json` |
-| `validate` | stage gate 检查（无产物修改）| stderr only |
+| `index` | 全产物索引 + traceability 图 | `manifest.yaml` / `traceability.json` |
+| `validate` | stage gate 检查（无产物修改）| stdout + exit code |
 | `context` | 提取 TASK 相关章节，按 hash 复用 | `context-packs/<ver>-<task>.md` |
-| `task-finished` | 追加 TASK 结论 JSON（默认轻量）| `task-runs/<ver>-<task>.json` |
+| `task-finished` | 写入最新 TASK 结论并保留历史记录 | `task-runs/<ver>-<task>.json` + `task-runs/history/*.json` |
 | `dashboard` | 渲染静态 HTML 仪表盘 | `dashboard/index.html` |
 
 所有命令子命令接受 `--iteration`（默认从 `iteration/` 推断最大值；不存在则返回 `v1.0`）。
@@ -164,7 +220,7 @@ python .workflow/workflow.py dashboard  --iteration v1.0       # 渲染静态 HT
 
 ## 7. LLM 自动化脚本（`.workflow/scripts/`）
 
-4 个本地脚本，让 LLM 不必亲自 grep / read 多份文档：
+5 个本地脚本，让 LLM 不必亲自 grep / read 多份文档：
 
 | 脚本 | 命令示例 | 替代的 LLM 行为 |
 |---|---|---|
@@ -210,24 +266,27 @@ python .workflow/scripts/check_links.py --iteration v1.0
 ### 9.1 启动一个新版本（v1.0）
 
 ```
-1. baseline/ 4 份文档必须已 Approved
-2. 触发 baseline-gate → 通过
-3. 触发 normalize-requirement（首版场景） → 生成 v1.0-requirement.md
-4. 人工审核 → status: Approved
-5. 进入 02-design / 03-planning / 04-implementation / 05-pull-request / 06-rc-review-release
-6. RC 完成 → 生成 v1.0-iteration-changelog.md
-7. 触发 manage-iteration → 归档 v1.0
+1. 用户提供原始需求；`route-requirement` 发现 baseline 为空并返回 `baseline/raw-requirement/`
+2. 归档原始材料，触发 normalize-requirement 起草 4 份 baseline 文档
+3. 人工审核 baseline → `validate --stage 00-baseline`
+4. 创建 `iteration/v1.0/` 骨架；`route-requirement` 返回该原始需求的目标版本，原文件保留在 `iteration/raw-requirement/`
+5. 触发 normalize-requirement → 生成 v1.0-requirement.md
+6. 人工审核 → status: Approved
+7. 进入 02-design / 03-planning / 04-implementation / 05-review-release
+8. RC 完成 → 生成 v1.0-iteration-changelog.md，并归档 v1.0
 ```
 
 ### 9.2 启动 v1.1+ 增量迭代
 
 ```
-1. 触发 normalize-requirement → 读 4 个 baseline + v1.0-requirement + v1.0-changelog
-2. 输出 v1.1-requirement.md（含 change_set: added / / / deprecated）
-3. 人工审核 → status: Approved
-4. 触发 iterate-implementation skill（按 TASK 列表实施）
-6. 每个 TASK 完成 → python .workflow/workflow.py task-finished --result succeeded
-7. RC 完成 → manage-iteration 归档 v1.0
+1. 用户提供原始需求；`route-requirement` 从 manifest.yaml（缺失时目录发现）解析目标版本
+2. 创建目标版本骨架；将原始材料原样保存到 `iteration/raw-requirement/`，并以 `route-requirement` 返回的目标版本归一化
+3. 触发 normalize-requirement → 读项目基线、原始需求、上一版 requirement 与 changelog
+4. 输出对应版本 requirement.md（含 change_set: added / modified / deprecated）
+5. 人工审核 → status: Approved
+6. 触发 iterate-implementation skill（按 TASK 列表实施）
+7. 每个 TASK 完成 → python .workflow/workflow.py task-finished --result succeeded
+8. RC 完成 → manage-iteration 归档上一版本
 ```
 
 ### 9.3 实施单个 TASK
@@ -243,6 +302,7 @@ python .workflow/workflow.py context  --iteration v1.0 --task TASK-API-010
 # 3. 实际写代码到 workspace/
 
 # 4. 完成：轻量记录（默认）
+#    task-finished 要求 Context Pack 已存在，否则拒绝写入完成记录
 python .workflow/workflow.py task-finished --iteration v1.0 --task TASK-API-010 --result succeeded
 # ↑ 不重跑 index/dashboard；高频操作零开销
 # ↓ 偶尔才需要：
@@ -281,8 +341,7 @@ python .workflow/scripts/diff_versions.py --from v1.0 --to v1.1
 | 02-design | `architecture-design.md`、`api-spec.md`、`database-dictionary.md` |
 | 03-planning | `task-plan-dag.md`、`validation-plan.md` |
 | 04-implementation | `source-code.md`（含 ISSUE 列表）、`test-results.md` |
-| 05-pull-request | `pull-request.md` |
-| 06-rc-review-release | `release-notes.md` |
+| 05-review-release | `review-release.md`（评审、合并、发布决定、release notes） |
 
 ---
 

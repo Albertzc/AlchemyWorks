@@ -73,7 +73,7 @@ Report
 
 **Version awareness**:
 
-- For a **new project (v1)**: confirm `baseline/` is fully `status: Approved` before generating `iteration/v1/` artifacts.
+- For a **new project (v1)**: preserve the user-provided raw requirement under `baseline/raw-requirement/`, use it to draft baseline artifacts, and confirm the four required baseline documents are `status: Approved` before generating `iteration/v1/` artifacts.
 - For an **iteration (v2+)**: use `normalize-iteration-requirement` to detect and create the new version; read the latest approved version's artifacts as the baseline.
 - **Iteration scope rule**: each task targets exactly one version. If a request affects multiple versions, split the work or escalate.
 
@@ -83,16 +83,17 @@ The project-level workflow control layer is implemented by `.workflow/workflow.p
 
 1. **Before starting or resuming a stage**, refresh the artifact index:
    `python .workflow/workflow.py index --iteration v{N}`
-2. **Before consuming a stage's inputs**, run its gate:
-   `python .workflow/workflow.py validate --iteration v{N} --stage <stage>`
-3. A nonzero gate result is a hard stop. Do not bypass missing, draft, unapproved, or unresolved-placeholder inputs, and do not change approval metadata to force progress.
-4. **Before implementing a TASK**, create and use exactly one task-scoped Context Pack:
+2. **At every stage handoff**, after the current stage's required outputs have been reviewed by a human, run its gate:
+   `python .workflow/workflow.py validate --iteration v{N} --stage <completed-stage>`
+3. A nonzero gate result is a hard stop: the next stage cannot start. Do not bypass missing, draft, unapproved, or unresolved-placeholder inputs.
+4. **Human approval is required for every stage handoff.** An agent must create or update artifacts with `status: draft` or `status: In Review`, list every required artifact and its verification evidence for human review, and wait for a human to set each artifact's frontmatter to `status: Approved`. An agent must never add, replace, or otherwise change an artifact's `status` to `Approved`.
+5. **Before implementing a TASK**, create and use exactly one task-scoped Context Pack:
    `python .workflow/workflow.py context --iteration v{N} --task TASK-XXX-NNN`
-5. The Context Pack is the default implementation context. Load complete upstream documents only when the pack lacks a required detail, and record that exception in the implementation record.
-6. **After changing workflow artifacts**, rerun `index` so `.workflow/manifest.yaml`, `.workflow/traceability.json`, and hash caches reflect the new content.
-7. **After completing every TASK**, run:
+6. The Context Pack is the default implementation context. Load complete upstream documents only when the pack lacks a required detail, and record that exception in the implementation record.
+7. **After changing workflow artifacts**, rerun `index` so `.workflow/manifest.yaml`, `.workflow/traceability.json`, and hash caches reflect the new content.
+8. **After completing every TASK**, run:
    `python .workflow/workflow.py task-finished --iteration v{N} --task TASK-XXX-NNN --result <succeeded|failed|blocked>`
-8. Do not report a TASK as complete until this command has refreshed `.workflow/dashboard/index.html` and printed the task conclusion for human confirmation.
+9. Do not report a TASK as complete until this command has written the task record and printed the task conclusion for human confirmation. Refresh the dashboard separately when needed.
 
 The Context Pack contains the selected TASK definition, related stable IDs, relevant contract excerpts, and input hashes. It reduces repeated full-document loading; it does not replace human approval or alter the source-of-truth priority.
 
@@ -147,7 +148,11 @@ Important behavior must be represented in durable project artifacts, not only in
 Keep the following chain synchronized:
 
 ```text
-Baseline (baseline/)
+Raw Requirement (user-provided, unstructured)
+    ↓
+Baseline (baseline/, first-project intake only)
+    ↓
+Raw Requirement Library (iteration/raw-requirement/, user-owned and read-only; route-requirement returns target version)
     ↓
 Product Requirement  (iteration/v{N}/01-product/v{N}-requirement.md)   # 需求 + 功能规格（FS 作为 FR 子项内嵌）
     ↓
@@ -167,9 +172,7 @@ Source Code           (iteration/v{N}/04-implementation/v{N}-source-code.md)   #
 +
 Test Results          (iteration/v{N}/04-implementation/v{N}-test-results.md)
     ↓
-Pull Request          (iteration/v{N}/05-pull-request/v{N}-pull-request.md)
-    ↓
-Release Notes         (iteration/v{N}/06-rc-review-release/v{N}-release-notes.md)   # 合并自原 3 份 RC 文档
+Review & Release      (iteration/v{N}/05-review-release/v{N}-review-release.md)   # 评审、合并、发布决定与 release notes
     ↓
 Iteration Changelog   (iteration/v{N}/01-product/v{N}-iteration-changelog.md)    # 封档说明，RC 完成后产出
 ```
@@ -338,7 +341,7 @@ docs: update local development instructions
 The agent MUST:
 
 - Read applicable rules and project context before acting.
-- Check `baseline/` and the latest approved `iteration/v{N}/` before any artifact change.
+- Check `baseline/`, the relevant user-provided raw requirement, and the latest approved `iteration/v{N}/` before any artifact change.
 - Keep assumptions explicit.
 - Ask for clarification when ambiguity can materially change the result.
 - Prefer reversible operations.
@@ -357,7 +360,8 @@ The agent MUST NOT:
 - Use destructive commands without explicit authorization.
 - Claim completion without verification.
 - Modify an artifact under `iteration/v{N}/` when the task targets `v{N+1}` (cross-version contamination).
-- Skip the `baseline-gate` check before creating `iteration/v1/`.
+- Skip the `stage-gate` check before creating `iteration/v1/`, or normalize a user-provided raw requirement without preserving its source and routing decision.
+- Add or change any artifact frontmatter value to `status: Approved`. The agent must instead hand off the draft or `In Review` artifacts, their paths, and validation evidence for human review.
 
 ## 16. Project-Specific Overrides
 
@@ -386,7 +390,7 @@ Iterations use a two-segment identifier **`v{major}.{minor}`** (e.g. `v1.0`, `v1
   - Active versions live under `iteration/v{major}.{minor}/`.
   - All versioned artifacts use the `v{major}.{minor}-` filename prefix.
   - Cross-version references in frontmatter must point to a real existing iteration (e.g. `base_version: v1.0`).
-- **RC-complete** is reached only when `iteration/v{major}.{minor}/06-rc-review-release/v{major}.{minor}-release-notes.md` has `status: Approved`.
+- **RC-complete** is reached only when `iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-review-release.md` has `status: Approved`.
 - Upon RC completion of `v{major}.{minor}`:
   1. Move the previous version's directory to `iteration/archive/v{major}.{minor-1}/` (within the same major). When the version is the first minor of a new major, archive the previous major to `iteration/archive/v{prev_major}.0/`.
   2. Create `iteration/v{major}.{minor}/01-product/v{major}.{minor}-iteration-changelog.md` summarizing the cycle.

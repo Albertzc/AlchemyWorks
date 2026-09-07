@@ -18,7 +18,7 @@ from pathlib import Path
 THIS = Path(__file__).resolve()
 sys.path.insert(0, str(THIS.parents[1]))
 
-from workflow import discover_iteration  # noqa: E402
+from workflow import canonical_iteration, discover_iteration  # noqa: E402
 
 TRACEABILITY = THIS.parents[1] / "traceability.json"
 
@@ -67,6 +67,7 @@ def main() -> int:
     parser.add_argument("--id", required=True, help="stable ID to query (e.g. FR-005, TASK-API-010)")
     parser.add_argument("--json", action="store_true", help="emit JSON instead of text")
     args = parser.parse_args()
+    args.iteration = canonical_iteration(args.iteration)
     data = query(args.iteration, args.id)
     if args.json:
         print(json.dumps(data, ensure_ascii=False, indent=2))

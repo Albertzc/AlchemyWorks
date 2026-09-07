@@ -1,0 +1,56 @@
+---
+name: stage-gate
+description: Use when starting, handing off, or reviewing any workflow stage. Enforces required inputs, human approval, and the gate that must pass before the next stage begins.
+---
+
+# Stage Gate
+
+## Purpose
+
+统一管理工作流的阶段门禁。所有正式产物阶段（项目基线、01-product 至 05-review-release）均须由人工审核；当前阶段的必需产物全部为 `status: Approved` 且校验通过后，才可进入下一阶段。
+
+## Stage Order
+
+```text
+用户原始需求（非结构化输入）
+    ↓ normalize-requirement 路由与归档
+00-baseline（仅首次项目）
+    ↓
+01-product → 02-design → 03-planning → 04-implementation → 05-review-release
+```
+
+## Required Inputs
+
+### 00-baseline
+
+以下项目级产物必须存在且 `status: Approved`：
+
+1. `baseline/01-product-vision.md`
+2. `baseline/02-product-charter.md`
+3. `baseline/03-tech-stack-decision.md`
+4. `baseline/04-glossary.md`
+## Raw Requirement Intake
+
+原始需求是用户提供的来源材料，格式可以是不带 frontmatter 的 Markdown、文本、邮件、会议纪要或其他可读取文件。它不属于需要 `Approved` 的阶段产物，Agent 不得改写其原文。
+
+- `baseline/` 除 `README.md` 外为空时：归档到 `baseline/raw-requirement/`，并由 `normalize-requirement` 起草 baseline 文档。
+- baseline 已初始化时：运行 `python .workflow/workflow.py route-requirement`；该命令优先使用 `.workflow/manifest.yaml` 的 `iteration` 字段确定版本，并输出集中原始需求库 `iteration/raw-requirement/` 和目标版本。该目录仅保存用户输入，Agent 只读。
+- 归一化后的 baseline 或产品需求才进入人工审核与 `stage-gate`。
+
+## Gate Procedure
+
+1. 开始或恢复阶段前运行 `python .workflow/workflow.py index --iteration v{N}`。
+2. Agent 只创建或更新 `draft` / `In Review` 产物，并列出审核所需的路径与证据。
+3. 人工审核后手动把本阶段全部必需产物设为 `Approved`。
+4. 运行 `python .workflow/workflow.py validate --iteration v{N} --stage <completed-stage>`。
+5. 仅当命令返回 0 时，开始下一阶段；非零结果是硬性停止条件。
+
+## Failure Handling
+
+- 不得跳过任一阶段、审核或门禁。
+- 不得由 Agent 写入或修改 `status: Approved`。
+- 原始需求缺失、无法读取，或归一化产物未保留其可追溯来源时，停止并要求补正。
+
+## Output
+
+报告应列出：当前阶段、所有必需产物、每个产物的状态、校验命令与结果，以及下一步是否允许开始。

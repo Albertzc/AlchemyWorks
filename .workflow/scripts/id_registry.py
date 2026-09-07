@@ -21,7 +21,7 @@ from pathlib import Path
 THIS = Path(__file__).resolve()
 sys.path.insert(0, str(THIS.parents[1]))
 
-from workflow import ID_RE, discover_iteration, is_real_id, load_artifacts  # noqa: E402
+from workflow import ID_RE, canonical_iteration, discover_iteration, is_real_id, load_artifacts  # noqa: E402
 
 PREFIXES = ("FR", "FS", "BR", "NFR", "API", "TBL", "TASK", "AC", "ISSUE")
 
@@ -30,6 +30,8 @@ def collect(iteration: str) -> dict[str, dict]:
     artifacts = load_artifacts(iteration)
     by_prefix: dict[str, set[int]] = {p: set() for p in PREFIXES}
     for item in artifacts:
+        if item.status == "missing":
+            continue
         text = (THIS.parents[2] / item.path).read_text(encoding="utf-8")
         for m in ID_RE.findall(text):
             if not is_real_id(m):
@@ -84,6 +86,7 @@ def main() -> int:
     parser.add_argument("--prefix", choices=PREFIXES, help="filter to one prefix")
     parser.add_argument("--json", action="store_true", help="emit JSON instead of text")
     args = parser.parse_args()
+    args.iteration = canonical_iteration(args.iteration)
     data = collect(args.iteration)
     prefixes = (args.prefix,) if args.prefix else PREFIXES
     if args.json:

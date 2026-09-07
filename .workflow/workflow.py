@@ -9,8 +9,10 @@ import hashlib
 import html
 import io
 import json
+import os
 import re
 import sys
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,17 +27,17 @@ STAGES = [
     "02-design",
     "03-planning",
     "04-implementation",
-    "05-pull-request",
-    "06-rc-review-release",
+    "05-review-release",
 ]
 # Canonical display order used by `write_manifest`, `dashboard_data`, and
 # `stage_status`. Use this instead of repeating ["00-baseline", *STAGES].
 ALL_STAGES = (BASELINE_STAGE, *STAGES)
+GATE_STAGES = ALL_STAGES
 # Stages whose artifacts are NEVER used as context sources by
-# `context_pack()`. Baseline is config (not task input); 05/06 are
+# `context_pack()`. Baseline is config (not task input); review/release is
 # post-execution summaries produced only after tasks are finished.
 CONTEXT_PACK_EXCLUDED_STAGES = frozenset(
-    {BASELINE_STAGE, "05-pull-request", "06-rc-review-release"}
+    {BASELINE_STAGE, "05-review-release"}
 )
 BASELINE_FILES = [
     "baseline/01-product-vision.md",
@@ -44,7 +46,11 @@ BASELINE_FILES = [
     "baseline/04-glossary.md",
 ]
 ID_RE = re.compile(r"\b(?:FR|BR|NFR|FS|API|TBL|TASK|AC|ISSUE)(?:-[A-Z0-9]+)+\b")
+TASK_ID_RE = re.compile(r"^TASK(?:-[A-Z0-9]+)+$")
 PLACEHOLDER_RE = re.compile(r"\b(?:TODO|TBD|XXX)\b|\[待确认\]|\[未提供\]|占位", re.IGNORECASE)
+MANIFEST_ITERATION_RE = re.compile(
+    r"^iteration:\s*['\"]?(v\d+(?:\.\d+)?)['\"]?\s*$", re.MULTILINE
+)
 
 
 @dataclass(frozen=True)
@@ -70,6 +76,51 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+# Captures a YAML block scalar under a `change_set:` key.
+# Frontmatter block example:
+#     change_set:
+#       added: [FR-100, FR-101]
+#       modified: [FR-010]
+#       deprecated: [FR-005]
+# parse_frontmatter() collapses this to {"change_set": ""} because its kv
+# parser does not understand nested maps. Any consumer that needs the
+# sub-keys MUST use this helper instead of parse_frontmatter()["change_set"].
+_CHANGE_SET_BLOCK_RE = re.compile(
+    r"^change_set:\s*\n(?:(?:[ \t]+[A-Za-z_][\w-]*:\s*\[.*?\]\s*(?:\n|$))+)",
+    re.MULTILINE,
+)
+
+_CHANGE_SET_LINE_RE = re.compile(
+    r"^\s+(added|modified|deprecated):\s*\[(.+?)\]", re.MULTILINE | re.DOTALL
+)
+
+
+def parse_change_set(text: str) -> dict[str, list[str]]:
+    """Return {"added": [...], "modified": [...], "deprecated": [...]}.
+
+    Only IDs that survive is_real_id() are returned (placeholders like
+    FR-XXX are filtered). Missing keys return an empty list. Frontmatter
+    is searched at the start of the text; nested keys under change_set
+    outside of that block are not parsed.
+    """
+    out: dict[str, list[str]] = {"added": [], "modified": [], "deprecated": []}
+    if not (text.startswith("---\n") or text.startswith("---\r\n")):
+        return out
+    lines = text.splitlines()
+    try:
+        end = lines.index("---", 1)
+    except ValueError:
+        return out
+    block = _CHANGE_SET_BLOCK_RE.search("\n".join(lines[1:end]))
+    if not block:
+        return out
+    for match in _CHANGE_SET_LINE_RE.finditer(block.group(0)):
+        key = match.group(1)
+        ids = [token for token in match.group(2).replace(",", " ").split() if is_real_id(token)]
+        out[key] = ids
+    return out
+
+
 def parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
     if text.startswith("---\n") or text.startswith("---\r\n"):
         lines = text.splitlines()
@@ -84,37 +135,19 @@ def parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
                 values[match.group(1)] = match.group(2).strip("'\"")
         return values, "\n".join(lines[end + 1 :])
     # Fallback: HTML comment-style frontmatter for HTML artifacts.
-    # Format: <!-- key: value --> on one or more leading lines before any other content.
-    # Supported because HTML cannot start with `---` (would break the doctype).
+    # Supports both one-line and multi-line leading comments.
     if text.startswith("<!--"):
-        lines = text.splitlines()
-        values: dict[str, str] = {}
-        consumed = 0
-        for line in lines:
-            stripped = line.strip()
-            if not stripped:
-                continue
-            if not stripped.startswith("<!--"):
-                break
-            inner = stripped[4:]
-            if inner.endswith("-->"):
-                inner = inner[:-3]
-            inner = inner.strip()
-            match = re.match(r"^([A-Za-z_][\w-]*):\s*(.*?)\s*$", inner)
+        end = text.find("-->", 4)
+        if end < 0:
+            return {}, text
+        values = {}
+        inner = text[4:end]
+        for line in inner.splitlines():
+            match = re.match(r"^\s*([A-Za-z_][\w-]*):\s*(.*?)\s*$", line)
             if match:
                 values[match.group(1)] = match.group(2).strip("'\"")
-                consumed += 1
-            else:
-                # not a kv line — stop scanning if we already collected some
-                if values:
-                    break
-                # else: tolerate non-kv comment and keep scanning
-                continue
         if values:
-            rest_start = consumed
-            while rest_start < len(lines) and not lines[rest_start].strip():
-                rest_start += 1
-            return values, "\n".join(lines[rest_start:])
+            return values, text[end + 3 :].lstrip("\r\n")
         return {}, text
     return {}, text
 
@@ -134,6 +167,12 @@ def iteration_number(iteration: str) -> tuple[int, int]:
     return major, minor
 
 
+def canonical_iteration(iteration: str) -> str:
+    """Return the on-disk iteration spelling, including the legacy vN alias."""
+    major, minor = iteration_number(iteration)
+    return f"v{major}.{minor}"
+
+
 def discover_iteration() -> str:
     versions: list[tuple[int, int]] = []
     directory = ROOT / "iteration"
@@ -145,7 +184,142 @@ def discover_iteration() -> str:
     if not versions:
         return "v1.0"
     major, minor = max(versions)
-    return f"v{major}.{minor}" if minor is not None and minor >= 0 else f"v{major}"
+    return f"v{major}.{minor}"
+
+
+def baseline_is_empty() -> bool:
+    """Return true when baseline has no formal artifact.
+
+    Raw user material is intake evidence, rather than a baseline artifact, so
+    files under ``baseline/raw-requirement`` do not make the baseline ready for
+    an iteration route.
+    """
+    directory = ROOT / "baseline"
+    if not directory.exists():
+        return True
+    return not any(
+        path.is_file()
+        and path.name != "README.md"
+        and "raw-requirement" not in path.relative_to(directory).parts
+        for path in directory.rglob("*")
+    )
+
+
+def manifest_iteration() -> str | None:
+    """Read the iteration recorded by the generated manifest, if valid."""
+    path = WORKFLOW_DIR / "manifest.yaml"
+    if not path.exists():
+        return None
+    match = MANIFEST_ITERATION_RE.search(path.read_text(encoding="utf-8"))
+    if not match:
+        return None
+    try:
+        return canonical_iteration(match.group(1))
+    except ValueError:
+        return None
+
+
+def requirement_route(iteration: str | None = None) -> dict[str, str | None]:
+    """Resolve where a newly received, unstructured requirement is archived.
+
+    A project without baseline artifacts treats its first raw requirement as
+    baseline input. Otherwise an explicit iteration wins, then the last
+    indexed manifest iteration, and finally normal version discovery.
+    """
+    if baseline_is_empty():
+        return {
+            "mode": "baseline",
+            "iteration": None,
+            "raw_requirement_dir": "baseline/raw-requirement",
+            "version_source": None,
+        }
+    resolved = canonical_iteration(iteration) if iteration else manifest_iteration() or discover_iteration()
+    source = "explicit" if iteration else "manifest" if manifest_iteration() else "discovery"
+    return {
+        "mode": "iteration",
+        "iteration": resolved,
+        "raw_requirement_dir": "iteration/raw-requirement",
+        "version_source": source,
+        "raw_requirement_access": "user-owned-read-only",
+    }
+
+
+def next_iteration() -> str:
+    """Return the next in-major iteration without creating it."""
+    directory = ROOT / "iteration"
+    pairs: list[tuple[int, int]] = []
+    if directory.exists():
+        for path in directory.iterdir():
+            match = re.fullmatch(r"v(\d+)(?:\.(\d+))?", path.name)
+            if path.is_dir() and match:
+                pairs.append((int(match.group(1)), int(match.group(2) or 0)))
+    if not pairs:
+        return "v1.0"
+    major, minor = max(pairs)
+    return f"v{major}.{minor + 1}"
+
+
+def init_project() -> int:
+    """Create the non-versioned project directories required for intake."""
+    created = []
+    for relative in ("baseline/raw-requirement", "iteration/raw-requirement", "workspace"):
+        path = ROOT / relative
+        if not path.exists():
+            path.mkdir(parents=True)
+            created.append(relative)
+    readmes = {
+        "baseline/raw-requirement/README.md": (
+            "# 原始需求输入\n\n"
+            "存放用户提供的原始需求材料，保留原文件格式与原文。baseline 尚未初始化时，"
+            "normalize-requirement 以此目录为输入起草 baseline 文档。\n"
+        ),
+        "iteration/README.md": (
+            "# Iterations\n\n"
+            "存放版本化交付物。不要手工创建版本目录；baseline 门禁通过后使用 "
+            "`python .workflow/workflow.py init-version` 创建下一个版本。\n\n"
+            "`raw-requirement/` 仅存放用户提供的原始需求。运行 "
+            "`python .workflow/workflow.py route-requirement` 确定该输入对应的版本；"
+            "Agent 仅可读取，不得修改、重命名或删除其中的文件。\n"
+        ),
+        "iteration/raw-requirement/README.md": (
+            "# 迭代原始需求输入\n\n"
+            "本目录保存用户提供的迭代原始需求，保留文件格式、文件名与原文。运行 "
+            "`python .workflow/workflow.py route-requirement` 确定当前输入对应的目标版本。\n\n"
+            "除本说明文件外，目录中的原始需求归用户所有且只读：Agent 不得修改、"
+            "重命名或删除。归一化产物必须记录所读取的原始文件路径和目标版本。\n"
+        ),
+        "workspace/README.md": (
+            "# Workspace\n\n"
+            "存放实际应用源码、配置和测试。版本化工作流文档不应放入此目录。\n"
+        ),
+    }
+    for relative, content in readmes.items():
+        path = ROOT / relative
+        if not path.exists():
+            path.write_text(content, encoding="utf-8")
+    print(f"workflow init: created {len(created)} directory(s)")
+    for relative in created:
+        print(f"  created: {relative}")
+    print("next: archive a user requirement, then draft and approve the baseline before running init-version")
+    return 0
+
+
+def init_version(iteration: str | None = None) -> int:
+    """Create an empty iteration skeleton after the baseline gate passes."""
+    expected = next_iteration()
+    target = canonical_iteration(iteration) if iteration else expected
+    if target != expected:
+        raise ValueError(f"version must be the next iteration {expected}; received {target}")
+    if validate(target, BASELINE_STAGE) != 0:
+        raise ValueError(f"baseline gate blocked; version {target} was not initialized")
+    root = ROOT / "iteration" / target
+    if root.exists():
+        raise ValueError(f"iteration already exists: iteration/{target}")
+    for stage in STAGES:
+        (root / stage).mkdir(parents=True)
+    index(target)
+    print(f"version initialized: iteration/{target}")
+    return 0
 
 
 def artifact_paths(iteration: str) -> Iterable[tuple[str, str]]:
@@ -203,79 +377,88 @@ def is_real_id(identifier: str) -> bool:
 
 
 def required_inputs(iteration: str, stage: str) -> list[str]:
-    iteration_number(iteration)  # validates iteration format; result unused.
-    if stage == "01-product":
-        return BASELINE_FILES
-    if stage == "02-design":
-        # Per templates/product.md §6 + README §10: v1.1+ iterations merge FS
-        # paragraphs into requirement.md, so feature-specification.md is an
-        # optional companion file. We still require it for v1.0 (the only
-        # version where it is independently produced) and allow it to be
-        # absent for later versions. Detect by scanning the frontmatter of
-        # requirement.md: when `product_version` looks like "v1.0" or
-        # `document_version` ends in ".0", the FS file is required.
-        #
-        # Boundary behaviour: when requirement.md itself does not yet
-        # exist (the typical fresh-iteration case), we cannot read its
-        # frontmatter to learn the version, so we conservatively require
-        # the FS file only when the iteration literal looks like a `.0`
-        # release (e.g. v1.0, v2.0). Any `v{major}.{minor>=1}` skips it.
-        requirement_path = (
-            ROOT / f"iteration/{iteration}/01-product/{iteration}-requirement.md"
-        )
-        inputs: list[str] = [
+    iteration_number(iteration)
+    outputs = {
+        "01-product": [
             f"iteration/{iteration}/01-product/{iteration}-requirement.md",
             f"iteration/{iteration}/01-product/{iteration}-prototype.html",
-        ]
-        fs_required = True
-        if not requirement_path.exists():
-            # No requirement yet → treat as an incremental iteration: minor
-            # bumps (v1.1, v2.3 …) skip FS; only literal .0 releases keep it.
-            fs_required = iteration.endswith(".0")
-        else:
-            frontmatter, _ = parse_frontmatter(requirement_path.read_text(encoding="utf-8"))
-            version = (
-                frontmatter.get("product_version", "")
-                or frontmatter.get("version", "")
-                or frontmatter.get("document_version", "")
-            )
-            # Allow omission when version explicitly says "MVP" (treated as
-            # iterative) or any minor >= 1. v1.0 still demands the file.
-            if version and not version.endswith(".0"):
-                fs_required = False
-            elif version.lower().startswith("mvp"):
-                fs_required = False
-        if fs_required:
-            inputs.append(
-                f"iteration/{iteration}/01-product/{iteration}-feature-specification.md"
-            )
-        return inputs
-    if stage == "03-planning":
-        return [
+        ],
+        "02-design": [
             f"iteration/{iteration}/02-design/{iteration}-architecture-design.md",
             f"iteration/{iteration}/02-design/{iteration}-api-spec.md",
             f"iteration/{iteration}/02-design/{iteration}-database-dictionary.md",
-        ]
-    if stage == "04-implementation":
-        return [
+        ],
+        "03-planning": [
             f"iteration/{iteration}/03-planning/{iteration}-task-plan-dag.md",
             f"iteration/{iteration}/03-planning/{iteration}-validation-plan.md",
-        ]
-    if stage == "05-pull-request":
-        return [f"iteration/{iteration}/04-implementation"]
-    if stage == "06-rc-review-release":
-        return [f"iteration/{iteration}/05-pull-request"]
-    raise ValueError(f"unknown stage: {stage}; iteration={n}")
+        ],
+        "04-implementation": [
+            f"iteration/{iteration}/04-implementation/{iteration}-source-code.md",
+            f"iteration/{iteration}/04-implementation/{iteration}-test-results.md",
+            f"iteration/{iteration}/04-implementation/{iteration}-issue-fixes.md",
+        ],
+        "05-review-release": [
+            f"iteration/{iteration}/05-review-release/{iteration}-review-release.md",
+        ],
+    }
+    if stage not in outputs:
+        raise ValueError(f"unknown stage: {stage}; iteration={iteration}")
+    end = STAGES.index(stage) + 1
+    return [path for current in STAGES[:end] for path in outputs[current]]
 
 
 def path_artifact(artifacts: list[Artifact], relative: str) -> Artifact | None:
     return next((item for item in artifacts if item.path == relative), None)
 
 
+def check_task_id_consistency(iteration: str, errors: list[str]) -> None:
+    """For stage 04: every TASK-* ID referenced in 04-implementation
+    artifacts must be defined in the task plan (task-plan-dag.md).
+
+    Without this check, an implementation file can reference
+    TASK-API-999 even when the plan only lists TASK-API-001..010,
+    and the gate never notices. Catches typos, copy-paste leftovers,
+    and forgotten plans.
+    """
+    plan_rel = f"iteration/{iteration}/03-planning/{iteration}-task-plan-dag.md"
+    plan_path = ROOT / plan_rel
+    if not plan_path.exists():
+        return  # already flagged by required_inputs; nothing to verify
+    plan_text = plan_path.read_text(encoding="utf-8")
+    defined_tasks = {
+        identifier for identifier in ID_RE.findall(plan_text)
+        if is_real_id(identifier) and identifier.startswith("TASK-")
+    }
+    impl_dir = ROOT / f"iteration/{iteration}/04-implementation"
+    if not impl_dir.exists():
+        return
+    implementation_files = sorted(impl_dir.rglob("*.md"))
+    referenced_tasks: set[str] = set()
+    for path in implementation_files:
+        text = path.read_text(encoding="utf-8")
+        referenced = {
+            identifier for identifier in ID_RE.findall(text)
+            if is_real_id(identifier) and identifier.startswith("TASK-")
+        }
+        referenced_tasks.update(referenced)
+        unknown = referenced - defined_tasks
+        for unknown_id in sorted(unknown):
+            errors.append(
+                f"TASK ID referenced in {path.relative_to(ROOT).as_posix()} "
+                f"but not defined in {plan_rel}: {unknown_id}"
+            )
+    if implementation_files:
+        for missing_id in sorted(defined_tasks - referenced_tasks):
+            errors.append(
+                f"TASK ID defined in {plan_rel} but not referenced by "
+                f"04-implementation artifacts: {missing_id}"
+            )
+
+
 def check_readme_freshness(iteration: str, errors: list[str]) -> None:
     """RC sign-off requires README.md to reference the current state.
 
-    Triggered only on stage 06-rc-review-release. Reports three classes of
+    Triggered only on the final 05-review-release stage. Reports three classes of
     staleness: missing README, missing current-iteration mention, and
     missing current skill / script mention. Does not modify files.
 
@@ -332,22 +515,18 @@ def validate(iteration: str, stage: str | None) -> int:
             errors.append(f"baseline is not Approved: {relative} ({item.status})")
 
     target = stage or "all"
-    stages = [stage] if stage else STAGES
-    checked_paths: set[str] = set(BASELINE_FILES)
+    stages = [] if stage == BASELINE_STAGE else [stage] if stage else STAGES
+    checked_paths: set[str] = set()
     for current in stages:
         for required in required_inputs(iteration, current):
-            if required.endswith("-implementation") or required.endswith("-pull-request"):
-                directory = ROOT / required
-                if not directory.exists() or not any(directory.iterdir()):
-                    errors.append(f"required stage output is missing: {required}")
+            if required in checked_paths:
                 continue
+            checked_paths.add(required)
             item = by_path.get(required)
             if not item:
                 errors.append(f"missing input for {current}: {required}")
             elif item.status != "Approved":
-                if required not in checked_paths:
-                    errors.append(f"input for {current} is not Approved: {required} ({item.status})")
-            checked_paths.add(required)
+                errors.append(f"input for {current} is not Approved: {required} ({item.status})")
 
     for item in artifacts:
         if item.path.startswith("templates/"):
@@ -363,8 +542,12 @@ def validate(iteration: str, stage: str | None) -> int:
         if PLACEHOLDER_RE.search(text) and item.status == "Approved":
             errors.append(f"Approved artifact contains unresolved placeholder: {item.path}")
 
-    # D3: RC sign-off freshness check (only at the final stage)
-    if "06-rc-review-release" in stages:
+    # S4: TASK-ID cross-artifact consistency (only at stage 04)
+    if "04-implementation" in stages:
+        check_task_id_consistency(iteration, errors)
+
+    # D3: review/release sign-off freshness check (only at the final stage)
+    if "05-review-release" in stages:
         check_readme_freshness(iteration, errors)
 
     print(f"workflow validate: iteration={iteration}, target={target}")
@@ -436,15 +619,24 @@ def primary_prefixes(path: str) -> set[str]:
     return set()
 
 
-def write_json(path: Path, value: object) -> None:
-    """Write JSON with a parent-directory mkdir.
-
-    Atomicity note: this call is **non-atomic** (write directly to the
-    destination). For state files that are read concurrently by other
-    processes (`cache/context-packs.json`), prefer `write_json_atomic`.
-    """
+def write_text_atomic(path: Path, text: str) -> None:
+    """Write a UTF-8 text file atomically, preserving concurrent readers."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    fd, tmp_path = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as handle:
+            handle.write(text)
+        os.replace(tmp_path, path)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
+def write_json(path: Path, value: object) -> None:
+    write_text_atomic(path, json.dumps(value, ensure_ascii=False, indent=2) + "\n")
 
 
 def write_json_atomic(path: Path, value: object) -> None:
@@ -457,26 +649,8 @@ def write_json_atomic(path: Path, value: object) -> None:
     rename per write; this is fine for state files written O(once)
     per TASK.
     """
-    import os
-    import tempfile
-
-    path.parent.mkdir(parents=True, exist_ok=True)
     payload = json.dumps(value, ensure_ascii=False, indent=2) + "\n"
-    fd, tmp_path = tempfile.mkstemp(
-        prefix=path.name + ".", suffix=".tmp", dir=str(path.parent)
-    )
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(payload)
-        os.replace(tmp_path, path)
-    except Exception:
-        # Best-effort cleanup of the leftover temp file; never raise from cleanup
-        # because the original exception (if any) is more informative.
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
+    write_text_atomic(path, payload)
 
 
 def write_manifest(iteration: str, artifacts: list[Artifact]) -> None:
@@ -502,31 +676,34 @@ def write_manifest(iteration: str, artifacts: list[Artifact]) -> None:
                     f"        frontmatter: {str(item.frontmatter).lower()}",
                 ])
     WORKFLOW_DIR.mkdir(parents=True, exist_ok=True)
-    (WORKFLOW_DIR / "manifest.yaml").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    write_text_atomic(WORKFLOW_DIR / "manifest.yaml", "\n".join(lines) + "\n")
 
 
 def index(iteration: str) -> int:
     artifacts = load_artifacts(iteration)
     write_manifest(iteration, artifacts)
-    write_json(WORKFLOW_DIR / "traceability.json", traceability(iteration, artifacts))
-    cache = {"schema_version": "1", "generated_at": now(), "iteration": iteration, "files": {item.path: item.sha256 for item in artifacts}}
-    write_json(WORKFLOW_DIR / "cache" / "index.json", cache)
+    write_json_atomic(WORKFLOW_DIR / "traceability.json", traceability(iteration, artifacts))
+    # NOTE: per-artifact sha256 hashes are already in manifest.yaml. There
+    # is intentionally no cache/index.json: it was never read by any
+    # consumer and only duplicated manifest content. See S2 in audit.
     print(f"workflow index: {len(artifacts)} artifacts indexed for {iteration}")
     print(f"manifest: {(WORKFLOW_DIR / 'manifest.yaml').relative_to(ROOT)}")
     print(f"traceability: {(WORKFLOW_DIR / 'traceability.json').relative_to(ROOT)}")
-    print(f"cache entries: {len(artifacts)}")
     return 0
 
 
 def find_task(iteration: str, task_id: str, artifacts: list[Artifact]) -> tuple[str, str, int]:
+    if not TASK_ID_RE.fullmatch(task_id) or not is_real_id(task_id):
+        raise ValueError(f"invalid task id: {task_id}")
     plan_path = ROOT / "iteration" / iteration / "03-planning" / f"{iteration}-task-plan-dag.md"
     if not plan_path.exists():
         raise ValueError(f"task plan not found: {plan_path.relative_to(ROOT)}")
     text = plan_path.read_text(encoding="utf-8")
     parsed = sections(text)
-    matches = [section for section in parsed if task_id in section[0]]
+    token = re.compile(rf"(?<![A-Z0-9-]){re.escape(task_id)}(?![A-Z0-9-])")
+    matches = [section for section in parsed if token.search(section[0])]
     if not matches:
-        matches = [section for section in parsed if task_id in section[1]]
+        matches = [section for section in parsed if token.search(section[1])]
     if not matches:
         raise ValueError(f"task not found: {task_id}")
     return matches[0][1], plan_path.relative_to(ROOT).as_posix(), matches[0][2]
@@ -644,7 +821,7 @@ def dashboard(iteration: str) -> int:
     page = template_path.read_text(encoding="utf-8").replace("__DASHBOARD_DATA__", serialized).replace("__DASHBOARD_FALLBACK__", fallback)
     output = WORKFLOW_DIR / "dashboard" / "index.html"
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(page, encoding="utf-8")
+    write_text_atomic(output, page)
     print(f"dashboard written: {output.relative_to(ROOT)}")
     print(f"gate: {data['gate_status']}, tasks: {len(data['tasks'])}")
     return 0
@@ -686,24 +863,37 @@ def task_finished(iteration: str, task_id: str, result: str, *, refresh_index: b
     """
     if result not in {"succeeded", "failed", "blocked"}:
         raise ValueError("result must be succeeded, failed, or blocked")
+    # Always verify the task is referenced in the task plan, regardless of
+    # refresh_index. Without this guard, a typo'd task_id silently writes
+    # a phantom succeeded/failed/blocked record into .workflow/task-runs/
+    # and pollutes the dashboard. find_task raises ValueError -> main() exits 2.
+    artifacts = load_artifacts(iteration)
+    find_task(iteration, task_id, artifacts)
     if refresh_index:
-        artifacts = load_artifacts(iteration)
-        find_task(iteration, task_id, artifacts)
         index(iteration)
+    context_path = WORKFLOW_DIR / "context-packs" / f"{iteration}-{task_id}.md"
+    if not context_path.exists():
+        raise ValueError(
+            f"context pack missing for {task_id}; run `workflow.py context --iteration {iteration} --task {task_id}` first"
+        )
     record = {
+        "schema_version": "2",
         "iteration": iteration,
         "task_id": task_id,
         "result": result,
         "recorded_at": now(),
         "context_pack": f".workflow/context-packs/{iteration}-{task_id}.md",
-        "context_pack_present": (WORKFLOW_DIR / "context-packs" / f"{iteration}-{task_id}.md").exists(),
-        "gate_status": "passed" if gate_code(iteration) == 0 else "blocked",
+        "context_pack_present": True,
+        "project_gate_status": "passed" if gate_code(iteration) == 0 else "blocked",
     }
     path = WORKFLOW_DIR / "task-runs" / f"{iteration}-{task_id}.json"
-    write_json(path, record)
+    write_json_atomic(path, record)
+    history_stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+    history_path = WORKFLOW_DIR / "task-runs" / "history" / f"{iteration}-{task_id}-{history_stamp}.json"
+    write_json_atomic(history_path, record)
     if refresh_dashboard:
         dashboard(iteration)
-    print(f"task conclusion: {task_id}={result}; gate={record['gate_status']}")
+    print(f"task conclusion: {task_id}={result}; gate={record['project_gate_status']}")
     return 0
 
 
@@ -714,7 +904,7 @@ def main(argv: list[str] | None = None) -> int:
         sub = subparsers.add_parser(name)
         sub.add_argument("--iteration", default=discover_iteration())
         if name == "validate":
-            sub.add_argument("--stage", choices=STAGES)
+            sub.add_argument("--stage", choices=GATE_STAGES)
     context = subparsers.add_parser("context")
     context.add_argument("--iteration", default=discover_iteration())
     context.add_argument("--task", required=True)
@@ -726,8 +916,27 @@ def main(argv: list[str] | None = None) -> int:
     finished.add_argument("--result", choices=["succeeded", "failed", "blocked"], required=True)
     finished.add_argument("--refresh-index", action="store_true", help="Also re-run `index` after writing the task record. Off by default; only enable when the task changed artifact state.")
     finished.add_argument("--refresh-dashboard", action="store_true", help="Also re-render the static dashboard after writing the task record. Off by default; run `python .workflow/workflow.py dashboard` separately when needed.")
+    route = subparsers.add_parser("route-requirement", help="Resolve the archive location for a newly received raw requirement.")
+    route.add_argument("--iteration", help="Override the version recorded in manifest.yaml.")
+    subparsers.add_parser("init", help="Create the non-versioned project directory skeleton.")
+    version = subparsers.add_parser("init-version", help="Create the next iteration skeleton after the baseline gate passes.")
+    version.add_argument("--iteration", help="Use the expected next version explicitly.")
     args = parser.parse_args(argv)
+    # Normalize legacy short form (v1) to canonical v1.0 so path lookups
+    # stay consistent with discover_iteration() and the on-disk directory
+    # naming. Without this, --iteration v1 would search iteration/v1/...
+    # even when only iteration/v1.0/ exists, producing misleading
+    # "missing input" errors instead of resolving the real directory.
+    if getattr(args, "iteration", None) is not None:
+        try:
+            args.iteration = canonical_iteration(args.iteration)
+        except (AttributeError, TypeError, ValueError):
+            pass  # leave as-is for error reporting downstream
     try:
+        if args.command == "init":
+            return init_project()
+        if args.command == "init-version":
+            return init_version(args.iteration)
         if args.command == "index":
             return index(args.iteration)
         if args.command == "validate":
@@ -736,6 +945,9 @@ def main(argv: list[str] | None = None) -> int:
             return context_pack(args.iteration, args.task)
         if args.command == "dashboard":
             return dashboard(args.iteration)
+        if args.command == "route-requirement":
+            print(json.dumps(requirement_route(args.iteration), ensure_ascii=False, indent=2))
+            return 0
         return task_finished(args.iteration, args.task, args.result, refresh_index=args.refresh_index, refresh_dashboard=args.refresh_dashboard)
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"ERROR {error}", file=sys.stderr)

@@ -54,6 +54,7 @@ description: "04 stage write code source-code.md tests."
 6. 编写 README.md（如何跑测试 / 启动 dev server）
 7. 全部代码文件经 compileall 静态校验（即使未安装依赖）
 8. 列出"待你执行"清单（venv 创建 / pip install / make test）
+9. 保持 04 阶段产物为 `draft` 或 `In Review`，列出全部必需产物和测试/验证证据，交由人类审核。Agent 不得将任何产物的 `status` 写入或修改为 `Approved`；人类批准后运行 `validate --stage 04-implementation`，才可进入 05 阶段。
 ```
 
 ## Context Budget Rules (HARD)

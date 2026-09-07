@@ -43,6 +43,28 @@ class WorkflowTests(unittest.TestCase):
         (product / "v1-requirement.md").write_text("---\nstatus: Approved\n---\n# Req\n## AC-001\n", encoding="utf-8")
         return temp, root
 
+    def add_approved(self, root, relative: str, body: str = "# artifact\n"):
+        path = root / relative
+        if path.exists():
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.suffix.lower() == ".html":
+            path.write_text("<!-- status: Approved -->\n" + body, encoding="utf-8")
+        else:
+            path.write_text("---\nstatus: Approved\n---\n" + body, encoding="utf-8")
+
+    def add_full_chain_after_fixture(self, root):
+        for relative in [
+            "iteration/v1/01-product/v1-prototype.html",
+            "iteration/v1/02-design/v1-architecture-design.md",
+            "iteration/v1/02-design/v1-database-dictionary.md",
+            "iteration/v1/03-planning/v1-validation-plan.md",
+            "iteration/v1/04-implementation/v1-source-code.md",
+            "iteration/v1/04-implementation/v1-test-results.md",
+            "iteration/v1/04-implementation/v1-issue-fixes.md",
+        ]:
+            self.add_approved(root, relative)
+
     def test_parse_frontmatter_and_gate(self):
         temp, root = self.make_repo(draft=True)
         try:
@@ -58,7 +80,10 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual(workflow.index("v1"), 0)
                 trace = json.loads((root / ".workflow" / "traceability.json").read_text(encoding="utf-8"))
                 self.assertTrue(any(node["id"] == "API-PROJ-001" for node in trace["nodes"]))
-                self.assertTrue((root / ".workflow" / "cache" / "index.json").exists())
+                # Per S2 audit, cache/index.json is no longer written (it was
+                # never read by any consumer; manifest.yaml carries the same
+                # per-artifact hashes).
+                self.assertFalse((root / ".workflow" / "cache" / "index.json").exists())
         finally:
             temp.cleanup()
 
@@ -96,10 +121,14 @@ class WorkflowTests(unittest.TestCase):
         temp, root = self.make_repo()
         try:
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                self.assertEqual(workflow.context_pack("v1", "TASK-API-010"), 0)
                 # default path: cheap append-only, no dashboard re-render
                 self.assertEqual(workflow.task_finished("v1", "TASK-API-010", "succeeded"), 0)
                 record = json.loads((root / ".workflow" / "task-runs" / "v1-TASK-API-010.json").read_text(encoding="utf-8"))
                 self.assertEqual(record["result"], "succeeded")
+                self.assertEqual(record["project_gate_status"], "blocked")
+                history = list((root / ".workflow" / "task-runs" / "history").glob("*.json"))
+                self.assertEqual(len(history), 1)
                 # dashboard should NOT have been written in the default path
                 self.assertFalse((root / ".workflow" / "dashboard" / "index.html").exists())
                 # opt-in: --refresh-dashboard flag triggers dashboard re-render
@@ -111,10 +140,19 @@ class WorkflowTests(unittest.TestCase):
         finally:
             temp.cleanup()
 
-    def test_readme_freshness_check_at_rc_stage(self):
-        """Stage 06 must verify README references current state.
+    def test_task_lookup_does_not_accept_prefix_match(self):
+        temp, root = self.make_repo()
+        try:
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                with self.assertRaises(ValueError):
+                    workflow.find_task("v1", "TASK-API-01", workflow.load_artifacts("v1"))
+        finally:
+            temp.cleanup()
 
-        Stage 06 must block when README is missing or does not mention
+    def test_readme_freshness_check_at_rc_stage(self):
+        """The final review/release stage must verify README freshness.
+
+        The final stage must block when README is missing or does not mention
         current skills / scripts. Earlier stages must not trigger this
         check (regression: D3 must be RC-stage-scoped only).
         """
@@ -141,6 +179,252 @@ class WorkflowTests(unittest.TestCase):
                     any("stale-skill" in e for e in errors),
                     msg=f"freshness check did not flag missing skill; errors={errors}",
                 )
+        finally:
+            temp.cleanup()
+
+
+    def test_task_finished_rejects_unknown_task_id(self):
+        """Regression for B1: task-finished must verify the task is in the plan.
+
+        Without find_task() being called in the default path, a typo'd or
+        stale task_id silently wrote a phantom succeeded/failed/blocked
+        record into .workflow/task-runs/ and polluted the dashboard.
+        """
+        temp, root = self.make_repo()
+        try:
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                with self.assertRaises(ValueError) as ctx:
+                    workflow.task_finished("v1", "TASK-NOPE", "succeeded")
+                self.assertIn("task not found", str(ctx.exception))
+                # No phantom record should be written to task-runs/.
+                runs = root / ".workflow" / "task-runs"
+                self.assertFalse((runs / "v1-TASK-NOPE.json").exists())
+        finally:
+            temp.cleanup()
+
+    def test_validate_stage_05_requires_review_release_file(self):
+        """The combined final stage requires its Approved review/release record."""
+        temp, root = self.make_repo()
+        try:
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                self.add_full_chain_after_fixture(root)
+                import io, contextlib
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    rc = workflow.validate("v1", "05-review-release")
+                self.assertEqual(rc, 1)
+                output = buf.getvalue()
+                self.assertIn("v1-review-release.md", output)
+                final_dir = root / "iteration" / "v1" / "05-review-release"
+                final_dir.mkdir(parents=True, exist_ok=True)
+                (final_dir / "v1-review-release.md").write_text(
+                    "---\nstatus: Approved\n---\n# review release\n", encoding="utf-8"
+                )
+                (root / "README.md").write_text("# v1\n", encoding="utf-8")
+                buf2 = io.StringIO()
+                with contextlib.redirect_stdout(buf2):
+                    rc = workflow.validate("v1", "05-review-release")
+                self.assertEqual(rc, 0, msg=buf2.getvalue())
+        finally:
+            temp.cleanup()
+
+
+
+    def test_validate_stage_04_reports_unknown_task_ids(self):
+        """Regression for S4: TASK-IDs in 04 must be defined in 03 plan.
+
+        Previously source-code.md / test-results.md / issue-fixes.md
+        could mention TASK-API-999 and the gate stayed green because
+        validate() only checked file existence + Approved, not
+        cross-artifact ID consistency.
+        """
+        temp, root = self.make_repo()
+        try:
+            # Re-make baseline as Approved so the gate noise is minimal
+            for name in [
+                "01-product-vision", "02-product-charter",
+                "03-tech-stack-decision", "04-glossary",
+            ]:
+                (root / "baseline" / f"{name}.md").write_text(
+                    "---\nstatus: Approved\n---\n# body\n", encoding="utf-8"
+                )
+            # Plan defines TASK-API-001..003 (already in make_repo)
+            plan = root / "iteration" / "v1" / "03-planning" / "v1-task-plan-dag.md"
+            plan.write_text(
+                "---\nstatus: Approved\n---\n# Plan\n## TASK-API-001\n## TASK-API-002\n## TASK-API-003\n",
+                encoding="utf-8",
+            )
+            val = root / "iteration" / "v1" / "03-planning" / "v1-validation-plan.md"
+            val.write_text("---\nstatus: Approved\n---\n# v\n", encoding="utf-8")
+
+            # Build 04-implementation with a known + an unknown TASK ref
+            impl = root / "iteration" / "v1" / "04-implementation"
+            impl.mkdir(exist_ok=True)
+            (impl / "v1-source-code.md").write_text(
+                "---\nstatus: Approved\n---\n# sc\nRef TASK-API-001 and TASK-API-999.\n",
+                encoding="utf-8",
+            )
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                import io, contextlib
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    rc = workflow.validate("v1", "04-implementation")
+                output = buf.getvalue()
+                self.assertEqual(rc, 1)
+                self.assertIn("TASK-API-999", output)
+                self.assertIn("not defined", output)
+                self.assertNotIn("TASK-API-001", output)
+
+                # Now fix the reference and the gate should be clean
+                (impl / "v1-source-code.md").write_text(
+                    "---\nstatus: Approved\n---\n# sc\nRef TASK-API-001, TASK-API-002, and TASK-API-003.\n",
+                    encoding="utf-8",
+                )
+                self.add_full_chain_after_fixture(root)
+                buf2 = io.StringIO()
+                with contextlib.redirect_stdout(buf2):
+                    rc = workflow.validate("v1", "04-implementation")
+                self.assertEqual(rc, 0, msg=buf2.getvalue())
+        finally:
+            temp.cleanup()
+
+    def test_stage_01_requires_product_outputs(self):
+        temp, root = self.make_repo()
+        try:
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                self.assertEqual(workflow.validate("v1", "01-product"), 1)
+                self.assertIn("iteration/v1/01-product/v1-prototype.html", workflow.required_inputs("v1", "01-product"))
+        finally:
+            temp.cleanup()
+
+    def test_requirement_route_uses_baseline_when_only_readme_exists(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "baseline").mkdir()
+            (root / "baseline" / "README.md").write_text("# Baseline\n", encoding="utf-8")
+            (root / ".workflow").mkdir()
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                route = workflow.requirement_route()
+            self.assertEqual(route["mode"], "baseline")
+            self.assertEqual(route["raw_requirement_dir"], "baseline/raw-requirement")
+
+    def test_requirement_route_keeps_baseline_mode_when_only_raw_input_exists(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "baseline" / "raw-requirement").mkdir(parents=True)
+            (root / "baseline" / "raw-requirement" / "customer-note.txt").write_text(
+                "用户原始需求", encoding="utf-8"
+            )
+            (root / ".workflow").mkdir()
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                route = workflow.requirement_route()
+            self.assertEqual(route["mode"], "baseline")
+
+    def test_requirement_route_prefers_manifest_iteration(self):
+        temp, root = self.make_repo()
+        try:
+            (root / ".workflow" / "manifest.yaml").write_text(
+                "schema_version: '1'\niteration: 'v1.1'\n", encoding="utf-8"
+            )
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                route = workflow.requirement_route()
+            self.assertEqual(route["mode"], "iteration")
+            self.assertEqual(route["iteration"], "v1.1")
+            self.assertEqual(route["version_source"], "manifest")
+            self.assertEqual(route["raw_requirement_dir"], "iteration/raw-requirement")
+            self.assertEqual(route["raw_requirement_access"], "user-owned-read-only")
+        finally:
+            temp.cleanup()
+
+    def test_init_creates_project_intake_directories(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                self.assertEqual(workflow.init_project(), 0)
+            self.assertTrue((root / "baseline" / "raw-requirement").is_dir())
+            self.assertTrue((root / "iteration").is_dir())
+            self.assertTrue((root / "iteration" / "raw-requirement").is_dir())
+            self.assertTrue((root / "workspace").is_dir())
+            self.assertTrue((root / "baseline" / "raw-requirement" / "README.md").is_file())
+            self.assertTrue((root / "iteration" / "README.md").is_file())
+            self.assertTrue((root / "workspace" / "README.md").is_file())
+            self.assertTrue((root / "iteration" / "raw-requirement" / "README.md").is_file())
+
+    def test_init_version_requires_baseline_then_creates_skeleton(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "baseline").mkdir()
+            (root / "iteration").mkdir()
+            (root / ".workflow").mkdir()
+            for name in ["01-product-vision", "02-product-charter", "03-tech-stack-decision", "04-glossary"]:
+                (root / "baseline" / f"{name}.md").write_text(
+                    "---\nstatus: Approved\n---\n# baseline\n", encoding="utf-8"
+                )
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                self.assertEqual(workflow.init_version(), 0)
+            for stage in workflow.STAGES:
+                self.assertTrue((root / "iteration" / "v1.0" / stage).is_dir())
+            self.assertFalse((root / "iteration" / "v1.0" / "00-raw-requirement").exists())
+
+    def test_init_version_refuses_unapproved_baseline(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "baseline").mkdir()
+            (root / "iteration").mkdir()
+            (root / ".workflow").mkdir()
+            for name in ["01-product-vision", "02-product-charter", "03-tech-stack-decision", "04-glossary"]:
+                (root / "baseline" / f"{name}.md").write_text(
+                    "---\nstatus: draft\n---\n# baseline\n", encoding="utf-8"
+                )
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                with self.assertRaises(ValueError):
+                    workflow.init_version()
+            self.assertFalse((root / "iteration" / "v1.0").exists())
+
+    def test_frontmatter_supports_multiline_html_and_scopes_change_set(self):
+        html = "<!--\nstatus: Approved\nowner: QA\n-->\n<html></html>"
+        values, body = workflow.parse_frontmatter(html)
+        self.assertEqual(values["status"], "Approved")
+        self.assertEqual(values["owner"], "QA")
+        self.assertEqual(body, "<html></html>")
+        text = (
+            "---\nchange_set:\n  deprecated: [FR-001]\n---\n"
+            "change_set:\n  deprecated: [FR-999]\n"
+        )
+        self.assertEqual(workflow.parse_change_set(text)["deprecated"], ["FR-001"])
+
+    def test_main_normalizes_short_iteration_literal(self):
+        """Regression for S1: --iteration v1 must resolve to v1.0 paths.
+
+        Previously the CLI accepted v1 as a legacy alias for v1.0
+        but did not normalize the iteration literal before path
+        lookups. Users got misleading 'missing input' errors when
+        only iteration/v1.0/ existed on disk.
+        """
+        temp, root = self.make_repo()
+        try:
+            # The CLI must normalize v1 -> v1.0 before any path lookup.
+            # Use a real v1.0 directory so the test distinguishes CLI
+            # normalization from merely accepting the literal.
+            import io, contextlib
+            legacy = root / "iteration" / "v1"
+            canonical = root / "iteration" / "v1.0"
+            canonical.parent.mkdir(parents=True, exist_ok=True)
+            legacy.rename(canonical)
+            with patch.object(workflow, "ROOT", root), patch.object(
+                workflow, "WORKFLOW_DIR", root / ".workflow"
+            ), patch.object(workflow, "discover_iteration", return_value="v1.0"):
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    workflow.main(["validate", "--iteration", "v1", "--stage", "03-planning"])
+            self.assertIn("iteration=v1.0", output.getvalue())
+            self.assertNotIn("iteration=v1/", output.getvalue())
+            major, minor = workflow.iteration_number("v1")
+            self.assertEqual(f"v{major}.{minor}", "v1.0")
+            major, minor = workflow.iteration_number("v2")
+            self.assertEqual(f"v{major}.{minor}", "v2.0")
+            major, minor = workflow.iteration_number("v1.3")
+            self.assertEqual(f"v{major}.{minor}", "v1.3")
         finally:
             temp.cleanup()
 
@@ -237,6 +521,26 @@ class DiffVersionsTests(unittest.TestCase):
                     any(m["id"] == "FR-001" for m in payload["modified"]),
                     msg=f"expected FR-001 in modified, got {payload['modified']!r}",
                 )
+            finally:
+                shutil.rmtree(sandbox, ignore_errors=True)
+
+    def test_diff_reads_archived_source_iteration(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = Path(raw)
+            sandbox, repo = self._make_two_iter_repo(tmp)
+            try:
+                archive = repo / "iteration" / "archive"
+                archive.mkdir(parents=True)
+                shutil.move(str(repo / "iteration" / "v1.0"), str(archive / "v1.0"))
+                result = subprocess.run(
+                    [sys.executable, ".workflow/scripts/diff_versions.py",
+                     "--from", "v1.0", "--to", "v1.1", "--json"],
+                    cwd=repo, capture_output=True, text=True,
+                )
+                self.assertEqual(result.returncode, 2, msg=result.stderr)
+                payload = json.loads(result.stdout)
+                self.assertNotIn("FR-001", payload["added"])
+                self.assertEqual(payload["deprecated"], ["FR-003"])
             finally:
                 shutil.rmtree(sandbox, ignore_errors=True)
 

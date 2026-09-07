@@ -1,33 +1,45 @@
 ---
 name: normalize-requirement
-description: Use whenever a new requirement document must be produced. Converts raw requirements into the project's standard Product Requirement under iteration/v{major}.{minor}/01-product/. For first project (v1.0) this triggers baseline-gate first; for iterations (v2.0+, v1.1, ...) it triggers manage-iteration.
+description: Use whenever a user provides an unstructured requirement. Routes it to baseline intake or the manifest-selected iteration, then normalizes it into the appropriate draft artifacts.
 ---
 
 # Normalize Requirement
 
 ## Purpose
 
-将非结构化或格式不统一的用户需求，归一化为 `iteration/v{major}.{minor}/01-product/v{major}.{minor}-requirement.md`。
+将用户提供、格式可能不统一的原始需求，先路由并归档，再归一化为 baseline 草稿或 `iteration/v{major}.{minor}/01-product/v{major}.{minor}-requirement.md` 草稿。
 
-适用所有版本：
-- **首次版本（v1.0）**：先 `baseline-gate`，再 manage-iteration。
-- **迭代（v1.1+）**：先 manage-iteration（创建骨架 + 检测 `base_version`），再 normalize。
+## Route First
+
+开始归一化前，运行：
+
+```powershell
+python .workflow/workflow.py route-requirement
+```
+
+该命令按以下规则输出原始需求的归档位置：
+
+1. `baseline/` 除 `README.md` 外为空：返回 `mode: baseline` 与 `baseline/raw-requirement/`。这是首次项目的 baseline 需求处理；保留用户原文，并根据其明确事实起草 4 份 baseline 文档，全部保持 `status: draft`。
+2. baseline 已初始化：返回 `mode: iteration`。优先使用 `.workflow/manifest.yaml` 的 `iteration` 字段；若 manifest 不存在或没有有效版本号，再使用目录发现结果。将用户原始材料原样保存到输出的 `iteration/raw-requirement/`；命令返回的 `iteration` 是该输入对应的目标版本。
+
+原始材料不是门禁产物，不要求 frontmatter 或 `status: Approved`。`iteration/raw-requirement/` 中的材料归用户所有且只读：Agent 不得修改、重命名或删除原始文件。归一化产物必须在 frontmatter 或“来源追溯”章节记录原始文件路径与 `route-requirement` 返回的目标版本；归一化产物才进入人工审核。
 
 ## Pre-flight
 
 | 版本 | 必须先调用 |
 |---|---|
-| `v1.0`（首次项目） | `baseline-gate` 校验 `baseline/` 完整性。未通过 → 报错并停止。 |
-| `v{major}.{minor}`（minor ≥ 1） | `manage-iteration` 创建骨架并校验 `base_version` 指向已存在的上一迭代。 |
-| `v{major}.0` 且 major > 1 | `baseline-gate`（重大变更需重新校验 baseline）；然后 manage-iteration。 |
+| baseline 路由 | 归档原始需求，起草 `baseline/` 的 4 个文档；人工审核后运行 `validate --stage 00-baseline`。 |
+| `v1.0`（首次项目） | `00-baseline` 通过后调用 manage-iteration 创建骨架，归档同一原始需求的迭代快照，再归一化为产品需求。 |
+| `v{major}.{minor}`（已初始化项目） | 使用 `route-requirement` 解析的版本；如目录不存在，先调用 manage-iteration 创建骨架。 |
 
 ## Required References
 
-开始转换前，**必须**读取：
+在 iteration 路由下，开始转换前，**必须**读取：
 
 - `baseline/01-product-vision.md`
 - `baseline/02-product-charter.md`
 - `baseline/04-glossary.md`
+- `iteration/raw-requirement/` 中与 `route-requirement` 返回目标版本关联的全部原始需求材料
 - `iteration/{上一已批准版本}/01-product/{上一版本}-requirement.md`（用于 diff 与继承）
 - `iteration/{上一已批准版本}/01-product/{上一版本}-iteration-changelog.md`（如存在）
 - `templates/product.md`（合并后的统一模板）
@@ -36,15 +48,9 @@ description: Use whenever a new requirement document must be produced. Converts 
 
 ## Input
 
-支持以下输入形式：
+原始材料来自用户，可为直接描述、Markdown、纯文本、邮件、会议纪要或其他可读取文件。先完整阅读全部材料，再开始归一化；不得仅依据文件名、摘要或聊天记忆推断需求。
 
-- 用户直接描述的产品想法或功能需求。
-- Markdown、纯文本、邮件或会议纪要。
-- 多轮对话中分散出现的需求。
-- 已有但章节不完整的需求文档。
-- **迭代增量**：在上一版本基础上的新增 / 修改 / 废弃条目。
-
-如果输入来自文件，先完整阅读文件，再开始归一化；不要只依据文件名或摘要推断需求。
+baseline 路由只从原始材料提取明确事实来起草 baseline 文档；技术选型或其他缺失信息必须保留为 `draft` 中的待确认项，不能擅自补全。iteration 路由使用已批准 baseline 与该迭代原始材料生成产品需求草稿。
 
 ## Conversion Rules
 
@@ -137,6 +143,21 @@ change_set:
 
 ## Output Contract
 
+### Baseline route
+
+当 `route-requirement` 返回 `mode: baseline` 时，输出为以下 4 份 `status: draft` 文档：
+
+```text
+baseline/01-product-vision.md
+baseline/02-product-charter.md
+baseline/03-tech-stack-decision.md
+baseline/04-glossary.md
+```
+
+必须在每份文档中标识原始需求来源。未提供的技术、指标或术语不得虚构；保留为待确认项并等待人工审核。通过 `validate --stage 00-baseline` 后，才可创建 `iteration/v1.0/`。
+
+### Iteration route
+
 输出文件路径：
 
 ```text
@@ -175,7 +196,7 @@ last_updated: YYYY-MM-DD
 
 ## Human Review Gate
 
-转换完成后，先进行人工确认，不要直接将结果作为下一阶段正式输入。确认重点：
+转换完成后，Agent 必须保持 `status: draft` 或 `status: In Review`，列出该阶段全部待审产物及验证证据，并进行人工确认；不得将状态改为 `Approved`，也不得直接将结果作为下一阶段正式输入。人工审核通过后由人类手动将每份必需产物改为 `Approved`，再运行 `validate --stage 01-product`。确认重点：
 
 - 产品目标和用户角色是否准确（与 baseline 一致）。
 - MVP 范围是否过大或过小。
@@ -186,7 +207,8 @@ last_updated: YYYY-MM-DD
 
 ## Validation Checklist
 
-- [ ] 已通过对应版本的 pre-flight（baseline-gate / manage-iteration）。
+- [ ] 已运行 `route-requirement`，并按其返回的 mode 与目录归档原始材料。
+- [ ] baseline 路由下已起草完整 baseline，或 iteration 路由下已读取已批准 baseline。
 - [ ] 已读取 standard template 和 baseline。
 - [ ] 原始输入中的明确事实都能在输出中找到。
 - [ ] 没有把推断写成已确认事实。

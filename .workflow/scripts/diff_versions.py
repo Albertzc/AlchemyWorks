@@ -34,13 +34,33 @@ sys.path.insert(0, str(THIS.parents[1]))
 
 from workflow import (  # noqa: E402
     ID_RE,
+    canonical_iteration,
     discover_iteration,
     is_real_id,
-    load_artifacts,
-    parse_frontmatter,
+    parse_change_set,
 )
 
 REPO_ROOT = THIS.parents[2]
+
+
+def _iteration_root(iteration: str) -> Path:
+    active = REPO_ROOT / "iteration" / iteration
+    if active.exists():
+        return active
+    return REPO_ROOT / "iteration" / "archive" / iteration
+
+
+def _artifact_paths(iteration: str) -> list[Path]:
+    paths = [REPO_ROOT / relative for relative in (
+        "baseline/01-product-vision.md",
+        "baseline/02-product-charter.md",
+        "baseline/03-tech-stack-decision.md",
+        "baseline/04-glossary.md",
+    )]
+    root = _iteration_root(iteration)
+    if root.exists():
+        paths.extend(path for path in root.rglob("*") if path.is_file() and path.suffix.lower() in {".md", ".html", ".json"})
+    return [path for path in paths if path.exists()]
 
 
 def _ids_in(iteration: str) -> dict[str, set[str]]:
@@ -49,37 +69,34 @@ def _ids_in(iteration: str) -> dict[str, set[str]]:
     Excludes templates/ and the workflow CLI itself; iterates only artifacts
     load_artifacts() reports (baseline + iteration/*/).
     """
-    artifacts = load_artifacts(iteration)
     out: dict[str, set[str]] = {}
-    for item in artifacts:
-        if item.status == "missing":
-            continue
-        text = (REPO_ROOT / item.path).read_text(encoding="utf-8")
+    root = _iteration_root(iteration)
+    for path in _artifact_paths(iteration):
+        text = path.read_text(encoding="utf-8")
+        try:
+            path.relative_to(root)
+            under_version_root = True
+        except ValueError:
+            under_version_root = False
+        if under_version_root and root != REPO_ROOT / "iteration" / iteration:
+            relative = f"iteration/{iteration}/{path.relative_to(root).as_posix()}"
+        else:
+            relative = path.relative_to(REPO_ROOT).as_posix()
         for identifier in ID_RE.findall(text):
             if not is_real_id(identifier):
                 continue
-            out.setdefault(identifier, set()).add(item.path)
+            out.setdefault(identifier, set()).add(relative)
     return out
 
 
-_CHANGE_SET_BLOCK_RE = re.compile(
-    r"^change_set:\s*(?:\n(?:\s+.+\n)+)", re.MULTILINE
-)
-_DEPRECATED_KEY_RE = re.compile(
-    r"^\s+deprecated:\s*\[(.+?)\]", re.MULTILINE | re.DOTALL
-)
-
-
 def _deprecated_in(iteration: str) -> set[str]:
-    """Read frontmatter `change_set.deprecated: [...]` from a top-level
-    01-product artifact.
+    """Read `change_set.deprecated` from a top-level 01-product artifact.
 
-    The workflow's flat kv frontmatter parser collapses YAML block scalars
-    (nested lists, multi-line strings) into empty strings, so we parse the
-    raw text with a small regex dedicated to the `change_set.deprecated`
-    line — the only nested key we currently care about.
+    Delegates to workflow.parse_change_set so the parsing logic lives
+    in one place; any future consumer (e.g. a normalize-requirement
+    checker) can reuse the same helper instead of duplicating regex.
     """
-    base = REPO_ROOT / "iteration" / iteration / "01-product"
+    base = _iteration_root(iteration) / "01-product"
     candidates = (
         base / f"{iteration}-requirement.md",
         base / f"{iteration}-iteration-changelog.md",
@@ -88,23 +105,18 @@ def _deprecated_in(iteration: str) -> set[str]:
     for path in candidates:
         if not path.exists():
             continue
-        text = path.read_text(encoding="utf-8")
-        block = _CHANGE_SET_BLOCK_RE.search(text)
-        if not block:
+        try:
+            change_set = parse_change_set(path.read_text(encoding="utf-8"))
+        except Exception:
             continue
-        match = _DEPRECATED_KEY_RE.search(block.group(0))
-        if not match:
-            continue
-        for raw in match.group(1).replace(",", " ").split():
-            if is_real_id(raw):
-                deprecated.add(raw)
+        deprecated.update(change_set.get("deprecated", []))
     return deprecated
 
 
 def collect(from_iter: str, to_iter: str) -> dict:
     """Compute the three diff buckets plus explicit deprecations."""
-    from_ids = _ids_in(from_iter) if (REPO_ROOT / "iteration" / from_iter).exists() else {}
-    to_ids = _ids_in(to_iter) if (REPO_ROOT / "iteration" / to_iter).exists() else {}
+    from_ids = _ids_in(from_iter) if _iteration_root(from_iter).exists() else {}
+    to_ids = _ids_in(to_iter) if _iteration_root(to_iter).exists() else {}
     deprecated = _deprecated_in(to_iter)
 
     from_set = set(from_ids)
@@ -189,6 +201,8 @@ def main() -> int:
     parser.add_argument("--json", action="store_true",
                         help="emit JSON instead of text")
     args = parser.parse_args()
+    args.from_iter = canonical_iteration(args.from_iter)
+    args.to_iter = canonical_iteration(args.to_iter)
     data = collect(args.from_iter, args.to_iter)
     if args.json:
         print(json.dumps(data, ensure_ascii=False, indent=2))
