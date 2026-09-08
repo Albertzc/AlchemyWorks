@@ -1,6 +1,6 @@
 # Alchemy Works (AW) — 软件开发工作流
 
-> AlchemyWorks/ AW 软件工厂：以**双段版本号**为顶层单元的阶段化交付流水线。
+> AlchemyWorks/ AW软件工厂：以**双段版本号**为顶层单元的阶段化交付流水线。
 > 支持 0→1 项目搭建 + 后续需求迭代；每个版本的所有阶段产物自动与 `v{major}.{minor}` 关联。
 
 ---
@@ -122,6 +122,14 @@ iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 
 所有 Skill 位于 `.agents/skills/<name>/SKILL.md`，触发条件命中时自动加载。
 
+### 原型生成工具路由
+
+进入 `01-product` 生成或修改 HTML 原型前，先执行原型预览工具检查：
+
+- Codex：必须使用 `visualize` 插件进行交互预览或关键交互检查，再生成项目内的 `v{major}.{minor}-prototype.html`。预览插件不可用时暂停并引导用户安装/启用。
+- 其他 Agent：先搜索功能等价的交互可视化或原型预览插件，记录替代工具后再生成；找不到替代工具时暂停并请求用户处理。
+- 工具预览是原型生成的前置验证，不替代正式阶段产物；阶段记录必须写明实际使用的工具、检查结果和阻断原因（如有）。
+
 ---
 
 ## 5. 模板体系（3 个跨版本模板）
@@ -190,11 +198,15 @@ flowchart TD
 ```bash
 # 索引与门禁
 python .workflow/workflow.py index      --iteration v1.0       # 生成 manifest + traceability + 缓存
+python .workflow/workflow.py state      --iteration v1.0 --refresh # 刷新并显示恢复工作所需的最小状态
+python .workflow/workflow.py resume     --json                   # 新会话首选：只输出最小恢复状态
+python .workflow/workflow.py preflight  --iteration v1.0 --json  # 本地门禁、DAG、覆盖率检查
 python .workflow/workflow.py validate   --iteration v1.0       # 校验全部 stage
 python .workflow/workflow.py validate   --iteration v1.0 --stage 02-design   # 单 stage 校验
 
 # 任务管理
 python .workflow/workflow.py context    --iteration v1.0 --task TASK-API-010   # 生成/复用 TASK Context Pack
+python .workflow/workflow.py context    --iteration v1.0 --task TASK-API-010 --compact --max-chars 12000
 python .workflow/workflow.py task-finished --iteration v1.0 --task TASK-API-010 --result succeeded
 # ↑ 默认仅追加 task-runs JSON，不触发 index/dashboard
 #   --refresh-index      当任务改变了产物状态时加上
@@ -208,13 +220,19 @@ python .workflow/workflow.py dashboard  --iteration v1.0       # 渲染静态 HT
 
 | 子命令 | 功能 | 写入文件 |
 |---|---|---|
-| `index` | 全产物索引 + traceability 图 | `manifest.yaml` / `traceability.json` |
+| `index` | 全产物索引 + traceability 图 + 恢复检查点 | `manifest.yaml` / `traceability.json` / `current-state.json` |
+| `state` | 刷新或读取当前阶段、阻塞项、下一动作和 Context Pack | `current-state.json` |
+| `resume` | 输出新会话所需的最小恢复 JSON | stdout |
+| `preflight` | 本地执行门禁、TASK DAG 和 AC/TASK 覆盖率检查 | stdout / JSON |
+| `review-pack` | 生成人工审核证据摘要，不修改审批状态 | stdout / JSON |
 | `validate` | stage gate 检查（无产物修改）| stdout + exit code |
-| `context` | 提取 TASK 相关章节，按 hash 复用 | `context-packs/<ver>-<task>.md` |
+| `context` | 提取 TASK 相关章节，去重、限长并按 hash 复用 | `context-packs/<ver>-<task>.md` |
 | `task-finished` | 写入最新 TASK 结论并保留历史记录 | `task-runs/<ver>-<task>.json` + `task-runs/history/*.json` |
 | `dashboard` | 渲染静态 HTML 仪表盘 | `dashboard/index.html` |
 
 所有命令子命令接受 `--iteration`（默认从 `iteration/` 推断最大值；不存在则返回 `v1.0`）。
+
+工作流生成的 `generated_at`、`checked_at`、`recorded_at` 和 Context Pack 时间均使用执行 Codex 客户端的本地时区，并保留 ISO 8601 偏移量。
 
 ---
 
@@ -292,10 +310,14 @@ python .workflow/scripts/check_links.py --iteration v1.0
 ### 9.3 实施单个 TASK
 
 ```bash
-# 1. 启动前：刷新索引 + 校验 gate + 生成 Context Pack
+# 1. 启动前：本地生成最小恢复状态
+python .workflow/workflow.py resume --json
+
+# 2. 启动任务前：本地 preflight + 校验 gate + 生成紧凑 Context Pack
 python .workflow/workflow.py index    --iteration v1.0
+python .workflow/workflow.py preflight --iteration v1.0 --json
 python .workflow/workflow.py validate --iteration v1.0 --stage 04-implementation
-python .workflow/workflow.py context  --iteration v1.0 --task TASK-API-010
+python .workflow/workflow.py context  --iteration v1.0 --task TASK-API-010 --compact --max-chars 12000
 
 # 2. 读 .workflow/context-packs/v1.0-TASK-API-010.md（任务片段，非整篇）
 
@@ -303,7 +325,7 @@ python .workflow/workflow.py context  --iteration v1.0 --task TASK-API-010
 
 # 4. 完成：轻量记录（默认）
 #    task-finished 要求 Context Pack 已存在，否则拒绝写入完成记录
-python .workflow/workflow.py task-finished --iteration v1.0 --task TASK-API-010 --result succeeded
+python .workflow/workflow.py task-finished --iteration v1.0 --task TASK-API-010 --result succeeded --auto-refresh
 # ↑ 不重跑 index/dashboard；高频操作零开销
 # ↓ 偶尔才需要：
 python .workflow/workflow.py task-finished ... --refresh-dashboard

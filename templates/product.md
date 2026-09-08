@@ -25,7 +25,7 @@ document_version: 0.1.0
 product_version: MVP
 status: draft
 owner: Product Owner
-last_updated: YYYY-MM-DD
+last_updated: YYYY-MM-DDTHH:MM:SS±HH:MM # Codex client local time
 base_version: <上一已批准迭代，如 v1.0>      # 迭代场景必填
 change_set:                                  # 迭代场景必填
   added: [FR-XXX, ...]

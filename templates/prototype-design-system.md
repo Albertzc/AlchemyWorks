@@ -4,7 +4,7 @@ version: 1.0.0
 status: draft
 theme: enterprise-light
 owner: Product Owner / Design Owner
-last_updated: YYYY-MM-DD
+last_updated: YYYY-MM-DDTHH:MM:SS±HH:MM # Codex client local time
 ---
 
 # HTML Prototype 设计系统模板
@@ -75,6 +75,13 @@ last_updated: YYYY-MM-DD
 - 生成时必须以 `Prototype.html` 作为结构与交互参考，不得从历史 Prototype 或临时页面派生。
 - 模板中的产品名称、业务文案和示例数据仅用于说明结构，必须依据已确认的 Product Requirement 和 Feature Specification 替换。
 - 原型中发现的视觉调整记录在本文档的变更记录中。
+
+## 5.1 原型生成工具路由
+
+- 使用 Codex 时，生成项目原型前必须调用 `visualize` 插件进行交互预览或关键交互检查；该预览不替代 `iteration/v{major}.{minor}/01-product/` 下的正式 HTML 文件。
+- 如果 Codex 环境未安装或未启用 `visualize`，必须暂停并引导用户安装/启用后再继续，不得静默跳过。
+- 使用其他 Agent 时，必须先搜索并记录一个与 `visualize` 功能相当的交互可视化/原型预览插件；找到后再生成页面，找不到则暂停并请求用户提供替代工具。
+- 阶段产物或实施记录必须记录实际使用的工具和检查结果，不能虚报插件调用。
 
 ## 6. 人工确认项
 

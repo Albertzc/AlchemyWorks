@@ -21,6 +21,16 @@ description: Use when creating or reviewing HTML prototypes. Defines visual lang
 
 路径与版本解耦 —— design system 是**模板级常量**，不属于任何版本。
 
+## Prototype Tool Routing
+
+生成或修改 `iteration/v{major}.{minor}/01-product/v{major}.{minor}-prototype.html` 前，必须先确定当前 Agent 环境的原型预览能力：
+
+1. **Codex 环境**：使用 `visualize` 插件创建交互预览或检查原型关键交互，再生成项目内的最终 HTML 原型文件。`visualize` 预览用于探索和验证，不替代项目内的正式原型产物。
+2. **Codex 未安装 `visualize` 时**：暂停原型生成，向用户说明缺少插件，并引导用户在当前 Codex 环境安装或启用 `visualize`；未得到用户确认前不得回退为无预览生成。
+3. **其他 Agent 环境**：先搜索当前环境中与 `visualize` 能力相当的插件或工具，至少应支持交互式界面预览、状态切换检查或原型可视化检查。找到替代能力后记录名称和用途，再继续生成；找不到时暂停并请求用户提供或安装替代工具。
+
+流程记录必须包含：运行环境、使用的插件/替代工具、预览或检查结果，以及无法使用时的阻断原因。不得把未实际调用的插件写成已使用。
+
 ## Design Rules
 
 ### Visual Language

@@ -31,6 +31,7 @@ Thumbs.db
 .workflow/cache/
 .workflow/manifest.yaml
 .workflow/traceability.json
+.workflow/current-state.json
 .workflow/dashboard/index.html
 .workflow/context-packs/
 .workflow/task-runs/

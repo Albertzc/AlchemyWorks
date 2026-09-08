@@ -23,7 +23,7 @@ document_type: <architecture-design | api-spec | database-dictionary>
 version: 1.0.0
 status: draft
 owner: Tech Lead
-last_updated: YYYY-MM-DD
+last_updated: YYYY-MM-DDTHH:MM:SS±HH:MM # Codex client local time
 base_version: <上一已批准迭代，如 v1.0>
 baseline_ref:
   - baseline/03-tech-stack-decision.md

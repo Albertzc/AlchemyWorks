@@ -15,6 +15,7 @@ Run from the project root:
 python .workflow/workflow.py init
 python .workflow/workflow.py init-version
 python .workflow/workflow.py index --iteration v1.0
+python .workflow/workflow.py state --iteration v1.0 --refresh
 python .workflow/workflow.py validate --iteration v1.0 --stage 00-baseline
 python .workflow/workflow.py validate --iteration v1.0 --stage <stage>
 python .workflow/workflow.py context --iteration v1.0 --task TASK-XXX-NNN
@@ -34,6 +35,7 @@ Implementation work must consume one TASK-scoped Context Pack. The pack contains
 
 - `.workflow/manifest.yaml`
 - `.workflow/traceability.json`
+- `.workflow/current-state.json`
 - `.workflow/cache/context-packs.json`
 - `.workflow/context-packs/<iteration>-<task>.md`
 - `.workflow/task-runs/<iteration>-<task>.json`
@@ -41,5 +43,9 @@ Implementation work must consume one TASK-scoped Context Pack. The pack contains
 - `.workflow/dashboard/index.html`
 
 These are generated state, not approval records. Human approval remains represented by artifact frontmatter and must be explicit.
+
+Generated timestamps use the local timezone of the Codex client running the command and include the ISO 8601 offset; do not reinterpret them as Codex server time.
+
+Before resuming work, run `state --refresh` to refresh the manifest, traceability graph, and recovery checkpoint, then use its current-stage, blocker, next-action, and active-Context-Pack fields to load only the required inputs. The checkpoint is invalidated by a changed source fingerprint and must never override artifact frontmatter or a stage gate.
 
 The stage gate validates the complete upstream chain through the requested stage. `task-finished` requires a pre-generated Context Pack and preserves both the latest task record and an immutable history record.

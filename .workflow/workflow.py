@@ -14,7 +14,7 @@ import re
 import sys
 import tempfile
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
@@ -65,7 +65,13 @@ class Artifact:
 
 
 def now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    """Return the local time of the Codex client running this command."""
+    return datetime.now().astimezone().replace(microsecond=0).isoformat()
+
+
+def local_filename_timestamp() -> str:
+    """Create a filesystem-safe local timestamp without falsely claiming UTC."""
+    return datetime.now().astimezone().strftime("%Y%m%dT%H%M%S.%f%z")
 
 
 def sha256(path: Path) -> str:
@@ -376,7 +382,7 @@ def is_real_id(identifier: str) -> bool:
     return not any(part in {"XXX", "NNN"} for part in identifier.split("-"))
 
 
-def required_inputs(iteration: str, stage: str) -> list[str]:
+def stage_outputs(iteration: str, stage: str) -> list[str]:
     iteration_number(iteration)
     outputs = {
         "01-product": [
@@ -403,8 +409,15 @@ def required_inputs(iteration: str, stage: str) -> list[str]:
     }
     if stage not in outputs:
         raise ValueError(f"unknown stage: {stage}; iteration={iteration}")
+    return outputs[stage]
+
+
+def required_inputs(iteration: str, stage: str) -> list[str]:
+    iteration_number(iteration)
+    if stage not in STAGES:
+        raise ValueError(f"unknown stage: {stage}; iteration={iteration}")
     end = STAGES.index(stage) + 1
-    return [path for current in STAGES[:end] for path in outputs[current]]
+    return [path for current in STAGES[:end] for path in stage_outputs(iteration, current)]
 
 
 def path_artifact(artifacts: list[Artifact], relative: str) -> Artifact | None:
@@ -501,8 +514,8 @@ def check_readme_freshness(iteration: str, errors: list[str]) -> None:
             )
 
 
-def validate(iteration: str, stage: str | None) -> int:
-    artifacts = load_artifacts(iteration)
+def validation_report(iteration: str, stage: str | None, artifacts: list[Artifact] | None = None) -> tuple[list[Artifact], list[str], list[str]]:
+    artifacts = artifacts if artifacts is not None else load_artifacts(iteration)
     by_path = {item.path: item for item in artifacts}
     errors: list[str] = []
     warnings: list[str] = []
@@ -550,6 +563,24 @@ def validate(iteration: str, stage: str | None) -> int:
     if "05-review-release" in stages:
         check_readme_freshness(iteration, errors)
 
+    return artifacts, errors, warnings
+
+
+def validate(iteration: str, stage: str | None, *, record_state: bool = True) -> int:
+    artifacts, errors, warnings = validation_report(iteration, stage)
+    target = stage or "all"
+    if record_state:
+        write_current_state(
+            iteration,
+            artifacts,
+            gate={
+                "target": target,
+                "result": "passed" if not errors else "blocked",
+                "errors": errors,
+                "warnings": warnings,
+                "checked_at": now(),
+            },
+        )
     print(f"workflow validate: iteration={iteration}, target={target}")
     for warning in warnings:
         print(f"WARNING {warning}")
@@ -683,6 +714,7 @@ def index(iteration: str) -> int:
     artifacts = load_artifacts(iteration)
     write_manifest(iteration, artifacts)
     write_json_atomic(WORKFLOW_DIR / "traceability.json", traceability(iteration, artifacts))
+    write_current_state(iteration, artifacts)
     # NOTE: per-artifact sha256 hashes are already in manifest.yaml. There
     # is intentionally no cache/index.json: it was never read by any
     # consumer and only duplicated manifest content. See S2 in audit.
@@ -709,7 +741,24 @@ def find_task(iteration: str, task_id: str, artifacts: list[Artifact]) -> tuple[
     return matches[0][1], plan_path.relative_to(ROOT).as_posix(), matches[0][2]
 
 
-def context_pack(iteration: str, task_id: str) -> int:
+def context_pack(
+    iteration: str,
+    task_id: str,
+    *,
+    compact: bool = False,
+    max_chars: int = 24000,
+    max_sections: int = 40,
+) -> int:
+    """Build a bounded, task-scoped context pack locally.
+
+    The old behaviour remains the default for API compatibility.  Compact
+    mode deduplicates identical excerpts, caps the number of sections and
+    truncates the generated body before any content is handed to an agent.
+    """
+    if max_chars < 1000:
+        raise ValueError("max_chars must be at least 1000")
+    if max_sections < 1:
+        raise ValueError("max_sections must be positive")
     artifacts = load_artifacts(iteration)
     task_text, task_path, task_line = find_task(iteration, task_id, artifacts)
     identifiers = sorted(set(ID_RE.findall(task_text)))
@@ -721,13 +770,41 @@ def context_pack(iteration: str, task_id: str) -> int:
         for heading, content, line in sections(text):
             if any(identifier in content for identifier in identifiers):
                 selected.append((item.path, content, line))
+    # Prefer one copy of a section even when the same contract is repeated in
+    # several documents.  This is the main token-saving path for compact mode.
+    unique: list[tuple[str, str, int]] = []
+    seen_content: set[str] = set()
+    for entry in selected:
+        key = hashlib.sha256(entry[1].strip().encode("utf-8")).hexdigest()
+        if key in seen_content:
+            continue
+        seen_content.add(key)
+        unique.append(entry)
+    selected = unique[:max_sections] if compact else unique
     source_hashes = {item.path: item.sha256 for item in artifacts if item.path in {path for path, _, _ in selected} or item.path == task_path}
-    key_material = json.dumps({"iteration": iteration, "task": task_id, "identifiers": identifiers, "source_hashes": source_hashes}, sort_keys=True)
+    key_material = json.dumps({
+        "iteration": iteration,
+        "task": task_id,
+        "identifiers": identifiers,
+        "source_hashes": source_hashes,
+        "compact": compact,
+        "max_chars": max_chars,
+        "max_sections": max_sections,
+    }, sort_keys=True)
     cache_key = hashlib.sha256(key_material.encode("utf-8")).hexdigest()
     output = WORKFLOW_DIR / "context-packs" / f"{iteration}-{task_id}.md"
     cache_path = WORKFLOW_DIR / "cache" / "context-packs.json"
     cache = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.exists() else {}
     if output.exists() and cache.get(str(output.relative_to(ROOT))) == cache_key:
+        write_current_state(
+            iteration,
+            artifacts,
+            active_context={
+                "task_id": task_id,
+                "path": output.relative_to(ROOT).as_posix(),
+                "context_key": cache_key,
+            },
+        )
         print(f"context cache hit: {output.relative_to(ROOT)}")
         return 0
     lines = [
@@ -752,12 +829,29 @@ def context_pack(iteration: str, task_id: str) -> int:
     for path, content, line in selected:
         lines.extend([f"### `{path}:{line}`", "", content, ""])
     lines.extend(["## Loading Rules", "", "This pack is task-scoped. Load the full upstream artifact only when a required detail is absent here.", ""])
+    if compact:
+        rendered = "\n".join(lines)
+        if len(rendered) > max_chars:
+            suffix = "\n\n[TRUNCATED locally: load only the missing section from the authoritative source.]\n"
+            rendered = rendered[: max_chars - len(suffix)] + suffix
+        output_text = rendered
+    else:
+        output_text = "\n".join(lines)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text("\n".join(lines), encoding="utf-8")
+    output.write_text(output_text, encoding="utf-8")
     cache[str(output.relative_to(ROOT))] = cache_key
     write_json_atomic(cache_path, cache)
+    write_current_state(
+        iteration,
+        artifacts,
+        active_context={
+            "task_id": task_id,
+            "path": output.relative_to(ROOT).as_posix(),
+            "context_key": cache_key,
+        },
+    )
     print(f"context pack written: {output.relative_to(ROOT)}")
-    print(f"selected excerpts: {len(selected)}, identifiers: {len(identifiers)}")
+    print(f"selected excerpts: {len(selected)}, identifiers: {len(identifiers)}, chars: {len(output_text)}")
     return 0
 
 
@@ -775,10 +869,353 @@ def task_records(iteration: str) -> list[dict]:
     return records
 
 
+def state_source_fingerprint(artifacts: list[Artifact], records: list[dict]) -> str:
+    """Fingerprint every authoritative input represented by the checkpoint."""
+    payload = {
+        "artifacts": [
+            {"path": item.path, "status": item.status, "sha256": item.sha256}
+            for item in artifacts
+        ],
+        "tasks": records,
+    }
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def stage_blockers(iteration: str, stage: str, by_path: dict[str, Artifact]) -> list[dict]:
+    expected = BASELINE_FILES if stage == BASELINE_STAGE else stage_outputs(iteration, stage)
+    blockers = []
+    for path in expected:
+        item = by_path.get(path)
+        status = item.status if item else "missing"
+        if status != "Approved":
+            blockers.append({"path": path, "status": status})
+    return blockers
+
+
+def derive_current_stage(iteration: str, artifacts: list[Artifact], gate: dict | None) -> dict:
+    by_path = {item.path: item for item in artifacts}
+    for stage in ALL_STAGES:
+        blockers = stage_blockers(iteration, stage, by_path)
+        if blockers:
+            missing = [item for item in blockers if item["status"] == "missing"]
+            return {
+                "name": stage,
+                "status": "blocked" if missing else "in_progress",
+                "blocking_artifacts": blockers,
+                "reason": (
+                    f"{len(missing)} required artifact(s) are missing"
+                    if missing else f"{len(blockers)} required artifact(s) are not Approved"
+                ),
+                "next_action": (
+                    f"Create the required {stage} artifacts" if missing
+                    else f"Review and approve {stage} artifacts, then run validate --stage {stage}"
+                ),
+            }
+    if gate and gate["result"] == "blocked":
+        return {
+            "name": gate["target"],
+            "status": "blocked",
+            "blocking_artifacts": [],
+            "reason": "Latest gate validation is blocked",
+            "next_action": "Resolve the latest gate errors and validate again",
+        }
+    return {
+        "name": "05-review-release",
+        "status": "ready_to_archive",
+        "blocking_artifacts": [],
+        "reason": "All required stage artifacts are Approved",
+        "next_action": "Archive the completed iteration according to the release process",
+    }
+
+
+def write_current_state(
+    iteration: str,
+    artifacts: list[Artifact],
+    *,
+    gate: dict | None = None,
+    active_context: dict | None = None,
+    last_task: dict | None = None,
+) -> dict:
+    """Write the derived recovery checkpoint; never treat it as approval authority."""
+    records = task_records(iteration)
+    fingerprint = state_source_fingerprint(artifacts, records)
+    previous: dict = {}
+    state_path = WORKFLOW_DIR / "current-state.json"
+    if state_path.exists():
+        try:
+            previous = json.loads(state_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            previous = {}
+    same_inputs = previous.get("iteration") == iteration and previous.get("source_fingerprint") == fingerprint
+    if gate is None and same_inputs:
+        gate = previous.get("latest_gate")
+    if active_context is None and same_inputs:
+        candidate = previous.get("active_context")
+        if candidate and (ROOT / candidate.get("path", "")).exists():
+            active_context = candidate
+    state = {
+        "schema_version": "1",
+        "generated_at": now(),
+        "iteration": iteration,
+        "source_fingerprint": fingerprint,
+        "authority": "Derived cache only. Artifact frontmatter and gate validation remain authoritative.",
+        "current_stage": derive_current_stage(iteration, artifacts, gate),
+        "latest_gate": gate,
+        "active_context": active_context,
+        "last_task": last_task or (records[0] if records else None),
+        "available_context_packs": [
+            path.relative_to(ROOT).as_posix()
+            for path in sorted((WORKFLOW_DIR / "context-packs").glob(f"{iteration}-*.md"))
+        ] if (WORKFLOW_DIR / "context-packs").exists() else [],
+        "sources": {
+            "manifest": ".workflow/manifest.yaml",
+            "traceability": ".workflow/traceability.json",
+            "task_runs": ".workflow/task-runs/",
+        },
+    }
+    write_json_atomic(state_path, state)
+    return state
+
+
+def state(iteration: str, *, refresh: bool = False) -> int:
+    path = WORKFLOW_DIR / "current-state.json"
+    artifacts = load_artifacts(iteration)
+    records = task_records(iteration)
+    fingerprint = state_source_fingerprint(artifacts, records)
+    if refresh or not path.exists():
+        write_manifest(iteration, artifacts)
+        write_json_atomic(WORKFLOW_DIR / "traceability.json", traceability(iteration, artifacts))
+        data = write_current_state(iteration, artifacts)
+        mode = "refreshed"
+    else:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if data.get("iteration") != iteration or data.get("source_fingerprint") != fingerprint:
+            write_manifest(iteration, artifacts)
+            write_json_atomic(WORKFLOW_DIR / "traceability.json", traceability(iteration, artifacts))
+            data = write_current_state(iteration, artifacts)
+            mode = "refreshed"
+        else:
+            mode = "cached"
+    current = data["current_stage"]
+    print(f"workflow state: {mode}; iteration={data['iteration']}")
+    print(f"current stage: {current['name']} ({current['status']})")
+    print(f"next action: {current['next_action']}")
+    if current["blocking_artifacts"]:
+        print("blockers:")
+        for blocker in current["blocking_artifacts"]:
+            print(f"  - {blocker['path']} ({blocker['status']})")
+    if data["active_context"]:
+        print(f"active context: {data['active_context']['task_id']} -> {data['active_context']['path']}")
+    return 0
+
+
+def active_iteration() -> str | None:
+    """Return the highest active iteration, or None after archival cleanup."""
+    directory = ROOT / "iteration"
+    if not directory.exists():
+        return None
+    candidates = []
+    for path in directory.iterdir():
+        match = re.fullmatch(r"v(\d+)(?:\.(\d+))?", path.name)
+        if path.is_dir() and match:
+            candidates.append((int(match.group(1)), int(match.group(2) or 0), path.name))
+    if not candidates:
+        return None
+    major, minor, _ = max(candidates)
+    return f"v{major}.{minor}"
+
+
+def resume_data(iteration: str | None = None) -> dict:
+    """Return the smallest local recovery payload for a new agent turn."""
+    resolved = canonical_iteration(iteration) if iteration else active_iteration()
+    if resolved is None:
+        return {
+            "status": "NO_ACTIVE_ITERATION",
+            "iteration": None,
+            "current_stage": None,
+            "next_action": "Route a new raw requirement, then initialize the baseline.",
+            "blocking_artifacts": [],
+            "recommended_reads": [],
+            "gate_command": None,
+        }
+    artifacts = load_artifacts(resolved)
+    records = task_records(resolved)
+    fingerprint = state_source_fingerprint(artifacts, records)
+    state_path = WORKFLOW_DIR / "current-state.json"
+    data = None
+    if state_path.exists():
+        try:
+            candidate = json.loads(state_path.read_text(encoding="utf-8"))
+            if candidate.get("iteration") == resolved and candidate.get("source_fingerprint") == fingerprint:
+                data = candidate
+        except json.JSONDecodeError:
+            data = None
+    if data is None:
+        write_manifest(resolved, artifacts)
+        write_json_atomic(WORKFLOW_DIR / "traceability.json", traceability(resolved, artifacts))
+        data = write_current_state(resolved, artifacts)
+    current = data["current_stage"]
+    reads = [item["path"] for item in current.get("blocking_artifacts", [])]
+    if data.get("active_context"):
+        reads.append(data["active_context"]["path"])
+    return {
+        "status": "READY",
+        "iteration": resolved,
+        "current_stage": current,
+        "latest_gate": data.get("latest_gate"),
+        "active_context": data.get("active_context"),
+        "last_task": data.get("last_task"),
+        "next_action": current["next_action"],
+        "blocking_artifacts": current.get("blocking_artifacts", []),
+        "recommended_reads": list(dict.fromkeys(reads)),
+        "gate_command": f"python .workflow/workflow.py validate --iteration {resolved} --stage {current['name']}",
+        "source_fingerprint": data["source_fingerprint"],
+        "generated_at": data["generated_at"],
+    }
+
+
+def resume(iteration: str | None = None, *, as_json: bool = False) -> int:
+    payload = resume_data(iteration)
+    if as_json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(f"workflow resume: {payload['status']}")
+        if payload["iteration"]:
+            print(f"iteration: {payload['iteration']}")
+            print(f"current stage: {payload['current_stage']['name']} ({payload['current_stage']['status']})")
+            print(f"next action: {payload['next_action']}")
+            for path in payload["recommended_reads"]:
+                print(f"read: {path}")
+        else:
+            print(f"next action: {payload['next_action']}")
+    return 0
+
+
+def task_dag_report(iteration: str) -> dict:
+    plan = ROOT / "iteration" / iteration / "03-planning" / f"{iteration}-task-plan-dag.md"
+    if not plan.exists():
+        return {"status": "missing", "tasks": [], "edges": [], "cycles": [], "errors": [str(plan.relative_to(ROOT))]}
+    text = plan.read_text(encoding="utf-8")
+    task_sections = [(heading, content) for heading, content, _ in sections(text) if re.search(r"\bTASK-[A-Z0-9-]+\b", heading)]
+    tasks = sorted({task for heading, _ in task_sections for task in ID_RE.findall(heading) if task.startswith("TASK-") and is_real_id(task)})
+    edges: list[dict[str, str]] = []
+    graph: dict[str, set[str]] = {task: set() for task in tasks}
+    for heading, content in task_sections:
+        current_ids = [task for task in ID_RE.findall(heading) if task.startswith("TASK-") and is_real_id(task)]
+        if not current_ids:
+            continue
+        current = current_ids[0]
+        prerequisite = re.search(r"(?:前置|depends_on|depends on)\s*\|?\s*([^\n]+)", content, re.IGNORECASE)
+        if not prerequisite:
+            continue
+        for dependency in ID_RE.findall(prerequisite.group(1)):
+            if dependency.startswith("TASK-") and is_real_id(dependency):
+                graph.setdefault(current, set()).add(dependency)
+                edges.append({"from": dependency, "to": current})
+    cycles: list[list[str]] = []
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(node: str, path: list[str]) -> None:
+        if node in visiting:
+            cycles.append(path[path.index(node):] + [node])
+            return
+        if node in visited:
+            return
+        visiting.add(node)
+        for dependency in graph.get(node, set()):
+            if dependency in graph:
+                visit(dependency, path + [dependency])
+        visiting.remove(node)
+        visited.add(node)
+
+    for task in tasks:
+        visit(task, [task])
+    unknown = sorted({edge["from"] for edge in edges if edge["from"] not in graph})
+    return {"status": "passed" if not cycles and not unknown else "failed", "tasks": tasks, "edges": edges, "cycles": cycles, "unknown_dependencies": unknown, "errors": []}
+
+
+def coverage_report(iteration: str) -> dict:
+    plan = ROOT / "iteration" / iteration / "03-planning" / f"{iteration}-task-plan-dag.md"
+    validation = ROOT / "iteration" / iteration / "03-planning" / f"{iteration}-validation-plan.md"
+    requirement = ROOT / "iteration" / iteration / "01-product" / f"{iteration}-requirement.md"
+    plan_text = plan.read_text(encoding="utf-8") if plan.exists() else ""
+    validation_text = validation.read_text(encoding="utf-8") if validation.exists() else ""
+    requirement_text = requirement.read_text(encoding="utf-8") if requirement.exists() else ""
+    tasks = sorted({i for i in ID_RE.findall(plan_text) if i.startswith("TASK-") and is_real_id(i)})
+    validation_tasks = sorted({i for i in ID_RE.findall(validation_text) if i.startswith("TASK-") and is_real_id(i)})
+    acs = sorted({i for i in ID_RE.findall(requirement_text) if i.startswith("AC-") and is_real_id(i)})
+    validation_acs = sorted({i for i in ID_RE.findall(validation_text) if i.startswith("AC-") and is_real_id(i)})
+    missing_tasks = sorted(set(tasks) - set(validation_tasks))
+    missing_acs = sorted(set(acs) - set(validation_acs))
+    return {
+        "tasks": {"defined": len(tasks), "validated": len(set(tasks) - set(missing_tasks)), "missing_validation": missing_tasks},
+        "acceptance": {"defined": len(acs), "validated": len(set(acs) - set(missing_acs)), "missing_validation": missing_acs},
+        "status": "passed" if not missing_tasks and not missing_acs else "warning",
+    }
+
+
+def preflight(iteration: str | None = None, *, as_json: bool = False) -> int:
+    resolved = canonical_iteration(iteration) if iteration else active_iteration()
+    if resolved is None:
+        payload = resume_data(None)
+        payload["preflight"] = "NO_ACTIVE_ITERATION"
+        if as_json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print("preflight: NO_ACTIVE_ITERATION")
+        return 0
+    artifacts, errors, warnings = validation_report(resolved, None)
+    dag = task_dag_report(resolved)
+    coverage = coverage_report(resolved)
+    payload = {"status": "passed" if not errors and dag["status"] == "passed" else "blocked", "iteration": resolved, "errors": errors, "warnings": warnings, "dag": dag, "coverage": coverage, "artifact_count": len(artifacts), "generated_at": now()}
+    if as_json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(f"preflight: {payload['status']}; iteration={resolved}; artifacts={len(artifacts)}")
+        for error in errors:
+            print(f"ERROR {error}")
+        if dag["status"] != "passed":
+            print(f"ERROR task DAG: {dag.get('cycles') or dag.get('unknown_dependencies')}")
+        if coverage["status"] != "passed":
+            print(f"WARNING coverage: {coverage}")
+    return 0 if payload["status"] == "passed" else 1
+
+
+def review_pack(iteration: str | None = None, stage: str | None = None, *, as_json: bool = False) -> int:
+    resolved = canonical_iteration(iteration) if iteration else active_iteration()
+    if resolved is None:
+        return resume(None, as_json=as_json)
+    artifacts, errors, warnings = validation_report(resolved, stage)
+    target = stage or "all"
+    required = required_inputs(resolved, stage) if stage else []
+    by_path = {item.path: item for item in artifacts}
+    payload = {
+        "iteration": resolved,
+        "stage": target,
+        "status": "blocked" if errors else "ready_for_human_review",
+        "artifacts": [{"path": path, "status": by_path.get(path).status if by_path.get(path) else "missing", "lines": by_path.get(path).lines if by_path.get(path) else 0} for path in required],
+        "errors": errors,
+        "warnings": warnings,
+        "review_commands": [f"python .workflow/workflow.py validate --iteration {resolved} --stage {target}"],
+        "note": "This is evidence for human review; it does not approve artifacts.",
+    }
+    if as_json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(f"review-pack: {payload['status']}; iteration={resolved}; stage={target}")
+        for item in payload["artifacts"]:
+            print(f"  {item['status']:<9} {item['path']}")
+        for error in errors:
+            print(f"ERROR {error}")
+    return 0 if not errors else 1
+
+
 def gate_code(iteration: str) -> int:
     # Capture diagnostics so dashboard generation remains a data-producing operation.
     with contextlib.redirect_stdout(io.StringIO()):
-        return validate(iteration, None)
+        return validate(iteration, None, record_state=False)
 
 
 def dashboard_data(iteration: str) -> dict:
@@ -789,6 +1226,7 @@ def dashboard_data(iteration: str) -> dict:
         by_stage[item.stage].append({"path": item.path, "status": item.status, "lines": item.lines, "sha256": item.sha256})
     stages = []
     overall_gate = gate_code(iteration)
+    checkpoint = write_current_state(iteration, artifacts)
     for stage, items in by_stage.items():
         if not items:
             status = "empty"
@@ -806,6 +1244,7 @@ def dashboard_data(iteration: str) -> dict:
         "gate_status": "passed" if overall_gate == 0 else "blocked",
         "stages": stages,
         "tasks": records,
+        "current_stage": checkpoint["current_stage"],
         "traceability_path": ".workflow/traceability.json",
         "manifest_path": ".workflow/manifest.yaml",
     }
@@ -841,11 +1280,11 @@ def static_dashboard_fallback(data: dict) -> str:
     ) or '<p class="muted">暂无任务执行记录</p>'
     return (
         '<div data-dashboard-fallback><section class="summary"><header><div><h1>Alchemy Works (AW) 软件开发工作流 · 项目执行视图</h1>'
-        f'<p class="muted">迭代 {html.escape(data["iteration"])} · 更新时间 {html.escape(data["generated_at"])}</p>'
+        f'<p class="muted">迭代 {html.escape(data["iteration"])} · 当前阶段 {html.escape(data["current_stage"]["name"])} · 更新时间 {html.escape(data["generated_at"])}</p>'
         f'</div><span class="badge {html.escape(data["gate_status"])}">门禁：{html.escape(data["gate_status"])}</span></header>'
-        f'<div class="summary-grid"><section class="summary-item"><h2>最近任务结论</h2>{tasks}</section>'
+        f'<div class="summary-grid"><section class="summary-item"><h2>下一步</h2><p><strong>{html.escape(data["current_stage"]["name"])}</strong> · {html.escape(data["current_stage"]["status"])}</p><p class="muted">{html.escape(data["current_stage"]["next_action"])}</p></section><section class="summary-item"><h2>最近任务结论</h2>{tasks}</section>'
         f'<section class="summary-item"><h2>数据来源</h2><p class="muted"><code>.workflow/manifest.yaml</code></p><p class="muted"><code>.workflow/traceability.json</code></p></section>'
-        f'<section class="summary-item"><h2>使用方式</h2><p class="muted">任务完成后运行 <code>task-finished</code> 刷新本视图，并提交任务结论。</p></section></div></section>'
+        f'<section class="summary-item"><h2>使用方式</h2><p class="muted">恢复工作时运行 <code>state --refresh</code>；TASK 完成后运行 <code>task-finished</code>。</p></section></div></section>'
         f'<section class="stage-list">{stages}</section></div>'
     )
 
@@ -888,9 +1327,10 @@ def task_finished(iteration: str, task_id: str, result: str, *, refresh_index: b
     }
     path = WORKFLOW_DIR / "task-runs" / f"{iteration}-{task_id}.json"
     write_json_atomic(path, record)
-    history_stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+    history_stamp = local_filename_timestamp()
     history_path = WORKFLOW_DIR / "task-runs" / "history" / f"{iteration}-{task_id}-{history_stamp}.json"
     write_json_atomic(history_path, record)
+    write_current_state(iteration, artifacts, last_task=record)
     if refresh_dashboard:
         dashboard(iteration)
     print(f"task conclusion: {task_id}={result}; gate={record['project_gate_status']}")
@@ -908,13 +1348,30 @@ def main(argv: list[str] | None = None) -> int:
     context = subparsers.add_parser("context")
     context.add_argument("--iteration", default=discover_iteration())
     context.add_argument("--task", required=True)
+    context.add_argument("--compact", action="store_true", help="Deduplicate and bound excerpts before handing the pack to an agent.")
+    context.add_argument("--max-chars", type=int, default=24000)
+    context.add_argument("--max-sections", type=int, default=40)
     dashboard_parser = subparsers.add_parser("dashboard")
     dashboard_parser.add_argument("--iteration", default=discover_iteration())
+    state_parser = subparsers.add_parser("state", help="Show the derived workflow recovery checkpoint.")
+    state_parser.add_argument("--iteration", default=discover_iteration())
+    state_parser.add_argument("--refresh", action="store_true", help="Rebuild manifest, traceability, and checkpoint before showing state.")
+    resume_parser = subparsers.add_parser("resume", help="Emit the smallest local recovery payload for a new agent turn.")
+    resume_parser.add_argument("--iteration", default=None)
+    resume_parser.add_argument("--json", action="store_true")
+    preflight_parser = subparsers.add_parser("preflight", help="Run local gate, DAG, and coverage checks without an LLM.")
+    preflight_parser.add_argument("--iteration", default=None)
+    preflight_parser.add_argument("--json", action="store_true")
+    review_parser = subparsers.add_parser("review-pack", help="Build a compact human-review evidence summary.")
+    review_parser.add_argument("--iteration", default=None)
+    review_parser.add_argument("--stage", choices=GATE_STAGES)
+    review_parser.add_argument("--json", action="store_true")
     finished = subparsers.add_parser("task-finished")
     finished.add_argument("--iteration", default=discover_iteration())
     finished.add_argument("--task", required=True)
     finished.add_argument("--result", choices=["succeeded", "failed", "blocked"], required=True)
     finished.add_argument("--refresh-index", action="store_true", help="Also re-run `index` after writing the task record. Off by default; only enable when the task changed artifact state.")
+    finished.add_argument("--auto-refresh", action="store_true", help="Refresh the local index when completing a task; keeps hashes and checkpoint metadata consistent.")
     finished.add_argument("--refresh-dashboard", action="store_true", help="Also re-render the static dashboard after writing the task record. Off by default; run `python .workflow/workflow.py dashboard` separately when needed.")
     route = subparsers.add_parser("route-requirement", help="Resolve the archive location for a newly received raw requirement.")
     route.add_argument("--iteration", help="Override the version recorded in manifest.yaml.")
@@ -942,13 +1399,21 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "validate":
             return validate(args.iteration, args.stage)
         if args.command == "context":
-            return context_pack(args.iteration, args.task)
+            return context_pack(args.iteration, args.task, compact=args.compact, max_chars=args.max_chars, max_sections=args.max_sections)
         if args.command == "dashboard":
             return dashboard(args.iteration)
+        if args.command == "state":
+            return state(args.iteration, refresh=args.refresh)
+        if args.command == "resume":
+            return resume(args.iteration, as_json=args.json)
+        if args.command == "preflight":
+            return preflight(args.iteration, as_json=args.json)
+        if args.command == "review-pack":
+            return review_pack(args.iteration, args.stage, as_json=args.json)
         if args.command == "route-requirement":
             print(json.dumps(requirement_route(args.iteration), ensure_ascii=False, indent=2))
             return 0
-        return task_finished(args.iteration, args.task, args.result, refresh_index=args.refresh_index, refresh_dashboard=args.refresh_dashboard)
+        return task_finished(args.iteration, args.task, args.result, refresh_index=args.refresh_index or args.auto_refresh, refresh_dashboard=args.refresh_dashboard)
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"ERROR {error}", file=sys.stderr)
         return 2

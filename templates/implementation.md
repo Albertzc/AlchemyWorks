@@ -25,7 +25,7 @@ document_type: task-plan-dag
 version: 1.0.0
 status: draft
 owner: Tech Lead
-last_updated: YYYY-MM-DD
+last_updated: YYYY-MM-DDTHH:MM:SS±HH:MM # Codex client local time
 base_version: <上一已批准迭代，如 v1.0>
 ---
 
@@ -53,7 +53,7 @@ document_type: validation-plan
 version: 1.0.0
 status: draft
 owner: QA / Tech Lead
-last_updated: YYYY-MM-DD
+last_updated: YYYY-MM-DDTHH:MM:SS±HH:MM # Codex client local time
 ---
 
 # 验证计划
@@ -79,7 +79,7 @@ document_type: source-code-summary
 version: 1.0.0
 status: draft
 owner: Tech Lead
-last_updated: YYYY-MM-DD
+last_updated: YYYY-MM-DDTHH:MM:SS±HH:MM # Codex client local time
 ---
 
 # <产品> v{major}.{minor} Source Code Summary
@@ -113,7 +113,7 @@ document_type: test-results
 version: 1.0.0
 status: draft
 owner: QA / Tech Lead
-last_updated: YYYY-MM-DD
+last_updated: YYYY-MM-DDTHH:MM:SS±HH:MM # Codex client local time
 ---
 
 # <产品> v{major}.{minor} 测试结果
@@ -136,7 +136,7 @@ document_type: issue-fixes
 version: 0.4.0
 status: Approved
 owner: Tech Lead
-last_updated: YYYY-MM-DD
+last_updated: YYYY-MM-DDTHH:MM:SS±HH:MM # Codex client local time
 ---
 
 # <产品> v1.0 问题修复记录

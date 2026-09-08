@@ -181,7 +181,7 @@ baseline_ref:
   - baseline/01-product-vision.md
   - baseline/02-product-charter.md
 owner: Product Owner
-last_updated: YYYY-MM-DD
+last_updated: YYYY-MM-DDTHH:MM:SS±HH:MM # Codex client local time
 ---
 ```
 

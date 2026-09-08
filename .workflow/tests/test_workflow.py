@@ -4,6 +4,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -15,6 +16,13 @@ import workflow
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_generated_timestamps_use_client_local_timezone(self):
+        timestamp = workflow.now()
+        parsed = datetime.fromisoformat(timestamp)
+        self.assertIsNotNone(parsed.tzinfo)
+        self.assertEqual(parsed.utcoffset(), datetime.now().astimezone().utcoffset())
+        self.assertRegex(workflow.local_filename_timestamp(), r"\d{8}T\d{6}\.\d{6}[+-]\d{4}$")
+
     def make_repo(self, draft=False):
         temp = tempfile.TemporaryDirectory()
         root = Path(temp.name)
@@ -80,6 +88,10 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual(workflow.index("v1"), 0)
                 trace = json.loads((root / ".workflow" / "traceability.json").read_text(encoding="utf-8"))
                 self.assertTrue(any(node["id"] == "API-PROJ-001" for node in trace["nodes"]))
+                checkpoint = json.loads((root / ".workflow" / "current-state.json").read_text(encoding="utf-8"))
+                self.assertEqual(checkpoint["iteration"], "v1")
+                self.assertEqual(checkpoint["current_stage"]["name"], "01-product")
+                self.assertTrue(checkpoint["source_fingerprint"])
                 # Per S2 audit, cache/index.json is no longer written (it was
                 # never read by any consumer; manifest.yaml carries the same
                 # per-artifact hashes).
@@ -97,6 +109,9 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual(workflow.context_pack("v1", "TASK-API-010"), 0)
                 self.assertEqual(first, output.stat().st_mtime_ns)
                 self.assertIn("API-PROJ-001", output.read_text(encoding="utf-8"))
+                checkpoint = json.loads((root / ".workflow" / "current-state.json").read_text(encoding="utf-8"))
+                self.assertEqual(checkpoint["active_context"]["task_id"], "TASK-API-010")
+                self.assertIn("v1-TASK-API-010.md", checkpoint["active_context"]["path"])
         finally:
             temp.cleanup()
 
@@ -127,6 +142,8 @@ class WorkflowTests(unittest.TestCase):
                 record = json.loads((root / ".workflow" / "task-runs" / "v1-TASK-API-010.json").read_text(encoding="utf-8"))
                 self.assertEqual(record["result"], "succeeded")
                 self.assertEqual(record["project_gate_status"], "blocked")
+                checkpoint = json.loads((root / ".workflow" / "current-state.json").read_text(encoding="utf-8"))
+                self.assertEqual(checkpoint["last_task"]["task_id"], "TASK-API-010")
                 history = list((root / ".workflow" / "task-runs" / "history").glob("*.json"))
                 self.assertEqual(len(history), 1)
                 # dashboard should NOT have been written in the default path
@@ -137,6 +154,44 @@ class WorkflowTests(unittest.TestCase):
                     0,
                 )
                 self.assertTrue((root / ".workflow" / "dashboard" / "index.html").exists())
+        finally:
+            temp.cleanup()
+
+    def test_compact_context_pack_is_bounded(self):
+        temp, root = self.make_repo()
+        try:
+            requirement = root / "iteration" / "v1" / "01-product" / "v1-requirement.md"
+            requirement.write_text(
+                "---\nstatus: Approved\n---\n# Req\n## AC-001\n" + ("API-PROJ-001 repeated contract text. " * 200),
+                encoding="utf-8",
+            )
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                self.assertEqual(workflow.context_pack("v1", "TASK-API-010", compact=True, max_chars=1200), 0)
+                output = root / ".workflow" / "context-packs" / "v1-TASK-API-010.md"
+                text = output.read_text(encoding="utf-8")
+                self.assertLessEqual(len(text), 1200)
+                self.assertIn("TRUNCATED locally", text)
+        finally:
+            temp.cleanup()
+
+    def test_resume_reports_no_active_iteration(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "iteration" / "raw-requirement").mkdir(parents=True)
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                payload = workflow.resume_data()
+            self.assertEqual(payload["status"], "NO_ACTIVE_ITERATION")
+            self.assertIsNone(payload["iteration"])
+
+    def test_preflight_and_review_pack_are_local_summaries(self):
+        temp, root = self.make_repo()
+        try:
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                dag = workflow.task_dag_report("v1")
+                coverage = workflow.coverage_report("v1")
+                self.assertEqual(dag["status"], "passed")
+                self.assertEqual(coverage["status"], "warning")
+                self.assertEqual(workflow.review_pack("v1", "03-planning", as_json=True), 1)
         finally:
             temp.cleanup()
 
@@ -294,6 +349,34 @@ class WorkflowTests(unittest.TestCase):
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
                 self.assertEqual(workflow.validate("v1", "01-product"), 1)
                 self.assertIn("iteration/v1/01-product/v1-prototype.html", workflow.required_inputs("v1", "01-product"))
+                checkpoint = json.loads((root / ".workflow" / "current-state.json").read_text(encoding="utf-8"))
+                self.assertEqual(checkpoint["latest_gate"]["target"], "01-product")
+                self.assertEqual(checkpoint["latest_gate"]["result"], "blocked")
+        finally:
+            temp.cleanup()
+
+    def test_state_refresh_rebuilds_checkpoint_for_requested_iteration(self):
+        temp, root = self.make_repo()
+        try:
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                self.assertEqual(workflow.state("v1", refresh=True), 0)
+                checkpoint = json.loads((root / ".workflow" / "current-state.json").read_text(encoding="utf-8"))
+                self.assertEqual(checkpoint["iteration"], "v1")
+                self.assertEqual(checkpoint["current_stage"]["name"], "01-product")
+        finally:
+            temp.cleanup()
+
+    def test_state_rebuilds_when_artifact_fingerprint_changes(self):
+        temp, root = self.make_repo()
+        try:
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                self.assertEqual(workflow.state("v1", refresh=True), 0)
+                before = json.loads((root / ".workflow" / "current-state.json").read_text(encoding="utf-8"))
+                requirement = root / "iteration" / "v1" / "01-product" / "v1-requirement.md"
+                requirement.write_text(requirement.read_text(encoding="utf-8") + "\nUpdated\n", encoding="utf-8")
+                self.assertEqual(workflow.state("v1"), 0)
+                after = json.loads((root / ".workflow" / "current-state.json").read_text(encoding="utf-8"))
+                self.assertNotEqual(before["source_fingerprint"], after["source_fingerprint"])
         finally:
             temp.cleanup()
 
