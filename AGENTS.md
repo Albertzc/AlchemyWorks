@@ -73,7 +73,7 @@ Report
 
 **Version awareness**:
 
-- For a **new project (v1)**: preserve the user-provided raw requirement under `baseline/raw-requirement/`, use it to draft baseline artifacts, and confirm the four required baseline documents are `status: Approved` before generating `iteration/v1/` artifacts.
+- For a **new project (v1)**: preserve the user-provided raw requirement under `baseline/raw-requirement/`, use it to draft baseline artifacts (including the core user-flow prototype), and confirm the five required baseline artifacts are `status: Approved` before generating `iteration/v1/` artifacts.
 - For an **iteration (v2+)**: use `normalize-iteration-requirement` to detect and create the new version; read the latest approved version's artifacts as the baseline.
 - **Iteration scope rule**: each task targets exactly one version. If a request affects multiple versions, split the work or escalate.
 
@@ -158,6 +158,8 @@ Raw Requirement Library (iteration/raw-requirement/, user-owned and read-only; r
     ↓
 Product Requirement  (iteration/v{N}/01-product/v{N}-requirement.md)   # 需求 + 功能规格（FS 作为 FR 子项内嵌）
     ↓
+Prototype Decision   (`prototype_required: true|false` in the requirement frontmatter)
+    ↓ (only when true)
 HTML Prototype       (iteration/v{N}/01-product/v{N}-prototype.html)
     ↓
 Architecture Design   (iteration/v{N}/02-design/v{N}-architecture-design.md)
@@ -254,6 +256,7 @@ A task is complete only when all applicable conditions are satisfied:
 ### Documentation
 
 - The relevant artifacts under `iteration/v{N}/<stage>/` are updated.
+- The baseline core user-flow prototype is present and approved for a new project; each iteration records whether an additional prototype is required and why.
 - The relevant baseline document (`baseline/`) is updated if scope changes affect project-level constants.
 - API or user documentation is updated when behavior changes.
 - Configuration or migration instructions are documented when needed.

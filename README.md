@@ -74,9 +74,11 @@ python .workflow/workflow.py init-version  # baseline 门禁通过后创建下�
         ↓ route-requirement + normalize-requirement
 baseline/ 为空 → baseline/raw-requirement/ → 起草 baseline → validate 00-baseline
 baseline/ 已初始化 → iteration/raw-requirement/（route-requirement 返回目标版本）→ 起草 01-product
+baseline/
+        05-core-user-flow-prototype.html            # 必需：核心用户旅程交互基线
 iteration/v{major}.{minor}/01-product/
         v{major}.{minor}-requirement.md            # 需求 + 功能规格（合并）
-        v{major}.{minor}-prototype.html            # 可交互 UI 原型（人类使用）
+        v{major}.{minor}-prototype.html            # 仅 `prototype_required: true` 时的可交互 UI 原型
         v{major}.{minor}-iteration-changelog.md     # 仅 RC 后产出（封档说明）
         ↓ validate 01-product
 iteration/v{major}.{minor}/02-design/
@@ -127,8 +129,8 @@ iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 
 进入 `01-product` 生成或修改 HTML 原型前，先执行原型预览工具检查：
 
-- Codex：必须使用 `visualize` 插件进行交互预览或关键交互检查，再生成项目内的 `v{major}.{minor}-prototype.html`。预览插件不可用时暂停并引导用户安装/启用。
-- 其他 Agent：先搜索功能等价的交互可视化或原型预览插件，记录替代工具后再生成；找不到替代工具时暂停并请求用户处理。
+- 仅当 baseline 核心流程原型或某版本 `prototype_required: true` 时：Codex 必须使用 `visualize` 插件进行交互预览或关键交互检查，再生成项目内的 HTML 原型。预览插件不可用时暂停并引导用户安装/启用。
+- 其他 Agent：在需要生成原型时，先搜索功能等价的交互可视化或原型预览插件，记录替代工具后再生成；找不到替代工具时暂停并请求用户处理。
 - 工具预览是原型生成的前置验证，不替代正式阶段产物；阶段记录必须写明实际使用的工具、检查结果和阻断原因（如有）。
 
 ---
@@ -163,7 +165,7 @@ flowchart TD
     B0 -- 是 --> R0
     R0 --> S1
 
-    S1["01-product<br/>requirement.md (含FS)<br/>prototype.html"]
+    S1["01-product<br/>requirement.md (含FS)<br/>prototype_required 决策<br/>prototype.html（仅 true）"]
     S2["02-design<br/>architecture-design.md<br/>api-spec.md<br/>database-dictionary.md"]
     S3["03-planning<br/>task-plan-dag.md<br/>validation-plan.md"]
     S4["04-implementation<br/>source-code.md (ISSUE 列表)<br/>test-results.md<br/>每 TASK: context → 实施 → task-finished"]
@@ -288,7 +290,7 @@ python .workflow/scripts/check_links.py --iteration v1.0
 
 ```
 1. 用户提供原始需求；`route-requirement` 发现 baseline 为空并返回 `baseline/raw-requirement/`
-2. 归档原始材料，触发 normalize-requirement 起草 4 份 baseline 文档
+2. 归档原始材料，触发 normalize-requirement 起草 4 份 baseline 文档和核心流程原型
 3. 人工审核 baseline → `validate --stage 00-baseline`
 4. 创建 `iteration/v1.0/` 骨架；`route-requirement` 返回该原始需求的目标版本，原文件保留在 `iteration/raw-requirement/`
 5. 触发 normalize-requirement → 生成 v1.0-requirement.md
@@ -362,7 +364,7 @@ python .workflow/scripts/diff_versions.py --from v1.0 --to v1.1
 
 | 阶段 | 产物 |
 |---|---|
-| 01-product | `requirement.md`（FS-XXX 作为 FR-XXX 子项内嵌）、`prototype.html` |
+| 01-product | `requirement.md`（FS-XXX 作为 FR-XXX 子项内嵌，含 `prototype_required` 决策）；`prototype.html` 仅在该决策为 `true` 时必需 |
 | 02-design | `architecture-design.md`、`api-spec.md`、`database-dictionary.md` |
 | 03-planning | `task-plan-dag.md`、`validation-plan.md` |
 | 04-implementation | `source-code.md`（含 ISSUE 列表）、`test-results.md` |

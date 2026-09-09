@@ -21,7 +21,7 @@
 
 | 路径 | 必需内容 | 用途 |
 |---|---|---|
-| `.workflow/` | `workflow.py`、`README.md` | 工作流 CLI（含文档变更后的 `refresh` 同步命令）及其操作说明。 |
+| `.workflow/` | `workflow.py`、`README.md` | 工作流 CLI（含 baseline 核心流程原型与迭代按需原型门禁、文档变更后的 `refresh` 同步命令）及其操作说明。 |
 | `.workflow/scripts/` | `stage_status.py`、`id_registry.py`、`query_id.py`、`check_links.py`、`diff_versions.py` | 供 Agent 和维护者调用的状态、ID、链接与版本比较工具。 |
 | `.workflow/dashboard/` | `template.html` | 工作流仪表盘的源模板。 |
 | `.workflow/tests/` | `test_workflow.py` | 工作流 CLI 的回归测试。 |
@@ -50,7 +50,7 @@
 
 | 路径 | 必需内容 | 用途 |
 |---|---|---|
-| `baseline/` | `README.md`、`raw-requirement/README.md` | 项目首次立项时的基线和原始需求入口。 |
+| `baseline/` | `README.md`、`raw-requirement/README.md` | 项目首次立项时的基线、必需核心流程原型和原始需求入口。 |
 | `iteration/` | `README.md`、`raw-requirement/README.md` | 版本化交付物及后续原始需求的入口。 |
 | `workspace/` | `README.md` | 真实业务代码仓库的承载目录。 |
 

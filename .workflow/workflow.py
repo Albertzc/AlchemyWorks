@@ -44,6 +44,7 @@ BASELINE_FILES = [
     "baseline/02-product-charter.md",
     "baseline/03-tech-stack-decision.md",
     "baseline/04-glossary.md",
+    "baseline/05-core-user-flow-prototype.html",
 ]
 ID_RE = re.compile(r"\b(?:FR|BR|NFR|FS|API|TBL|TASK|AC|ISSUE)(?:-[A-Z0-9]+)+\b")
 TASK_ID_RE = re.compile(r"^TASK(?:-[A-Z0-9]+)+$")
@@ -387,7 +388,6 @@ def stage_outputs(iteration: str, stage: str) -> list[str]:
     outputs = {
         "01-product": [
             f"iteration/{iteration}/01-product/{iteration}-requirement.md",
-            f"iteration/{iteration}/01-product/{iteration}-prototype.html",
         ],
         "02-design": [
             f"iteration/{iteration}/02-design/{iteration}-architecture-design.md",
@@ -409,7 +409,62 @@ def stage_outputs(iteration: str, stage: str) -> list[str]:
     }
     if stage not in outputs:
         raise ValueError(f"unknown stage: {stage}; iteration={iteration}")
+    if stage == "01-product" and prototype_required(iteration):
+        outputs[stage].append(
+            f"iteration/{iteration}/01-product/{iteration}-prototype.html"
+        )
     return outputs[stage]
+
+
+def prototype_decision(iteration: str) -> str | None:
+    """Read the product-stage prototype decision from requirement frontmatter.
+
+    The decision is intentionally a flat frontmatter value so the workflow can
+    audit it without interpreting free-form product prose.  ``None`` means the
+    requirement is missing the decision or uses an unsupported value.
+    """
+    requirement = ROOT / f"iteration/{iteration}/01-product/{iteration}-requirement.md"
+    if not requirement.exists():
+        return None
+    frontmatter, _ = parse_frontmatter(requirement.read_text(encoding="utf-8"))
+    decision = frontmatter.get("prototype_required", "").lower()
+    return decision if decision in {"true", "false"} else None
+
+
+def prototype_required(iteration: str) -> bool:
+    """Return whether this iteration must submit a product-stage prototype."""
+    return prototype_decision(iteration) == "true"
+
+
+def prototype_policy_errors(iteration: str) -> list[str]:
+    """Return auditable policy errors for the product-stage prototype choice."""
+    requirement = ROOT / f"iteration/{iteration}/01-product/{iteration}-requirement.md"
+    if not requirement.exists():
+        return []  # The required-input check reports a missing requirement.
+    frontmatter, _ = parse_frontmatter(requirement.read_text(encoding="utf-8"))
+    decision = frontmatter.get("prototype_required", "").lower()
+    if decision not in {"true", "false"}:
+        return [
+            f"invalid or missing prototype_required decision in {requirement.relative_to(ROOT).as_posix()}; "
+            "use true or false"
+        ]
+    if decision == "false":
+        missing = [
+            field for field in ("prototype_baseline", "prototype_rationale")
+            if not policy_text_is_supplied(frontmatter.get(field, ""))
+        ]
+        if missing:
+            return [
+                f"prototype_required is false in {requirement.relative_to(ROOT).as_posix()} but missing "
+                f"frontmatter: {', '.join(missing)}"
+            ]
+    return []
+
+
+def policy_text_is_supplied(value: str) -> bool:
+    """Reject empty or template-placeholder values in gate-controlled fields."""
+    stripped = value.strip()
+    return bool(stripped) and not stripped.startswith("<") and not PLACEHOLDER_RE.search(stripped)
 
 
 def required_inputs(iteration: str, stage: str) -> list[str]:
@@ -540,6 +595,9 @@ def validation_report(iteration: str, stage: str | None, artifacts: list[Artifac
                 errors.append(f"missing input for {current}: {required}")
             elif item.status != "Approved":
                 errors.append(f"input for {current} is not Approved: {required} ({item.status})")
+
+    if "01-product" in stages:
+        errors.extend(prototype_policy_errors(iteration))
 
     for item in artifacts:
         if item.path.startswith("templates/"):
@@ -890,6 +948,10 @@ def stage_blockers(iteration: str, stage: str, by_path: dict[str, Artifact]) -> 
         status = item.status if item else "missing"
         if status != "Approved":
             blockers.append({"path": path, "status": status})
+    if stage == "01-product":
+        requirement = f"iteration/{iteration}/01-product/{iteration}-requirement.md"
+        if by_path.get(requirement) and prototype_policy_errors(iteration):
+            blockers.append({"path": f"{requirement}#prototype_required", "status": "invalid"})
     return blockers
 
 

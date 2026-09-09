@@ -35,6 +35,9 @@ class WorkflowTests(unittest.TestCase):
         for name in ["01-product-vision", "02-product-charter", "03-tech-stack-decision", "04-glossary"]:
             status = "draft" if draft else "Approved"
             (root / "baseline" / f"{name}.md").write_text(f"---\nstatus: {status}\n---\n# {name}\n", encoding="utf-8")
+        (root / "baseline" / "05-core-user-flow-prototype.html").write_text(
+            f"<!-- status: {'draft' if draft else 'Approved'} -->\n<html></html>\n", encoding="utf-8"
+        )
         plan = root / "iteration" / "v1" / "03-planning"
         plan.mkdir(parents=True)
         (plan / "v1-task-plan-dag.md").write_text(
@@ -48,7 +51,10 @@ class WorkflowTests(unittest.TestCase):
         )
         product = root / "iteration" / "v1" / "01-product"
         product.mkdir(parents=True)
-        (product / "v1-requirement.md").write_text("---\nstatus: Approved\n---\n# Req\n## AC-001\n", encoding="utf-8")
+        (product / "v1-requirement.md").write_text(
+            "---\nstatus: Approved\nprototype_required: true\n---\n# Req\n## AC-001\n",
+            encoding="utf-8",
+        )
         return temp, root
 
     def add_approved(self, root, relative: str, body: str = "# artifact\n"):
@@ -355,6 +361,48 @@ class WorkflowTests(unittest.TestCase):
         finally:
             temp.cleanup()
 
+    def test_incremental_product_stage_allows_no_prototype_when_decision_is_false(self):
+        temp, root = self.make_repo()
+        try:
+            product = root / "iteration" / "v1.1" / "01-product"
+            product.mkdir(parents=True)
+            (product / "v1.1-requirement.md").write_text(
+                "---\nstatus: Approved\nprototype_required: false\nprototype_baseline: baseline/05-core-user-flow-prototype.html\nprototype_rationale: Existing interaction is reused.\n---\n# Increment\n## AC-002\n",
+                encoding="utf-8",
+            )
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                self.assertNotIn(
+                    "iteration/v1.1/01-product/v1.1-prototype.html",
+                    workflow.required_inputs("v1.1", "01-product"),
+                )
+                self.assertEqual(workflow.validate("v1.1", "01-product"), 0)
+        finally:
+            temp.cleanup()
+
+    def test_product_stage_requires_an_explicit_prototype_decision(self):
+        temp, root = self.make_repo()
+        try:
+            requirement = root / "iteration" / "v1" / "01-product" / "v1-requirement.md"
+            requirement.write_text("---\nstatus: Approved\n---\n# Req\n", encoding="utf-8")
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                self.assertEqual(workflow.validate("v1", "01-product"), 1)
+        finally:
+            temp.cleanup()
+
+    def test_product_stage_requires_rationale_when_prototype_is_not_required(self):
+        temp, root = self.make_repo()
+        try:
+            product = root / "iteration" / "v1.1" / "01-product"
+            product.mkdir(parents=True)
+            (product / "v1.1-requirement.md").write_text(
+                "---\nstatus: Approved\nprototype_required: false\n---\n# Increment\n",
+                encoding="utf-8",
+            )
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                self.assertEqual(workflow.validate("v1.1", "01-product"), 1)
+        finally:
+            temp.cleanup()
+
     def test_state_refresh_rebuilds_checkpoint_for_requested_iteration(self):
         temp, root = self.make_repo()
         try:
@@ -482,6 +530,9 @@ class WorkflowTests(unittest.TestCase):
                 (root / "baseline" / f"{name}.md").write_text(
                     "---\nstatus: Approved\n---\n# baseline\n", encoding="utf-8"
                 )
+            (root / "baseline" / "05-core-user-flow-prototype.html").write_text(
+                "<!-- status: Approved -->\n<html></html>\n", encoding="utf-8"
+            )
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
                 self.assertEqual(workflow.init_version(), 0)
             for stage in workflow.STAGES:

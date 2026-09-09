@@ -35,6 +35,9 @@ baseline_ref:
   - baseline/01-product-vision.md
   - baseline/02-product-charter.md
   - baseline/04-glossary.md
+prototype_required: <true|false>
+prototype_baseline: <required when prototype_required is false>
+prototype_rationale: <required when prototype_required is false>
 ---
 
 # <产品名> 产品需求规格书
@@ -110,16 +113,26 @@ baseline_ref:
 - **NFR-001 <类别>**：<描述>
 - **NFR-002 <类别>**：<描述>
 
-## 10. 原型生成要求
+## 10. 原型决策与生成要求
 
-### 10.1 页面清单
+> `prototype_required` 与本节必须一致。Baseline 的 `05-core-user-flow-prototype.html` 为必需交互基线；本版本仅在新增页面、复杂/跨页面流程、影响业务结果的交互、体验重点、多端适配或体验分歧等情况下设为 `true`。设为 `false` 时，frontmatter 的 `prototype_baseline` 和 `prototype_rationale` 必须说明复用的交互基线和理由。
+
+### 10.1 原型决策
+
+| 项目 | 内容 |
+|---|---|
+| 是否需要本版本原型 | `true` / `false` |
+| 决策理由 | |
+| 复用的交互基线（如适用） | `baseline/05-core-user-flow-prototype.html` / 已有页面或组件 |
+
+### 10.2 页面清单（`prototype_required: true` 时必填）
 
 | 页面 ID | 页面名称 | URL/路由 | 主要功能 | 关联 FS |
 |---|---|---|---|---|
 | | | | | |
 
-### 10.2 必须演示的交互
-### 10.3 模拟数据要求
+### 10.3 必须演示的交互（`prototype_required: true` 时必填）
+### 10.4 模拟数据要求（`prototype_required: true` 时必填）
 
 ## 11. 验收标准（Given / When / Then）
 

@@ -29,6 +29,16 @@ description: Use when starting, handing off, or reviewing any workflow stage. En
 2. `baseline/02-product-charter.md`
 3. `baseline/03-tech-stack-decision.md`
 4. `baseline/04-glossary.md`
+5. `baseline/05-core-user-flow-prototype.html`（覆盖核心角色、关键任务闭环、关键状态和权限差异的可评审交互原型；低保真即可）
+
+### 01-product 原型决策
+
+每个版本的 `requirement.md` frontmatter 必须明确 `prototype_required: true` 或 `prototype_required: false`。这是人工可审阅、门禁可校验的决策记录：
+
+- `true`：`v{major}.{minor}-prototype.html` 成为该版本 01-product 的必需且需 Approved 的产物。适用于新页面、复杂/跨页面流程、影响业务结果的交互、体验重点、多端适配或评审存在交互分歧的改动。
+- `false`：原型不作为该版本门禁产物；frontmatter 中非空的 `prototype_baseline` 与 `prototype_rationale` 是必需门禁字段，需求与功能规格也必须记录沿用的交互基线和不制作原型的理由。适用于纯后端或非 UI 改动、复用既有模式的轻量 UI 改动，以及能由规格和验收标准无歧义表达的改动。
+
+Baseline 核心流程原型始终必需；功能迭代的页面原型按上述决策按需生成。
 ## Raw Requirement Intake
 
 原始需求是用户提供的来源材料，格式可以是不带 frontmatter 的 Markdown、文本、邮件、会议纪要或其他可读取文件。它不属于需要 `Approved` 的阶段产物，Agent 不得改写其原文。

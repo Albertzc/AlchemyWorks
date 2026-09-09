@@ -19,7 +19,7 @@ python .workflow/workflow.py route-requirement
 
 该命令按以下规则输出原始需求的归档位置：
 
-1. `baseline/` 除 `README.md` 外为空：返回 `mode: baseline` 与 `baseline/raw-requirement/`。这是首次项目的 baseline 需求处理；保留用户原文，并根据其明确事实起草 4 份 baseline 文档，全部保持 `status: draft`。
+1. `baseline/` 除 `README.md` 外为空：返回 `mode: baseline` 与 `baseline/raw-requirement/`。这是首次项目的 baseline 需求处理；保留用户原文，并根据其明确事实起草 4 份 baseline 文档和 1 份核心流程原型，全部保持 `status: draft`。
 2. baseline 已初始化：返回 `mode: iteration`。优先使用 `.workflow/manifest.yaml` 的 `iteration` 字段；若 manifest 不存在或没有有效版本号，再使用目录发现结果。将用户原始材料原样保存到输出的 `iteration/raw-requirement/`；命令返回的 `iteration` 是该输入对应的目标版本。
 
 原始材料不是门禁产物，不要求 frontmatter 或 `status: Approved`。`iteration/raw-requirement/` 中的材料归用户所有且只读：Agent 不得修改、重命名或删除原始文件。归一化产物必须在 frontmatter 或“来源追溯”章节记录原始文件路径与 `route-requirement` 返回的目标版本；归一化产物才进入人工审核。
@@ -28,7 +28,7 @@ python .workflow/workflow.py route-requirement
 
 | 版本 | 必须先调用 |
 |---|---|
-| baseline 路由 | 归档原始需求，起草 `baseline/` 的 4 个文档；人工审核后运行 `validate --stage 00-baseline`。 |
+| baseline 路由 | 归档原始需求，起草 `baseline/` 的 4 个文档和核心流程原型；人工审核后运行 `validate --stage 00-baseline`。 |
 | `v1.0`（首次项目） | `00-baseline` 通过后调用 manage-iteration 创建骨架，归档同一原始需求的迭代快照，再归一化为产品需求。 |
 | `v{major}.{minor}`（已初始化项目） | 使用 `route-requirement` 解析的版本；如目录不存在，先调用 manage-iteration 创建骨架。 |
 
@@ -133,9 +133,9 @@ change_set:
 
 不得改动 `iteration/v{major}.{minor-1}/` 下的任何文件。如发现上一版本有错误，开新迭代以"修改"条目覆盖。
 
-### 6. 生成原型所需信息
+### 6. 原型决策与所需信息
 
-从需求中提取页面和交互线索，写入"原型生成要求"。
+从需求中提取页面和交互线索，完成原型触发评估，并写入"原型决策与生成要求"。每个 iteration 输出的 frontmatter 必须写入 `prototype_required: true` 或 `prototype_required: false`：新页面、复杂/跨页面流程、影响业务结果的交互、体验重点、多端适配或体验分歧时为 `true`；纯技术改动、沿用既有交互模式的轻量改动，或规格与验收标准可无歧义表达时可为 `false`。`false` 时还必须在 frontmatter 写入非空的 `prototype_baseline` 与 `prototype_rationale`。
 
 ### 7. 验收标准
 
@@ -145,16 +145,19 @@ change_set:
 
 ### Baseline route
 
-当 `route-requirement` 返回 `mode: baseline` 时，输出为以下 4 份 `status: draft` 文档：
+当 `route-requirement` 返回 `mode: baseline` 时，输出为以下 5 份 `status: draft` 产物：
 
 ```text
 baseline/01-product-vision.md
 baseline/02-product-charter.md
 baseline/03-tech-stack-decision.md
 baseline/04-glossary.md
+baseline/05-core-user-flow-prototype.html
 ```
 
 必须在每份文档中标识原始需求来源。未提供的技术、指标或术语不得虚构；保留为待确认项并等待人工审核。通过 `validate --stage 00-baseline` 后，才可创建 `iteration/v1.0/`。
+
+核心流程原型可为低保真线框、可点击流程或结构化 HTML，必须覆盖核心角色、关键任务闭环、关键状态和权限差异；不要求高保真视觉稿。生成 HTML 原型时仍须遵循 `prototype-design-system` 的工具路由。
 
 ### Iteration route
 
@@ -173,6 +176,9 @@ version: 1.0.0
 status: draft
 product_name: <产品名称>
 base_version: <上一已批准迭代，如 v1.0>
+prototype_required: <true|false>
+prototype_baseline: <prototype_required 为 false 时必填>
+prototype_rationale: <prototype_required 为 false 时必填>
 change_set:                  # 仅迭代场景
   added: [FR-XXX, ...]
   modified: [FR-XXX, ...]
@@ -215,7 +221,8 @@ last_updated: YYYY-MM-DDTHH:MM:SS±HH:MM # Codex client local time
 - [ ] 没有引入未经请求的技术设计。
 - [ ] 每条功能需求只表达一个可验证目标。
 - [ ] MVP 范围、非目标和待确认问题已明确。
-- [ ] 页面、关键交互和模拟数据要求足以支持原型生成。
+- [ ] 已在 frontmatter 声明 `prototype_required: true|false`；`false` 时另有非空 `prototype_baseline` 和 `prototype_rationale`。
+- [ ] `true` 时页面、关键交互和模拟数据要求足以支持原型生成。
 - [ ] 输出文件名 = `v{major}.{minor}-requirement.md`。
 - [ ] （迭代）`change_set` 完整列出本轮所有变更。
 - [ ] （迭代）未修改 `iteration/v{major}.{minor-1}/` 任何文件。

@@ -27,6 +27,10 @@
 
 `Prototype.html` 与 `product.md` 内的 TeamFlow 示例仅用于演示结构、组件和章节组织。**生成 `iteration/v{major}.{minor}/` 产物时必须根据实际需求替换示例数据**，不得原样照搬。
 
+## 原型门禁
+
+`baseline/05-core-user-flow-prototype.html` 是新项目的必需交互基线。每个版本的 `requirement.md` 必须声明 `prototype_required: true|false`：为 `true` 时，使用本目录的原型模板和设计系统生成该版本的 HTML 原型；为 `false` 时，不生成版本原型，并在需求文档中记录复用的交互基线和理由。
+
 ## 版本号说明
 
 模板内所有路径引用使用 `v{major}.{minor}` 占位符（例如 `iteration/v{major}.{minor}/01-product/v{major}.{minor}-requirement.md`）。生成实际产物时替换为具体值（如 `v1.0` / `v1.1` / `v2.0`）。
