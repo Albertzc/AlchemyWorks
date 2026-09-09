@@ -31,6 +31,7 @@
 ├── .agents/skills/                  # 阶段化 AI Agent Skill（6 个）
 └── .workflow/                       # 工作流 CLI + 状态 + 缓存
     ├── workflow.py                  # 主 CLI（纯 stdlib）
+    ├── workflow-file-inventory.md   # 工作流必要文件与目录权威清单
     ├── manifest.yaml                # 产物索引（自动）
     ├── traceability.json            # 稳定 ID 追溯图（自动）
     ├── cache/                       # context-pack 缓存
@@ -199,6 +200,7 @@ flowchart TD
 # 索引与门禁
 python .workflow/workflow.py index      --iteration v1.0       # 生成 manifest + traceability + 缓存
 python .workflow/workflow.py state      --iteration v1.0 --refresh # 刷新并显示恢复工作所需的最小状态
+python .workflow/workflow.py refresh    --iteration v1.0 --stage 02-design # 文档变更后：索引、刷新状态并运行门禁
 python .workflow/workflow.py resume     --json                   # 新会话首选：只输出最小恢复状态
 python .workflow/workflow.py preflight  --iteration v1.0 --json  # 本地门禁、DAG、覆盖率检查
 python .workflow/workflow.py validate   --iteration v1.0       # 校验全部 stage
@@ -222,6 +224,7 @@ python .workflow/workflow.py dashboard  --iteration v1.0       # 渲染静态 HT
 |---|---|---|
 | `index` | 全产物索引 + traceability 图 + 恢复检查点 | `manifest.yaml` / `traceability.json` / `current-state.json` |
 | `state` | 刷新或读取当前阶段、阻塞项、下一动作和 Context Pack | `current-state.json` |
+| `refresh` | 文档变更后依次执行 `index`、`state --refresh` 和 `validate`；首个失败即停止 | 同 `index` / `state`，并输出门禁结果 |
 | `resume` | 输出新会话所需的最小恢复 JSON | stdout |
 | `preflight` | 本地执行门禁、TASK DAG 和 AC/TASK 覆盖率检查 | stdout / JSON |
 | `review-pack` | 生成人工审核证据摘要，不修改审批状态 | stdout / JSON |

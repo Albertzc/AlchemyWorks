@@ -1010,6 +1010,23 @@ def state(iteration: str, *, refresh: bool = False) -> int:
     return 0
 
 
+def refresh(iteration: str, stage: str | None) -> int:
+    """Synchronize workflow artifacts and run the requested stage gate.
+
+    This is the standard post-document-edit sequence: rebuild the artifact
+    index and traceability graph, refresh the recovery checkpoint, then run
+    validation. The first non-zero result stops the sequence.
+    """
+    print(f"workflow refresh: iteration={iteration}, stage={stage or 'all'}")
+    result = index(iteration)
+    if result != 0:
+        return result
+    result = state(iteration, refresh=True)
+    if result != 0:
+        return result
+    return validate(iteration, stage)
+
+
 def active_iteration() -> str | None:
     """Return the highest active iteration, or None after archival cleanup."""
     directory = ROOT / "iteration"
@@ -1356,6 +1373,12 @@ def main(argv: list[str] | None = None) -> int:
     state_parser = subparsers.add_parser("state", help="Show the derived workflow recovery checkpoint.")
     state_parser.add_argument("--iteration", default=discover_iteration())
     state_parser.add_argument("--refresh", action="store_true", help="Rebuild manifest, traceability, and checkpoint before showing state.")
+    refresh_parser = subparsers.add_parser(
+        "refresh",
+        help="Run index, state --refresh, and stage validation after document changes.",
+    )
+    refresh_parser.add_argument("--iteration", default=discover_iteration())
+    refresh_parser.add_argument("--stage", choices=GATE_STAGES)
     resume_parser = subparsers.add_parser("resume", help="Emit the smallest local recovery payload for a new agent turn.")
     resume_parser.add_argument("--iteration", default=None)
     resume_parser.add_argument("--json", action="store_true")
@@ -1404,6 +1427,8 @@ def main(argv: list[str] | None = None) -> int:
             return dashboard(args.iteration)
         if args.command == "state":
             return state(args.iteration, refresh=args.refresh)
+        if args.command == "refresh":
+            return refresh(args.iteration, args.stage)
         if args.command == "resume":
             return resume(args.iteration, as_json=args.json)
         if args.command == "preflight":

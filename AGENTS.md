@@ -81,6 +81,8 @@ Report
 
 The project-level workflow control layer is implemented by `.workflow/workflow.py` and the `workflow-governance` Skill. These controls are mandatory for versioned workflow work:
 
+The authoritative inventory of workflow-owned files and directories is [`.workflow/workflow-file-inventory.md`](.workflow/workflow-file-inventory.md). Any change to the workflow itself (including its CLI, scripts, Skills, templates, governance documents, scaffold, tests, or generated-state ignore rules) MUST update that inventory in the same change.
+
 1. **Before starting or resuming a stage**, refresh the artifact index:
    `python .workflow/workflow.py index --iteration v{N}`
 2. **At every stage handoff**, after the current stage's required outputs have been reviewed by a human, run its gate:

@@ -366,6 +366,45 @@ class WorkflowTests(unittest.TestCase):
         finally:
             temp.cleanup()
 
+    def test_refresh_runs_standard_document_sync_sequence(self):
+        calls = []
+
+        def record_index(iteration):
+            calls.append(("index", iteration))
+            return 0
+
+        def record_state(iteration, *, refresh=False):
+            calls.append(("state", iteration, refresh))
+            return 0
+
+        def record_validate(iteration, stage):
+            calls.append(("validate", iteration, stage))
+            return 0
+
+        with patch.object(workflow, "index", side_effect=record_index), patch.object(
+            workflow, "state", side_effect=record_state
+        ), patch.object(workflow, "validate", side_effect=record_validate):
+            self.assertEqual(workflow.refresh("v1", "01-product"), 0)
+
+        self.assertEqual(
+            calls,
+            [
+                ("index", "v1"),
+                ("state", "v1", True),
+                ("validate", "v1", "01-product"),
+            ],
+        )
+
+    def test_refresh_stops_when_index_fails(self):
+        with patch.object(workflow, "index", return_value=1) as index_mock, patch.object(
+            workflow, "state"
+        ) as state_mock, patch.object(workflow, "validate") as validate_mock:
+            self.assertEqual(workflow.refresh("v1", "01-product"), 1)
+
+        index_mock.assert_called_once_with("v1")
+        state_mock.assert_not_called()
+        validate_mock.assert_not_called()
+
     def test_state_rebuilds_when_artifact_fingerprint_changes(self):
         temp, root = self.make_repo()
         try:
