@@ -54,7 +54,7 @@
 | **重大变更** | `v{major+1}.0`（架构重置、新项目、技术栈变更）|
 | **目录命名** | `iteration/v{major}.{minor}/` |
 | **文件前缀** | `v{major}.{minor}-*.md` / `.html` |
-| **归档** | RC 完成后旧版整体迁移至 `iteration/archive/v{major}.{minor}/` |
+| **归档** | 下一连续版本创建成功后，将已 RC 完成的上一版迁移至 `iteration/archive/v{major}.{minor}/` |
 
 详细规则见 `AGENTS.md §17 Versioning and Archive Rules`。
 
@@ -112,16 +112,19 @@ iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 
 ---
 
-## 4. AI Agent Skill 体系（6 个）
+## 4. AI Agent Skill 体系（9 个）
 
 | Skill | 触发场景 | 输出 |
 |---|---|---|
-| `stage-gate` | 开始、交接或审核任一阶段 | 校验完整上游链、人工审核状态与阶段输入 |
+| `stage-gate` | 开始、交接或审核任一阶段 | 门禁政策：阶段顺序、必需产物与人工审批条件 |
 | `normalize-requirement` | 任何新需求文档产出 | `v{major}.{minor}-requirement.md` + change_set |
 | `prototype-design-system` | 01 阶段 UI 原型设计 | 视觉与组件规范参考 |
+| `design-specification` | 02 阶段架构、API、数据库设计 | 三类设计产物与一致性检查 |
+| `planning-validation` | 03 阶段任务与验证规划 | TASK DAG + AC/测试覆盖 |
 | `iterate-implementation` | 04 阶段 TASK 实施 | 源码 + 测试 + ISSUE |
+| `review-release` | 05 阶段评审与发布准备 | 评审证据 + 风险/回滚 + 发布建议 |
 | `manage-iteration` | 创建 / 归档版本 | `iteration/v{N}/` + `archive/v{N}/` |
-| `workflow-governance` | 任意阶段 | 门禁 + 索引 + 追溯 + Context Pack |
+| `workflow-governance` | 任意阶段 | 唯一 CLI 操作入口：校验 + 索引 + 追溯 + Context Pack |
 
 所有 Skill 位于 `.agents/skills/<name>/SKILL.md`，触发条件命中时自动加载。
 
@@ -170,13 +173,13 @@ flowchart TD
     S3["03-planning<br/>task-plan-dag.md<br/>validation-plan.md"]
     S4["04-implementation<br/>source-code.md (ISSUE 列表)<br/>test-results.md<br/>每 TASK: context → 实施 → task-finished"]
     S5["05-review-release<br/>review-release.md<br/>评审 / 合并 / 发布"]
-    Arch([封档: archive/vN/ + iteration-changelog.md])
+    Arch([创建下一版本后封档上一版<br/>archive/vN/ + iteration-changelog.md])
 
     S1 -- 人工审核 → Approved<br/>validate 01 --> S2
     S2 -- 人工审核 → Approved<br/>validate 02 --> S3
     S3 -- 人工审核 → Approved<br/>validate 03 --> S4
     S4 -- 人工审核 → Approved<br/>validate 04 --> S5
-    S5 -- 人工审核 → Approved<br/>validate 05 --> Arch
+    S5 -- 人工审核 → Approved<br/>生成 changelog、保持活动 --> Arch
 
     subgraph X[横切动作 - 不构成线性阶段]
         X1["index → manifest.yaml<br/>+ traceability.json<br/>"]
@@ -216,6 +219,10 @@ python .workflow/workflow.py task-finished --iteration v1.0 --task TASK-API-010 
 #   --refresh-index      当任务改变了产物状态时加上
 #   --refresh-dashboard  当要立即刷新仪表盘时加上
 
+# 已归档版本的可再生 Context Pack / 缓存清理（默认预览；不删除 TASK 审计记录）
+python .workflow/workflow.py cleanup --iteration v1.0
+python .workflow/workflow.py cleanup --iteration v1.0 --execute
+
 # 仪表盘
 python .workflow/workflow.py dashboard  --iteration v1.0       # 渲染静态 HTML 仪表盘
 ```
@@ -232,6 +239,7 @@ python .workflow/workflow.py dashboard  --iteration v1.0       # 渲染静态 HT
 | `review-pack` | 生成人工审核证据摘要，不修改审批状态 | stdout / JSON |
 | `validate` | stage gate 检查（无产物修改）| stdout + exit code |
 | `context` | 提取 TASK 相关章节，去重、限长并按 hash 复用 | `context-packs/<ver>-<task>.md` |
+| `cleanup` | 预览或清理已归档版本的 Context Pack 与缓存键；`--execute` 才删除 | `context-packs/` + `cache/context-packs.json` |
 | `task-finished` | 写入最新 TASK 结论并保留历史记录 | `task-runs/<ver>-<task>.json` + `task-runs/history/*.json` |
 | `dashboard` | 渲染静态 HTML 仪表盘 | `dashboard/index.html` |
 
@@ -296,20 +304,20 @@ python .workflow/scripts/check_links.py --iteration v1.0
 5. 触发 normalize-requirement → 生成 v1.0-requirement.md
 6. 人工审核 → status: Approved
 7. 进入 02-design / 03-planning / 04-implementation / 05-review-release
-8. RC 完成 → 生成 v1.0-iteration-changelog.md，并归档 v1.0
+8. RC 完成 → 生成 v1.0-iteration-changelog.md；v1.0 保持活动状态，直至 v1.1 创建成功后归档
 ```
 
 ### 9.2 启动 v1.1+ 增量迭代
 
 ```
 1. 用户提供原始需求；`route-requirement` 从 manifest.yaml（缺失时目录发现）解析目标版本
-2. 创建目标版本骨架；将原始材料原样保存到 `iteration/raw-requirement/`，并以 `route-requirement` 返回的目标版本归一化
+2. 确认上一版本已通过 05-review-release；创建目标版本骨架后，CLI 自动归档上一版本；将原始材料原样保存到 `iteration/raw-requirement/`，并以 `route-requirement` 返回的目标版本归一化
 3. 触发 normalize-requirement → 读项目基线、原始需求、上一版 requirement 与 changelog
 4. 输出对应版本 requirement.md（含 change_set: added / modified / deprecated）
 5. 人工审核 → status: Approved
 6. 触发 iterate-implementation skill（按 TASK 列表实施）
 7. 每个 TASK 完成 → python .workflow/workflow.py task-finished --result succeeded
-8. RC 完成 → manage-iteration 归档上一版本
+8. RC 完成 → 生成本版本 changelog 并保持活动状态；下一个版本创建成功时归档本版本
 ```
 
 ### 9.3 实施单个 TASK

@@ -19,6 +19,8 @@ python .workflow/workflow.py validate --iteration v1 --stage 01-product
 python .workflow/workflow.py validate --iteration v1
 python .workflow/workflow.py context --iteration v1 --task TASK-API-010
 python .workflow/workflow.py context --iteration v1 --task TASK-API-010 --compact --max-chars 12000
+python .workflow/workflow.py cleanup --iteration v1.0
+python .workflow/workflow.py cleanup --iteration v1.0 --execute
 python .workflow/workflow.py state --iteration v1 --refresh
 python .workflow/workflow.py resume --json
 python .workflow/workflow.py preflight --iteration v1 --json
@@ -28,6 +30,8 @@ python .workflow/workflow.py task-finished --iteration v1 --task TASK-API-010 --
 ```
 
 `init` creates only the non-versioned intake directories, including `iteration/raw-requirement/README.md`. `init-version` creates the next version skeleton only after the baseline gate passes, and refreshes `manifest.yaml`. `route-requirement` determines where newly received, unstructured user requirements are archived. With an empty baseline it returns the baseline intake directory; otherwise it uses the `iteration` in `manifest.yaml` when available, falling back to version discovery, and returns that target version with the centralized `iteration/raw-requirement/` directory. Except for its README, this directory contains user-owned source material only: Agents must not modify, rename, or delete its files. `validate` is the `stage-gate` controller: a nonzero exit code means the requested formal stage cannot proceed. Raw requirements are source material, not approved stage artifacts. `index` writes the artifact manifest, stable-ID traceability graph, and derived recovery checkpoint. `state` compares the cached checkpoint's input fingerprint with current artifact and TASK metadata, rebuilding the manifest, traceability graph, and checkpoint when it is stale; `state --refresh` forces that same rebuild. `refresh` is the standard post-document-edit sequence: it runs `index`, then `state --refresh`, then `validate`; a nonzero result stops the sequence. `context` creates a task-scoped pack under `context-packs/` and reuses it when its input fingerprint is unchanged. `resume --json` is the preferred low-context startup command; it emits only the active iteration, current stage, blockers, next action, recommended reads and gate command. It returns `NO_ACTIVE_ITERATION` when no active version exists. `context --compact` deduplicates excerpts and enforces local character/section limits. `preflight` runs gate, DAG and coverage checks locally. `review-pack` emits human-review evidence without approving artifacts. `task-finished --auto-refresh` refreshes local indexes when a task changed artifact files.
+
+Archive policy: `v1.0` has no predecessor. For a later version, `init-version` first validates the active predecessor through `05-review-release`, creates the successor skeleton, and only then moves that predecessor to `iteration/archive/`. A failed predecessor gate leaves both the predecessor and archive unchanged.
 
 Generated files:
 
@@ -39,6 +43,10 @@ Generated files:
 - `task-runs/` — task completion conclusions and gate/context metadata.
 - `task-runs/history/` — immutable task completion history.
 - `dashboard/index.html` — static project execution view.
+
+## Generated-state retention
+
+Context Packs and `cache/context-packs.json` are rebuildable implementation caches. Once a version has been moved to `iteration/archive/`, run `cleanup --iteration v{major}.{minor}` to preview its removable packs; add `--execute` to remove them and their cache keys. The command refuses active versions and never removes `task-runs/` or `task-runs/history/`, which are retained as audit evidence.
 
 ## Prototype gates
 

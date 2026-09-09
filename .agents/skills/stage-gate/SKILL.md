@@ -47,13 +47,17 @@ Baseline 核心流程原型始终必需；功能迭代的页面原型按上述�
 - baseline 已初始化时：运行 `python .workflow/workflow.py route-requirement`；该命令优先使用 `.workflow/manifest.yaml` 的 `iteration` 字段确定版本，并输出集中原始需求库 `iteration/raw-requirement/` 和目标版本。该目录仅保存用户输入，Agent 只读。
 - 归一化后的 baseline 或产品需求才进入人工审核与 `stage-gate`。
 
-## Gate Procedure
+## Ownership Boundary
 
-1. 开始或恢复阶段前运行 `python .workflow/workflow.py index --iteration v{N}`。
-2. Agent 只创建或更新 `draft` / `In Review` 产物，并列出审核所需的路径与证据。
-3. 人工审核后手动把本阶段全部必需产物设为 `Approved`。
-4. 运行 `python .workflow/workflow.py validate --iteration v{N} --stage <completed-stage>`。
-5. 仅当命令返回 0 时，开始下一阶段；非零结果是硬性停止条件。
+本 Skill 只定义**门禁政策**：阶段顺序、必需产物、人工审批和允许进入下一阶段的条件。它不定义或重复工作流 CLI 的运行步骤。
+
+`workflow-governance` 是索引、状态恢复、Context Pack、`validate` 和任务结论命令的唯一操作入口。开始、交接或审核阶段时，先使用该 Skill 执行命令；其 `validate` 结果是本 Skill 政策是否满足的唯一可执行证据。
+
+## Handoff Policy
+
+1. Agent 只创建或更新 `draft` / `In Review` 产物，并列出审核所需的路径与证据。
+2. 人工审核后手动把本阶段全部必需产物设为 `Approved`。
+3. 仅当 `workflow-governance` 执行的对应阶段校验返回 0 时，才可开始下一阶段；非零结果是硬性停止条件。
 
 ## Failure Handling
 

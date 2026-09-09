@@ -11,6 +11,7 @@ import io
 import json
 import os
 import re
+import shutil
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -312,7 +313,7 @@ def init_project() -> int:
 
 
 def init_version(iteration: str | None = None) -> int:
-    """Create an empty iteration skeleton after the baseline gate passes."""
+    """Create the next skeleton, then archive the completed predecessor."""
     expected = next_iteration()
     target = canonical_iteration(iteration) if iteration else expected
     if target != expected:
@@ -322,11 +323,62 @@ def init_version(iteration: str | None = None) -> int:
     root = ROOT / "iteration" / target
     if root.exists():
         raise ValueError(f"iteration already exists: iteration/{target}")
+    predecessor = previous_active_iteration(target)
+    if predecessor and validate(predecessor, "05-review-release") != 0:
+        raise ValueError(
+            f"previous iteration {predecessor} has not passed the 05-review-release gate; "
+            f"version {target} was not initialized"
+        )
+    archive_target = ROOT / "iteration" / "archive" / predecessor if predecessor else None
+    if archive_target and archive_target.exists():
+        raise ValueError(f"archive destination already exists: {archive_target.relative_to(ROOT).as_posix()}")
     for stage in STAGES:
         (root / stage).mkdir(parents=True)
+    if predecessor:
+        archive_iteration(predecessor, target)
     index(target)
     print(f"version initialized: iteration/{target}")
+    if predecessor:
+        print(f"archived completed predecessor: iteration/{predecessor} -> iteration/archive/{predecessor}")
     return 0
+
+
+def previous_active_iteration(target: str) -> str | None:
+    """Return the highest active iteration immediately preceding ``target``."""
+    target_number = iteration_number(target)
+    candidates: list[tuple[tuple[int, int], str]] = []
+    directory = ROOT / "iteration"
+    if directory.exists():
+        for path in directory.iterdir():
+            if not path.is_dir():
+                continue
+            try:
+                number = iteration_number(path.name)
+            except ValueError:
+                continue
+            if number < target_number:
+                candidates.append((number, canonical_iteration(path.name)))
+    return max(candidates)[1] if candidates else None
+
+
+def archive_iteration(predecessor: str, successor: str) -> None:
+    """Move a completed predecessor into the immutable archive after successor creation."""
+    source = ROOT / "iteration" / predecessor
+    destination = ROOT / "iteration" / "archive" / predecessor
+    if not source.is_dir():
+        raise ValueError(f"completed predecessor is missing: iteration/{predecessor}")
+    if destination.exists():
+        raise ValueError(f"archive destination already exists: {destination.relative_to(ROOT).as_posix()}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(source), str(destination))
+    (destination / "ARCHIVED.md").write_text(
+        f"# Archive: {predecessor}\n\n"
+        f"- archived_at: {now()}\n"
+        f"- superseded_by: {successor}\n"
+        f"- rc_artifact: iteration/{predecessor}/05-review-release/{predecessor}-review-release.md\n"
+        f"- note: 此目录只读，不得修改。\n",
+        encoding="utf-8",
+    )
 
 
 def artifact_paths(iteration: str) -> Iterable[tuple[str, str]]:
@@ -401,7 +453,6 @@ def stage_outputs(iteration: str, stage: str) -> list[str]:
         "04-implementation": [
             f"iteration/{iteration}/04-implementation/{iteration}-source-code.md",
             f"iteration/{iteration}/04-implementation/{iteration}-test-results.md",
-            f"iteration/{iteration}/04-implementation/{iteration}-issue-fixes.md",
         ],
         "05-review-release": [
             f"iteration/{iteration}/05-review-release/{iteration}-review-release.md",
@@ -409,11 +460,25 @@ def stage_outputs(iteration: str, stage: str) -> list[str]:
     }
     if stage not in outputs:
         raise ValueError(f"unknown stage: {stage}; iteration={iteration}")
+    if stage == "04-implementation" and issue_fixes_required(iteration):
+        outputs[stage].append(
+            f"iteration/{iteration}/04-implementation/{iteration}-issue-fixes.md"
+        )
     if stage == "01-product" and prototype_required(iteration):
         outputs[stage].append(
             f"iteration/{iteration}/01-product/{iteration}-prototype.html"
         )
     return outputs[stage]
+
+
+def issue_fixes_required(iteration: str) -> bool:
+    """Keep the standalone issue log only for the legacy v1.0 artifact set.
+
+    The implementation template merges issue tracking into source-code.md from
+    v1.1 onward, so incremental iterations must not be blocked by the obsolete
+    file.
+    """
+    return iteration_number(iteration) == (1, 0)
 
 
 def prototype_decision(iteration: str) -> str | None:
@@ -913,6 +978,47 @@ def context_pack(
     return 0
 
 
+def cleanup_context_packs(iteration: str, *, execute: bool = False) -> int:
+    """Preview or remove generated Context Packs for an archived iteration.
+
+    Task-run records are audit evidence and are intentionally outside this
+    operation.  Requiring an archived iteration and an explicit execute flag
+    prevents cleanup from removing an active implementation task's context.
+    """
+    resolved = canonical_iteration(iteration)
+    archive = ROOT / "iteration" / "archive" / resolved
+    if not archive.is_dir():
+        raise ValueError(
+            f"cleanup requires an archived iteration: iteration/archive/{resolved}"
+        )
+    packs_dir = WORKFLOW_DIR / "context-packs"
+    packs = sorted(packs_dir.glob(f"{resolved}-*.md")) if packs_dir.exists() else []
+    cache_path = WORKFLOW_DIR / "cache" / "context-packs.json"
+    cache = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.exists() else {}
+    prefix = f".workflow/context-packs/{resolved}-"
+    cache_keys = sorted(key for key in cache if key.startswith(prefix))
+
+    mode = "execute" if execute else "dry-run"
+    print(
+        f"cleanup {mode}: iteration={resolved}; context_packs={len(packs)}; "
+        f"cache_keys={len(cache_keys)}; task_runs=preserved"
+    )
+    for pack in packs:
+        print(f"  context-pack: {pack.relative_to(ROOT).as_posix()}")
+    if not execute:
+        print("next: re-run with --execute to remove the listed generated Context Packs and cache keys")
+        return 0
+
+    for pack in packs:
+        pack.unlink()
+    if cache_keys:
+        for key in cache_keys:
+            del cache[key]
+        write_json_atomic(cache_path, cache)
+    print(f"cleanup complete: removed_context_packs={len(packs)}; removed_cache_keys={len(cache_keys)}; task_runs=preserved")
+    return 0
+
+
 def task_records(iteration: str) -> list[dict]:
     directory = WORKFLOW_DIR / "task-runs"
     records = []
@@ -984,10 +1090,10 @@ def derive_current_stage(iteration: str, artifacts: list[Artifact], gate: dict |
         }
     return {
         "name": "05-review-release",
-        "status": "ready_to_archive",
+        "status": "ready_for_next_iteration",
         "blocking_artifacts": [],
         "reason": "All required stage artifacts are Approved",
-        "next_action": "Archive the completed iteration according to the release process",
+        "next_action": "Create the next iteration; its creation archives this completed predecessor",
     }
 
 
@@ -1430,6 +1536,16 @@ def main(argv: list[str] | None = None) -> int:
     context.add_argument("--compact", action="store_true", help="Deduplicate and bound excerpts before handing the pack to an agent.")
     context.add_argument("--max-chars", type=int, default=24000)
     context.add_argument("--max-sections", type=int, default=40)
+    cleanup = subparsers.add_parser(
+        "cleanup",
+        help="Preview or remove generated Context Packs for an archived iteration; task-run audit records are preserved.",
+    )
+    cleanup.add_argument("--iteration", required=True)
+    cleanup.add_argument(
+        "--execute",
+        action="store_true",
+        help="Perform deletion. Without this flag cleanup is a dry run.",
+    )
     dashboard_parser = subparsers.add_parser("dashboard")
     dashboard_parser.add_argument("--iteration", default=discover_iteration())
     state_parser = subparsers.add_parser("state", help="Show the derived workflow recovery checkpoint.")
@@ -1485,6 +1601,8 @@ def main(argv: list[str] | None = None) -> int:
             return validate(args.iteration, args.stage)
         if args.command == "context":
             return context_pack(args.iteration, args.task, compact=args.compact, max_chars=args.max_chars, max_sections=args.max_sections)
+        if args.command == "cleanup":
+            return cleanup_context_packs(args.iteration, execute=args.execute)
         if args.command == "dashboard":
             return dashboard(args.iteration)
         if args.command == "state":

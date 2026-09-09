@@ -15,11 +15,11 @@ description: "04 stage write code source-code.md tests."
 
 进入 04 前必须确认：
 
-1. `iteration/v{N}/03-planning/v1-task-plan-dag.md` `status: Approved`
-2. `iteration/v{N}/03-planning/v1-validation-plan.md` 已确定验证命令
+1. `iteration/v{N}/03-planning/v{N}-task-plan-dag.md` `status: Approved`
+2. `iteration/v{N}/03-planning/v{N}-validation-plan.md` 已确定验证命令
 3. `iteration/v{N}/02-design/` 三件套（architecture / api-spec / database-dictionary）齐全
-4. `iteration/v{N}/01-product/v1-requirement.md` 与 `baseline/decisions/` 存在
-5. 用户已回答"实现范围 + DB 实例 + 优先级 + 验证命令"四元组（默认推荐组合见 `references/scope-recommendation.md`）
+4. `iteration/v{N}/01-product/v{N}-requirement.md`、适用的 `baseline/decisions/` 与 `baseline/03-tech-stack-decision.md` 存在
+5. 用户已确认实现范围、数据环境、优先级和验证命令，或这些决策已在已批准的上游产物中明确。
 
 ## Output Artifacts
 
@@ -28,19 +28,19 @@ description: "04 stage write code source-code.md tests."
 | 实际代码 | `workspace/{backend,frontend,...}/` | ✅ |
 | 实施主记录 | `iteration/v{N}/04-implementation/v{N}-source-code.md` | ✅ |
 | 测试结果 | `iteration/v{N}/04-implementation/v{N}-test-results.md` | ✅ |
-| 问题修复 | `iteration/v{N}/04-implementation/v{N}-issue-fixes.md` | ✅ |
+| 问题修复（仅 v1.0） | `iteration/v1.0/04-implementation/v1.0-issue-fixes.md` | 兼容旧产物 |
 | 阶段导航 | `iteration/v{N}/04-implementation/README.md` | 推荐 |
 
-## Default Scope Recommendations (when user says "G")
+## Scope and Environment Resolution
 
-如果用户回复"G"（默认），按下列推荐组合：
+实现范围、依赖服务、数据环境、执行顺序和验证命令必须来自已批准的产品需求、技术选型、TASK DAG 与验证计划。若这些输入缺失或相互矛盾，停止并请求人类决定；不得以某个项目的框架、数据库或命令作为默认值。
 
-| 决策点 | 默认 | 适用场景 |
-|---|---|---|
-| 实现范围 | **B 最小可运行版本** | 覆盖 AC-001..007 端到端可演示；非全量 TASK |
-| DB 实例 | **P3 Testcontainers + dev SQLite** | dev SQLite 启动快，集成测试用真实 PG 行为 |
-| 优先级 | 按 task-plan-dag 默认 1→7 | SETUP → DATA → CONN → STEP → RUN → INT → TEST |
-| 验证命令 | Format + Lint + Type + Unit | 前 4 项；E2E / Build / Security 推迟 RC |
+| 决策点 | 依据 |
+|---|---|
+| 实现范围 | 已批准 TASK 与关联 AC |
+| 数据/外部服务 | `baseline/03-tech-stack-decision.md` 与设计产物 |
+| 优先级 | TASK DAG 的依赖关系 |
+| 验证命令 | 已批准 validation plan 与项目实际脚本 |
 
 ## Workflow
 
@@ -48,12 +48,12 @@ description: "04 stage write code source-code.md tests."
 0. 用户确认四元组（实现范围 / DB / 优先级 / 验证）
 1. 创建 iteration/v{N}/04-implementation/ 目录骨架
 2. 实际写代码到 workspace/{子项目}/
-3. 编写 v{N}-source-code.md 主记录（结构见 references/source-code-template.md）
+3. 编写 v{N}-source-code.md 主记录（结构见 `templates/implementation.md` 的“产物 3”）
 4. 占位 v{N}-test-results.md（首次实际跑测试后填数据）
-5. 占位 v{N}-issue-fixes.md（实际发现 issue 后追加）
+5. 在 `v{N}-source-code.md` §5 记录已知问题；仅 v1.0 额外维护 `v1.0-issue-fixes.md` 以兼容旧产物。
 6. 编写 README.md（如何跑测试 / 启动 dev server）
-7. 全部代码文件经 compileall 静态校验（即使未安装依赖）
-8. 列出"待你执行"清单（venv 创建 / pip install / make test）
+7. 使用项目语言和工具链对应的静态检查或构建命令验证改动。
+8. 在 README 和交付消息中记录实际可执行的安装、启动和测试命令。
 9. 保持 04 阶段产物为 `draft` 或 `In Review`，列出全部必需产物和测试/验证证据，交由人类审核。Agent 不得将任何产物的 `status` 写入或修改为 `Approved`；人类批准后运行 `validate --stage 04-implementation`，才可进入 05 阶段。
 ```
 
@@ -138,17 +138,13 @@ Use `failed` when verification fails and `blocked` when a required decision or d
 3. 子会话返回 **patch 后的代码 + source-code.md 该 TASK 章节的追加条目**（不是整篇）
 4. 主会话**接收摘要**（≤2k tokens），负责把摘要追加回 source-code.md
 
-这条规则**优先于** "Default Scope Recommendations"——如果默认组合会触发超预算，先缩范围，再谈默认值。
+这条规则优先于任何范围偏好：如果当前 TASK 会触发超预算，先缩小或拆分范围。
 
-## Critical Pitfalls
+## Stack-Specific References
 
-完整 pitfall 列表见 `references/pitfalls.md`。最常见的 3 个：
+只读取与已批准技术栈匹配的参考资料。`pitfalls.md` 与 `backend-dualstack-testing.md` 仅适用于 Python、FastAPI、SQLAlchemy 或 PostgreSQL/SQLite 双栈；`frontend-vue3-stack.md` 仅适用于 Vue 3、Element Plus 与其相关工具链。其他技术栈应以 baseline、设计产物和项目既有模式为准。
 
-1. **`patch` 工具缩进陷阱**：大块替换时 `new_string` 整体缩进错误把代码推出函数 → 每次大块 patch 后立即 `python3 -m compileall -q <dir>` 验证。
-2. **async generator 不能 return value**：用 `return`（裸）而非 `return iter([])`。
-3. **顶层 `type X = ...` 陷阱**：统一用工厂函数 `def foo_column(): return mapped_column(...)`。
-
-### Frontend multi-batch delivery (large UI surface)
+### Frontend Vue 3 multi-batch delivery (only when baseline matches)
 
 > 经验：用户填 10+ 个视图页面时，一次性写完会让 prompt 上下文爆炸、vue-tsc 报错成百上千无法定位、出错重写代价高。**强制分批 + 每批 type-check 验证**。
 
@@ -189,33 +185,29 @@ Use `failed` when verification fails and `blocked` when a required decision or d
 
 ## Companion Documents Structure
 
-`v{N}-source-code.md` 8 节结构（参考 `references/source-code-template.md`）：
+`v{N}-source-code.md` 8 节结构（参考 `templates/implementation.md` 的“产物 3”）：
 
 1. 交付范围（按 task-plan-dag 列表，每条标 ✅/⚠️/❌）
 2. 关键设计决策（实施层，含 ADR 引用）
 3. 文件清单（树形）
 4. AC 验收矩阵（测试 ↔ AC）
 5. 已知限制与后续工作（明确推迟项 + 原因）
-6. 前端/其他子项目（若未实施，注明推迟到 v1.1）
-7. 运行方法（venv / pip install / make 目标）
+6. 前端/其他子项目（若未实施，注明目标版本或待确认原因）
+7. 运行方法（项目实际安装、启动和测试命令）
 8. 变更记录
 
 ## Validation Checklist (before reporting done)
 
-- [ ] 所有 .py 文件通过 `python3 -m compileall -q` （无需装依赖即可静态校验）
+- [ ] 已运行适用于当前语言和项目工具链的静态检查、构建或类型检查
 - [ ] `v{N}-source-code.md` 8 节齐全
 - [ ] `v{N}-test-results.md` 至少含 AC 矩阵（即使实际数据待填）
-- [ ] `v{N}-issue-fixes.md` 至少含模板 + 当前已知遗留
-- [ ] README.md 含 3 步可执行：venv / install / test
-- [ ] 在 v1-source-code.md §5 明确列出"已知限制"
-- [ ] 在交付消息里给出清晰的"待你执行"清单（venv、pip install、make test）
+- [ ] v1.0 的 `v1.0-issue-fixes.md` 含当前已知遗留；v1.1+ 已知问题已写入 `v{N}-source-code.md` §5
+- [ ] README.md 含项目实际的安装、启动和测试步骤
+- [ ] 在 `v{N}-source-code.md` §5 明确列出"已知限制"
+- [ ] 在交付消息里给出清晰的后续执行命令或说明无后续命令
 
 ## References
 
-- `references/source-code-template.md` — `v{N}-source-code.md` 完整模板（基于 v1 实证）
-- `references/pitfalls.md` — 详尽 pitfall 清单 + 修复方案
-- `references/dual-db-compat.md` — SQLite / PostgreSQL 双数据库兼容模式
-- `references/p3-test-strategy.md` — Testcontainers 之外的低成本 E2E 验证策略
-- `references/frontend-stack-comparison.md` — Vue3 vs React 对 FastAPI 后端决策模板
-- `references/scope-recommendation.md` — 用户回复"G"时的默认四元组
-- `references/frontend-vue3-stack.md` — Vue 3 + Element Plus + openapi-typescript 实战配方（类型链路、按需导入、14 路由模板、type-check 验证脚本）
+- `references/pitfalls.md` — Python/FastAPI 项目的问题清单（仅技术栈匹配时）
+- `references/backend-dualstack-testing.md` — SQLAlchemy + PostgreSQL/SQLite 双栈测试（仅技术栈匹配时）
+- `references/frontend-vue3-stack.md` — Vue 3 + Element Plus 实战配方（仅技术栈匹配时）

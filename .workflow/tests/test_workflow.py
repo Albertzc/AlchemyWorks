@@ -163,6 +163,43 @@ class WorkflowTests(unittest.TestCase):
         finally:
             temp.cleanup()
 
+    def test_cleanup_context_packs_requires_archive_and_preserves_task_runs(self):
+        temp, root = self.make_repo()
+        try:
+            packs = root / ".workflow" / "context-packs"
+            packs.mkdir(parents=True)
+            archived_pack = packs / "v1.0-TASK-API-010.md"
+            active_pack = packs / "v1.1-TASK-API-020.md"
+            archived_pack.write_text("archived context", encoding="utf-8")
+            active_pack.write_text("active context", encoding="utf-8")
+            cache_path = root / ".workflow" / "cache" / "context-packs.json"
+            cache_path.parent.mkdir(parents=True)
+            cache_path.write_text(
+                json.dumps({
+                    ".workflow/context-packs/v1.0-TASK-API-010.md": "old-key",
+                    ".workflow/context-packs/v1.1-TASK-API-020.md": "active-key",
+                }),
+                encoding="utf-8",
+            )
+            history = root / ".workflow" / "task-runs" / "history" / "v1.0-TASK-API-010-20260101T000000.000000+0800.json"
+            history.parent.mkdir(parents=True)
+            history.write_text("{}", encoding="utf-8")
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                with self.assertRaises(ValueError):
+                    workflow.cleanup_context_packs("v1.0")
+                (root / "iteration" / "archive" / "v1.0").mkdir(parents=True)
+                self.assertEqual(workflow.cleanup_context_packs("v1.0"), 0)
+                self.assertTrue(archived_pack.exists())
+                self.assertEqual(workflow.cleanup_context_packs("v1.0", execute=True), 0)
+            self.assertFalse(archived_pack.exists())
+            self.assertTrue(active_pack.exists())
+            cache = json.loads(cache_path.read_text(encoding="utf-8"))
+            self.assertNotIn(".workflow/context-packs/v1.0-TASK-API-010.md", cache)
+            self.assertIn(".workflow/context-packs/v1.1-TASK-API-020.md", cache)
+            self.assertTrue(history.exists())
+        finally:
+            temp.cleanup()
+
     def test_compact_context_pack_is_bounded(self):
         temp, root = self.make_repo()
         try:
@@ -379,6 +416,45 @@ class WorkflowTests(unittest.TestCase):
         finally:
             temp.cleanup()
 
+    def test_incremental_implementation_stage_does_not_require_legacy_issue_log(self):
+        """v1.1+ records issues in source-code.md rather than issue-fixes.md."""
+        temp, root = self.make_repo()
+        try:
+            product = root / "iteration" / "v1.1" / "01-product"
+            product.mkdir(parents=True)
+            (product / "v1.1-requirement.md").write_text(
+                "---\nstatus: Approved\nprototype_required: false\n"
+                "prototype_baseline: baseline/05-core-user-flow-prototype.html\n"
+                "prototype_rationale: Existing interaction is reused.\n---\n"
+                "# Increment\n## AC-002\n",
+                encoding="utf-8",
+            )
+            for relative in [
+                "iteration/v1.1/02-design/v1.1-architecture-design.md",
+                "iteration/v1.1/02-design/v1.1-api-spec.md",
+                "iteration/v1.1/02-design/v1.1-database-dictionary.md",
+                "iteration/v1.1/03-planning/v1.1-task-plan-dag.md",
+                "iteration/v1.1/03-planning/v1.1-validation-plan.md",
+                "iteration/v1.1/04-implementation/v1.1-source-code.md",
+                "iteration/v1.1/04-implementation/v1.1-test-results.md",
+            ]:
+                self.add_approved(root, relative, "TASK-API-010\n")
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                expected = "iteration/v1.1/04-implementation/v1.1-issue-fixes.md"
+                self.assertNotIn(expected, workflow.required_inputs("v1.1", "04-implementation"))
+                self.assertEqual(workflow.validate("v1.1", "04-implementation"), 0)
+        finally:
+            temp.cleanup()
+
+    def test_v1_implementation_stage_retains_legacy_issue_log_requirement(self):
+        temp, root = self.make_repo()
+        try:
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                expected = "iteration/v1/04-implementation/v1-issue-fixes.md"
+                self.assertIn(expected, workflow.required_inputs("v1", "04-implementation"))
+        finally:
+            temp.cleanup()
+
     def test_product_stage_requires_an_explicit_prototype_decision(self):
         temp, root = self.make_repo()
         try:
@@ -553,6 +629,54 @@ class WorkflowTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     workflow.init_version()
             self.assertFalse((root / "iteration" / "v1.0").exists())
+
+    def test_init_version_archives_completed_predecessor_after_creating_successor(self):
+        temp, root = self.make_repo()
+        try:
+            (root / "iteration" / "v1").rename(root / "iteration" / "v1.0")
+            for relative in [
+                "iteration/v1.0/01-product/v1.0-prototype.html",
+                "iteration/v1.0/02-design/v1.0-architecture-design.md",
+                "iteration/v1.0/02-design/v1.0-api-spec.md",
+                "iteration/v1.0/02-design/v1.0-database-dictionary.md",
+                "iteration/v1.0/03-planning/v1.0-task-plan-dag.md",
+                "iteration/v1.0/03-planning/v1.0-validation-plan.md",
+                "iteration/v1.0/04-implementation/v1.0-source-code.md",
+                "iteration/v1.0/04-implementation/v1.0-test-results.md",
+                "iteration/v1.0/04-implementation/v1.0-issue-fixes.md",
+                "iteration/v1.0/05-review-release/v1.0-review-release.md",
+            ]:
+                self.add_approved(root, relative, "TASK-API-010\n")
+            requirement = root / "iteration" / "v1.0" / "01-product" / "v1.0-requirement.md"
+            requirement.write_text(
+                "---\nstatus: Approved\nprototype_required: true\n---\n# Req\nAC-001\n",
+                encoding="utf-8",
+            )
+            plan = root / "iteration" / "v1.0" / "03-planning" / "v1.0-task-plan-dag.md"
+            plan.write_text("---\nstatus: Approved\n---\nTASK-API-010\n", encoding="utf-8")
+            (root / "README.md").write_text("# v1.0\n", encoding="utf-8")
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                self.assertEqual(workflow.init_version(), 0)
+            self.assertTrue((root / "iteration" / "v1.1" / "01-product").is_dir())
+            archived = root / "iteration" / "archive" / "v1.0"
+            self.assertTrue(archived.is_dir())
+            self.assertFalse((root / "iteration" / "v1.0").exists())
+            self.assertIn("superseded_by: v1.1", (archived / "ARCHIVED.md").read_text(encoding="utf-8"))
+        finally:
+            temp.cleanup()
+
+    def test_init_version_does_not_archive_unreleased_predecessor(self):
+        temp, root = self.make_repo()
+        try:
+            (root / "iteration" / "v1").rename(root / "iteration" / "v1.0")
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                with self.assertRaises(ValueError):
+                    workflow.init_version()
+            self.assertTrue((root / "iteration" / "v1.0").is_dir())
+            self.assertFalse((root / "iteration" / "v1.1").exists())
+            self.assertFalse((root / "iteration" / "archive" / "v1.0").exists())
+        finally:
+            temp.cleanup()
 
     def test_frontmatter_supports_multiline_html_and_scopes_change_set(self):
         html = "<!--\nstatus: Approved\nowner: QA\n-->\n<html></html>"
