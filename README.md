@@ -226,6 +226,7 @@ python .workflow/workflow.py cleanup --iteration v1.0 --execute
 
 # 仪表盘
 python .workflow/workflow.py dashboard  --iteration v1.0       # 渲染静态 HTML 仪表盘
+python .workflow/workflow.py verify-workflow                 # 检查工作流核心文件是否被修改
 ```
 
 **子命令表**：
@@ -245,6 +246,8 @@ python .workflow/workflow.py dashboard  --iteration v1.0       # 渲染静态 HT
 | `dashboard` | 渲染静态 HTML 仪表盘 | `dashboard/index.html` |
 
 所有命令子命令接受 `--iteration`（默认从 `iteration/` 推断最大值；不存在则返回 `v1.0`）。
+
+产品开发期间，工作流核心文件默认为只读。`AGENTS.md`、工作流说明、`.workflow/workflow.py`、`.workflow/scripts/`、`.workflow/tests/`、`.agents/skills/` 和 `templates/` 被修改且未提交时，工作流 CLI 会阻断；通过 `verify-workflow` 检查后，必须在独立的工作流维护变更中完成提交。`baseline/`、`iteration/`、`workspace/` 及工作流生成缓存不受此保护。
 
 工作流生成的 `generated_at`、`checked_at`、`recorded_at` 和 Context Pack 时间均使用执行 Codex 客户端的本地时区，并保留 ISO 8601 偏移量。
 

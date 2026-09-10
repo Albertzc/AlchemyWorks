@@ -12,6 +12,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -47,12 +48,89 @@ BASELINE_FILES = [
     "baseline/04-glossary.md",
     "baseline/05-core-user-flow-prototype.html",
 ]
+# These are workflow definitions and governance controls, not product
+# artifacts. Product-stage CLI commands refuse to run while any of them has
+# uncommitted changes, so a product task cannot silently alter its own gates.
+WORKFLOW_PROTECTED_PATHS = (
+    "AGENTS.md",
+    "README.md",
+    ".gitignore",
+    ".workflow/workflow.py",
+    ".workflow/README.md",
+    ".workflow/workflow-file-inventory.md",
+    ".workflow/dashboard/template.html",
+    ".workflow/scripts/",
+    ".workflow/tests/",
+    ".agents/skills/",
+    "templates/",
+)
 ID_RE = re.compile(r"\b(?:FR|BR|NFR|FS|API|TBL|TASK|AC|ISSUE)(?:-[A-Z0-9]+)+\b")
 TASK_ID_RE = re.compile(r"^TASK(?:-[A-Z0-9]+)+$")
 PLACEHOLDER_RE = re.compile(r"\b(?:TODO|TBD|XXX)\b|\[待确认\]|\[未提供\]|占位", re.IGNORECASE)
 MANIFEST_ITERATION_RE = re.compile(
     r"^iteration:\s*['\"]?(v\d+(?:\.\d+)?)['\"]?\s*$", re.MULTILINE
 )
+
+
+def _is_workflow_protected_path(path: str) -> bool:
+    normalized = path.replace("\\", "/")
+    if normalized.startswith("./"):
+        normalized = normalized[2:]
+    return any(
+        normalized == protected.rstrip("/")
+        or normalized.startswith(protected)
+        for protected in WORKFLOW_PROTECTED_PATHS
+    )
+
+
+def workflow_changed_paths() -> list[str]:
+    """Return modified or untracked workflow-definition paths in this Git tree."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(ROOT), "status", "--porcelain=v1", "--untracked-files=all"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return []
+    if result.returncode != 0:
+        return []
+    changed: set[str] = set()
+    for line in result.stdout.splitlines():
+        if len(line) < 4:
+            continue
+        path = line[3:]
+        if " -> " in path:  # rename status; protect the destination path
+            path = path.rsplit(" -> ", 1)[1]
+        path = path.replace("\\", "/")
+        if _is_workflow_protected_path(path):
+            changed.add(path)
+    return sorted(changed)
+
+
+def workflow_protection_errors() -> list[str]:
+    """Return blockers when workflow definitions are dirty during product work."""
+    changed = workflow_changed_paths()
+    if not changed:
+        return []
+    return [
+        "workflow core files have uncommitted changes; product workflow commands are blocked: "
+        + ", ".join(changed)
+        + ". Complete and commit a dedicated workflow-maintenance change first."
+    ]
+
+
+def verify_workflow() -> int:
+    errors = workflow_protection_errors()
+    print("workflow verify-workflow")
+    if errors:
+        for error in errors:
+            print(f"ERROR {error}")
+        print("result: BLOCKED")
+        return 1
+    print("result: PASS (workflow core is clean)")
+    return 0
 
 
 @dataclass(frozen=True)
@@ -1607,6 +1685,10 @@ def main(argv: list[str] | None = None) -> int:
     review_parser.add_argument("--iteration", default=None)
     review_parser.add_argument("--stage", choices=GATE_STAGES)
     review_parser.add_argument("--json", action="store_true")
+    subparsers.add_parser(
+        "verify-workflow",
+        help="Verify that workflow core files are clean before product workflow commands run.",
+    )
     finished = subparsers.add_parser("task-finished")
     finished.add_argument("--iteration", default=discover_iteration())
     finished.add_argument("--task", required=True)
@@ -1631,6 +1713,13 @@ def main(argv: list[str] | None = None) -> int:
         except (AttributeError, TypeError, ValueError):
             pass  # leave as-is for error reporting downstream
     try:
+        if args.command == "verify-workflow":
+            return verify_workflow()
+        protection_errors = workflow_protection_errors()
+        if protection_errors:
+            for error in protection_errors:
+                print(f"ERROR {error}", file=sys.stderr)
+            return 2
         if args.command == "init":
             return init_project()
         if args.command == "init-version":

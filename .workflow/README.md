@@ -27,6 +27,7 @@ python .workflow/workflow.py preflight --iteration v1 --json
 python .workflow/workflow.py review-pack --iteration v1 --stage 03-planning --json
 python .workflow/workflow.py dashboard --iteration v1
 python .workflow/workflow.py task-finished --iteration v1 --task TASK-API-010 --result succeeded
+python .workflow/workflow.py verify-workflow
 .\.workflow\scripts\sync-workflow.ps1 -TargetRoot 'E:\path\to\target-project'
 ```
 
@@ -60,6 +61,10 @@ Every HTML prototype, including the baseline prototype, must preserve the HTML-c
 All generated timestamps use the local timezone of the Codex client that runs the command and include an ISO 8601 offset (for example, `+08:00`). They do not use Codex server time or a misleading UTC `Z` suffix.
 
 The gate validates the complete upstream chain through the requested stage, including the required implementation and combined review-release artifact.
+
+## Workflow core protection
+
+During product development, the workflow core is read-only. `AGENTS.md`, the root workflow documentation, `.workflow/workflow.py`, workflow scripts/tests, `.agents/skills/`, and `templates/` are protected definitions; `baseline/`, `iteration/`, and `workspace/` remain project-owned inputs and outputs. `index`, `validate`, `init-version`, `refresh`, `context`, `task-finished`, and other operational commands stop when a protected file has uncommitted changes. Run `python .workflow/workflow.py verify-workflow` to inspect the guard. Workflow maintainers may edit the protected files in a dedicated maintenance change, run the workflow tests, and commit the change before resuming product workflow commands.
 
 ## Synchronizing this workflow to another project
 

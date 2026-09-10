@@ -16,6 +16,36 @@ import workflow
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_workflow_protection_identifies_core_paths(self):
+        self.assertTrue(workflow._is_workflow_protected_path(".workflow/workflow.py"))
+        self.assertTrue(workflow._is_workflow_protected_path(".agents/skills/stage-gate/SKILL.md"))
+        self.assertTrue(workflow._is_workflow_protected_path("templates/Prototype.html"))
+        self.assertFalse(workflow._is_workflow_protected_path("iteration/v1/01-product/v1-requirement.md"))
+        self.assertFalse(workflow._is_workflow_protected_path(".workflow/manifest.yaml"))
+
+    def test_workflow_changed_paths_ignores_project_artifacts_and_generated_state(self):
+        status = (
+            " M .workflow/workflow.py\n"
+            " M iteration/v1.0/01-product/v1.0-requirement.md\n"
+            " M .workflow/manifest.yaml\n"
+            "?? templates/new-template.md\n"
+        )
+        completed = subprocess.CompletedProcess([], 0, stdout=status, stderr="")
+        with patch.object(workflow.subprocess, "run", return_value=completed):
+            self.assertEqual(
+                workflow.workflow_changed_paths(),
+                [".workflow/workflow.py", "templates/new-template.md"],
+            )
+
+    def test_product_commands_are_blocked_when_workflow_core_is_dirty(self):
+        with patch.object(workflow, "workflow_protection_errors", return_value=["workflow core is dirty"]):
+            self.assertEqual(workflow.main(["validate", "--iteration", "v1"]), 2)
+
+    def test_verify_workflow_reports_dirty_core_without_mutating_it(self):
+        with patch.object(workflow, "workflow_protection_errors", return_value=["workflow core is dirty"]):
+            self.assertEqual(workflow.verify_workflow(), 1)
+        with patch.object(workflow, "workflow_protection_errors", return_value=[]):
+            self.assertEqual(workflow.verify_workflow(), 0)
     def test_generated_timestamps_use_client_local_timezone(self):
         timestamp = workflow.now()
         parsed = datetime.fromisoformat(timestamp)

@@ -9,6 +9,13 @@
 - 新条目必须先明确其用途、是否为必要项，以及是否属于可再生运行状态；可再生状态不得加入本清单的“必要项”。
 - 代码评审和工作流自检应将“实现变更与本清单一致”作为检查项。
 
+## 1.1 核心骨架保护
+
+- 上表登记的工作流定义、Skill、模板、治理规则、脚本和测试，在产品开发期间视为只读核心骨架。
+- `baseline/`、`iteration/` 和 `workspace/` 下的项目产物不属于核心骨架；`.workflow/` 下的 manifest、traceability、current-state、cache、Context Pack、task-runs 和 dashboard/index.html 是可再生运行状态，也不属于核心骨架。
+- `python .workflow/workflow.py verify-workflow` 检查核心骨架是否有未提交修改；产品工作流 CLI 在发现修改时阻断。
+- 核心骨架只能通过独立的 workflow-maintenance 变更修改；该变更必须同步更新本清单、说明、测试和同步脚本，并在提交后恢复产品工作流。
+
 ## 2. 必要的顶层治理文件
 
 | 路径 | 类型 | 用途 |

@@ -16,6 +16,7 @@ python .workflow/workflow.py init
 python .workflow/workflow.py init-version
 python .workflow/workflow.py index --iteration v1.0
 python .workflow/workflow.py state --iteration v1.0 --refresh
+python .workflow/workflow.py verify-workflow
 python .workflow/workflow.py validate --iteration v1.0 --stage 00-baseline
 python .workflow/workflow.py validate --iteration v1.0 --stage <stage>
 python .workflow/workflow.py context --iteration v1.0 --task TASK-XXX-NNN

@@ -99,6 +99,10 @@ The authoritative inventory of workflow-owned files and directories is [`.workfl
 
 The Context Pack contains the selected TASK definition, related stable IDs, relevant contract excerpts, and input hashes. It reduces repeated full-document loading; it does not replace human approval or alter the source-of-truth priority.
 
+### Workflow Core Protection
+
+During product development, the workflow core is read-only. Do not modify `AGENTS.md`, the root workflow `README.md`, `.gitignore`, `.workflow/workflow.py`, `.workflow/README.md`, `.workflow/workflow-file-inventory.md`, `.workflow/scripts/`, `.workflow/tests/`, `.agents/skills/`, or `templates/` as part of a product or iteration task. The workflow CLI blocks operational commands when these paths have uncommitted changes. Changes to them require a dedicated workflow-maintenance change, updated inventory/documentation/tests, and a clean commit before product work resumes. Project artifacts under `baseline/`, `iteration/`, and `workspace/` are not protected by this guard.
+
 The final report should summarize:
 
 - What changed.
