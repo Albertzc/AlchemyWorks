@@ -22,7 +22,7 @@
 | 路径 | 必需内容 | 用途 |
 |---|---|---|
 | `.workflow/` | `workflow.py`、`README.md` | 工作流 CLI（含 baseline 核心流程原型与迭代按需原型门禁、文档变更后的 `refresh` 同步命令、已归档版本 Context Pack 缓存清理）及其操作说明。 |
-| `.workflow/scripts/` | `stage_status.py`、`id_registry.py`、`query_id.py`、`check_links.py`、`diff_versions.py` | 供 Agent 和维护者调用的状态、ID、链接与版本比较工具。 |
+| `.workflow/scripts/` | `stage_status.py`、`id_registry.py`、`query_id.py`、`check_links.py`、`diff_versions.py`、`sync-workflow.ps1` | 供 Agent 和维护者调用的状态、ID、链接与版本比较工具，以及向指定项目同步工作流源定义的受保护脚本。 |
 | `.workflow/dashboard/` | `template.html` | 工作流仪表盘的源模板。 |
 | `.workflow/tests/` | `test_workflow.py` | 工作流 CLI 的回归测试。 |
 
@@ -36,7 +36,7 @@
 | `.agents/skills/prototype-design-system/` | `SKILL.md`、`references/` | 原型视觉、交互和设计令牌约束。 |
 | `.agents/skills/design-specification/` | `SKILL.md` | 02-design 的架构、API、数据库字典产物与一致性检查。 |
 | `.agents/skills/planning-validation/` | `SKILL.md` | 03-planning 的 TASK DAG、验收覆盖和验证计划约束。 |
-| `.agents/skills/iterate-implementation/` | `SKILL.md`、`references/` | 实现阶段的代码、测试和记录约束；v1.0 保留独立 `issue-fixes.md`，v1.1+ 将 Issue 记录合并入 `source-code.md`。 |
+| `.agents/skills/iterate-implementation/` | `SKILL.md` | 实现阶段的代码、测试和记录约束；v1.0 保留独立 `issue-fixes.md`，v1.1+ 将 Issue 记录合并入 `source-code.md`。 |
 | `.agents/skills/review-release/` | `SKILL.md` | 05-review-release 的审查证据、风险、回滚和发布决策约束。 |
 | `.agents/skills/workflow-governance/` | `SKILL.md` | 工作流 CLI 的唯一操作入口：索引、状态、校验、追溯、Context Pack 和任务结论。 |
 

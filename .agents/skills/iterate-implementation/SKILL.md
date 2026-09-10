@@ -140,10 +140,6 @@ Use `failed` when verification fails and `blocked` when a required decision or d
 
 这条规则优先于任何范围偏好：如果当前 TASK 会触发超预算，先缩小或拆分范围。
 
-## Stack-Specific References
-
-只读取与已批准技术栈匹配的参考资料。`pitfalls.md` 与 `backend-dualstack-testing.md` 仅适用于 Python、FastAPI、SQLAlchemy 或 PostgreSQL/SQLite 双栈；`frontend-vue3-stack.md` 仅适用于 Vue 3、Element Plus 与其相关工具链。其他技术栈应以 baseline、设计产物和项目既有模式为准。
-
 ### Frontend Vue 3 multi-batch delivery (only when baseline matches)
 
 > 经验：用户填 10+ 个视图页面时，一次性写完会让 prompt 上下文爆炸、vue-tsc 报错成百上千无法定位、出错重写代价高。**强制分批 + 每批 type-check 验证**。
@@ -159,7 +155,7 @@ Use `failed` when verification fails and `blocked` when a required decision or d
 4. **副产修跨批累积**：A 批修的 type re-export / schema 类型补全，B 批才能用；不要把"待修"推到收尾。
 5. **写新组件前先 `read_file` 看现有组件的 prop 定义**。盲猜组件签名（特别是 `PipelineStageTimeline` 给 Run 用还是 Pipeline 用）会撞类型墙。
 
-详见 `references/frontend-vue3-stack.md` §13（含收尾前必跑的 type-check / lint / unit / dev 四件套 + ESLint v9 flat config + side-effects-in-computed 修复 + `vue/require-default-prop` 套路）。
+收尾前根据已批准的 validation plan 和项目实际脚本，运行 type-check、lint、unit test 与开发启动验证；具体命令以项目自身工具链为准。
 
 ### Context-bloat discipline (applies to any large task)
 
@@ -181,7 +177,7 @@ Use `failed` when verification fails and `blocked` when a required decision or d
 - 把长文档复制到我的回复里（用 grep 摘要行）
 - 把"待修"列表塞进 prompt，让 prompt 越来越长
 
-完整论述见 `references/frontend-vue3-stack.md` §14。
+上述约束适用于所有大规模实现任务；应优先使用项目提供的精确检索、局部读取和小范围编辑能力。
 
 ## Companion Documents Structure
 
@@ -205,9 +201,3 @@ Use `failed` when verification fails and `blocked` when a required decision or d
 - [ ] README.md 含项目实际的安装、启动和测试步骤
 - [ ] 在 `v{N}-source-code.md` §5 明确列出"已知限制"
 - [ ] 在交付消息里给出清晰的后续执行命令或说明无后续命令
-
-## References
-
-- `references/pitfalls.md` — Python/FastAPI 项目的问题清单（仅技术栈匹配时）
-- `references/backend-dualstack-testing.md` — SQLAlchemy + PostgreSQL/SQLite 双栈测试（仅技术栈匹配时）
-- `references/frontend-vue3-stack.md` — Vue 3 + Element Plus 实战配方（仅技术栈匹配时）
