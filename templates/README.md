@@ -31,6 +31,8 @@
 
 `baseline/05-core-user-flow-prototype.html` 是新项目的必需交互基线。每个版本的 `requirement.md` 必须声明 `prototype_required: true|false`：为 `true` 时，使用本目录的原型模板和设计系统生成该版本的 HTML 原型；为 `false` 时，不生成版本原型，并在需求文档中记录复用的交互基线和理由。
 
+HTML 原型必须保留模板顶部的审核 frontmatter。生成时使用 `status: draft`、`review_decision: pending`；人工审核完成后填写 `reviewer`、`reviewed_at`、`review_notes`，并由人工将审核通过的原型设为 `status: Approved`、`review_decision: approved`。工作流会在门禁中强制检查这些字段。
+
 ## 版本号说明
 
 模板内所有路径引用使用 `v{major}.{minor}` 占位符（例如 `iteration/v{major}.{minor}/01-product/v{major}.{minor}-requirement.md`）。生成实际产物时替换为具体值（如 `v1.0` / `v1.1` / `v2.0`）。

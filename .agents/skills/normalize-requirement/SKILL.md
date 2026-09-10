@@ -223,6 +223,7 @@ last_updated: YYYY-MM-DDTHH:MM:SS±HH:MM # Codex client local time
 - [ ] MVP 范围、非目标和待确认问题已明确。
 - [ ] 已在 frontmatter 声明 `prototype_required: true|false`；`false` 时另有非空 `prototype_baseline` 和 `prototype_rationale`。
 - [ ] `true` 时页面、关键交互和模拟数据要求足以支持原型生成。
+- [ ] 生成 HTML 原型时已从 `templates/Prototype.html` 保留审核 frontmatter：`status`、`review_decision`、`reviewer`、`reviewed_at`、`review_notes`。
 - [ ] 输出文件名 = `v{major}.{minor}-requirement.md`。
 - [ ] （迭代）`change_set` 完整列出本轮所有变更。
 - [ ] （迭代）未修改 `iteration/v{major}.{minor-1}/` 任何文件。

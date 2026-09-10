@@ -39,6 +39,10 @@ description: Use when starting, handing off, or reviewing any workflow stage. En
 - `false`：原型不作为该版本门禁产物；frontmatter 中非空的 `prototype_baseline` 与 `prototype_rationale` 是必需门禁字段，需求与功能规格也必须记录沿用的交互基线和不制作原型的理由。适用于纯后端或非 UI 改动、复用既有模式的轻量 UI 改动，以及能由规格和验收标准无歧义表达的改动。
 
 Baseline 核心流程原型始终必需；功能迭代的页面原型按上述决策按需生成。
+
+### HTML 原型审核记录
+
+每个 HTML 原型必须使用 HTML 注释形式的 frontmatter，至少包含 `status`、`review_decision`、`reviewer`、`reviewed_at` 和 `review_notes`。生成时使用 `status: draft`、`review_decision: pending`；人工审核通过时由人类填写审核人、时间和结论，并同时设置 `status: Approved`、`review_decision: approved`。`validate` 会把缺少这些字段或审核结论未完成视为门禁错误。
 ## Raw Requirement Intake
 
 原始需求是用户提供的来源材料，格式可以是不带 frontmatter 的 Markdown、文本、邮件、会议纪要或其他可读取文件。它不属于需要 `Approved` 的阶段产物，Agent 不得改写其原文。

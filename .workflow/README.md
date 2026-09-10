@@ -55,6 +55,8 @@ The `00-baseline` gate requires the four baseline documents plus `baseline/05-co
 
 Each iteration's product requirement must include the flat frontmatter decision `prototype_required: true|false`. A `true` decision makes `iteration/v{major}.{minor}/01-product/v{major}.{minor}-prototype.html` a required Approved input to the 01-product gate. A `false` decision permits that artifact to be omitted, but requires nonempty `prototype_baseline` and `prototype_rationale` frontmatter for human review.
 
+Every HTML prototype, including the baseline prototype, must preserve the HTML-comment frontmatter from `templates/Prototype.html`: `status`, `review_decision`, `reviewer`, `reviewed_at`, and `review_notes`. A generated prototype starts as `status: draft` / `review_decision: pending`; an Approved prototype must have `review_decision: approved` plus a nonempty reviewer, timestamp, and review conclusion. `validate` treats missing or incomplete prototype review metadata as a blocking error.
+
 All generated timestamps use the local timezone of the Codex client that runs the command and include an ISO 8601 offset (for example, `+08:00`). They do not use Codex server time or a misleading UTC `Z` suffix.
 
 The gate validates the complete upstream chain through the requested stage, including the required implementation and combined review-release artifact.

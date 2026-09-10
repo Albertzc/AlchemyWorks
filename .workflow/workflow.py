@@ -526,6 +526,41 @@ def prototype_policy_errors(iteration: str) -> list[str]:
     return []
 
 
+def prototype_review_policy_errors(iteration: str, item: Artifact) -> list[str]:
+    """Require explicit, auditable human review metadata for HTML prototypes."""
+    if not item.path.endswith("-prototype.html") and item.path != "baseline/05-core-user-flow-prototype.html":
+        return []
+    path = ROOT / item.path
+    if not path.exists():
+        return []
+    frontmatter, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
+    required = ["status", "review_decision", "reviewer", "reviewed_at", "review_notes"]
+    missing = [field for field in required if field not in frontmatter]
+    errors: list[str] = []
+    if missing:
+        errors.append(
+            f"prototype is missing review frontmatter in {item.path}: {', '.join(missing)}"
+        )
+        return errors
+    decision = frontmatter.get("review_decision", "").lower()
+    if decision not in {"pending", "approved", "changes_requested", "rejected"}:
+        errors.append(
+            f"prototype has invalid review_decision in {item.path}: {decision or '<empty>'}; "
+            "use pending, approved, changes_requested, or rejected"
+        )
+    if item.status == "Approved":
+        if decision != "approved":
+            errors.append(
+                f"Approved prototype must have review_decision: approved: {item.path}"
+            )
+        for field in ("reviewer", "reviewed_at", "review_notes"):
+            if not policy_text_is_supplied(frontmatter.get(field, "")):
+                errors.append(
+                    f"Approved prototype has empty review frontmatter '{field}': {item.path}"
+                )
+    return errors
+
+
 def policy_text_is_supplied(value: str) -> bool:
     """Reject empty or template-placeholder values in gate-controlled fields."""
     stripped = value.strip()
@@ -674,7 +709,12 @@ def validation_report(iteration: str, stage: str | None, artifacts: list[Artifac
             continue
         text = (ROOT / item.path).read_text(encoding="utf-8")
         if item.stage != BASELINE_STAGE and item.frontmatter is False and item.path.endswith(".html"):
-            warnings.append(f"artifact has no frontmatter status: {item.path}")
+            if item.path.endswith("-prototype.html"):
+                errors.append(f"prototype artifact has no frontmatter: {item.path}")
+            else:
+                warnings.append(f"artifact has no frontmatter status: {item.path}")
+        if item.path.endswith(".html"):
+            errors.extend(prototype_review_policy_errors(iteration, item))
         if PLACEHOLDER_RE.search(text) and item.status == "Approved":
             errors.append(f"Approved artifact contains unresolved placeholder: {item.path}")
 

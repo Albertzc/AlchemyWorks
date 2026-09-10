@@ -104,6 +104,7 @@ iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 **关键约定**：
 
 - 每份正式阶段产物需有 `status: Approved` frontmatter 才算"通过"（否则 gate 拒绝）；原始需求是来源材料，不要求统一格式或审批状态。`iteration/raw-requirement/` 除 README 外仅保存用户原文件，Agent 只读，不得修改、重命名或删除；`route-requirement` 输出其对应版本。
+- HTML 原型还必须保留审核 frontmatter：`review_decision`、`reviewer`、`reviewed_at`、`review_notes`；只有 `status: Approved` 且 `review_decision: approved`、审核人/时间/结论齐全时，原型门禁才会通过。
 - `Approved` 状态下若含占位词（`TODO` / `TBD` / `XXX` / `[待确认]` / `[未提供]` / `占位`），validate 视为 unresolved blocker
 - 上游产物必须 Approved 才能作为下游阶段的正式输入
 - Agent 只能创建或更新 `status: draft` / `status: In Review` 的产物，**不得**写入或修改 `status: Approved`。每个阶段完成时，Agent 必须列出待人工审核的全部必需产物及验证证据；人类手动审核并将各产物改为 `Approved` 后，才可运行该阶段的 `validate` 并开始下一阶段。

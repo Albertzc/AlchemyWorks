@@ -36,7 +36,14 @@ class WorkflowTests(unittest.TestCase):
             status = "draft" if draft else "Approved"
             (root / "baseline" / f"{name}.md").write_text(f"---\nstatus: {status}\n---\n# {name}\n", encoding="utf-8")
         (root / "baseline" / "05-core-user-flow-prototype.html").write_text(
-            f"<!-- status: {'draft' if draft else 'Approved'} -->\n<html></html>\n", encoding="utf-8"
+            "<!--\n"
+            f"status: {'draft' if draft else 'Approved'}\n"
+            f"review_decision: {'pending' if draft else 'approved'}\n"
+            "reviewer: Product Owner\n"
+            "reviewed_at: 2026-09-10T12:00:00+08:00\n"
+            "review_notes: Fixture review record.\n"
+            "-->\n<html></html>\n",
+            encoding="utf-8",
         )
         plan = root / "iteration" / "v1" / "03-planning"
         plan.mkdir(parents=True)
@@ -63,7 +70,12 @@ class WorkflowTests(unittest.TestCase):
             return
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.suffix.lower() == ".html":
-            path.write_text("<!-- status: Approved -->\n" + body, encoding="utf-8")
+            path.write_text(
+                "<!--\nstatus: Approved\nreview_decision: approved\n"
+                "reviewer: Product Owner\nreviewed_at: 2026-09-10T12:00:00+08:00\n"
+                "review_notes: Fixture review record.\n-->\n" + body,
+                encoding="utf-8",
+            )
         else:
             path.write_text("---\nstatus: Approved\n---\n" + body, encoding="utf-8")
 
@@ -398,6 +410,55 @@ class WorkflowTests(unittest.TestCase):
         finally:
             temp.cleanup()
 
+    def test_product_prototype_requires_review_frontmatter(self):
+        temp, root = self.make_repo()
+        try:
+            prototype = root / "iteration" / "v1" / "01-product" / "v1-prototype.html"
+            prototype.parent.mkdir(parents=True, exist_ok=True)
+            prototype.write_text("<!-- status: Approved -->\n<html></html>\n", encoding="utf-8")
+            import io, contextlib
+            buf = io.StringIO()
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"), contextlib.redirect_stdout(buf):
+                rc = workflow.validate("v1", "01-product")
+            self.assertEqual(rc, 1)
+            self.assertIn("missing review frontmatter", buf.getvalue())
+            self.assertIn("review_decision", buf.getvalue())
+        finally:
+            temp.cleanup()
+
+    def test_approved_product_prototype_requires_a_completed_review_record(self):
+        temp, root = self.make_repo()
+        try:
+            prototype = root / "iteration" / "v1" / "01-product" / "v1-prototype.html"
+            prototype.parent.mkdir(parents=True, exist_ok=True)
+            prototype.write_text(
+                "<!--\nstatus: Approved\nreview_decision: pending\nreviewer: \nreviewed_at: \nreview_notes: \n-->\n<html></html>\n",
+                encoding="utf-8",
+            )
+            import io, contextlib
+            buf = io.StringIO()
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"), contextlib.redirect_stdout(buf):
+                rc = workflow.validate("v1", "01-product")
+            self.assertEqual(rc, 1)
+            self.assertIn("review_decision: approved", buf.getvalue())
+            self.assertIn("reviewer", buf.getvalue())
+        finally:
+            temp.cleanup()
+
+    def test_approved_product_prototype_accepts_completed_review_record(self):
+        temp, root = self.make_repo()
+        try:
+            prototype = root / "iteration" / "v1" / "01-product" / "v1-prototype.html"
+            prototype.parent.mkdir(parents=True, exist_ok=True)
+            prototype.write_text(
+                "<!--\nstatus: Approved\nreview_decision: approved\nreviewer: Product Owner\nreviewed_at: 2026-09-10T12:00:00+08:00\nreview_notes: Reviewed key flows and responsive states.\n-->\n<html></html>\n",
+                encoding="utf-8",
+            )
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                self.assertEqual(workflow.validate("v1", "01-product"), 0)
+        finally:
+            temp.cleanup()
+
     def test_incremental_product_stage_allows_no_prototype_when_decision_is_false(self):
         temp, root = self.make_repo()
         try:
@@ -607,7 +668,10 @@ class WorkflowTests(unittest.TestCase):
                     "---\nstatus: Approved\n---\n# baseline\n", encoding="utf-8"
                 )
             (root / "baseline" / "05-core-user-flow-prototype.html").write_text(
-                "<!-- status: Approved -->\n<html></html>\n", encoding="utf-8"
+                "<!--\nstatus: Approved\nreview_decision: approved\n"
+                "reviewer: Product Owner\nreviewed_at: 2026-09-10T12:00:00+08:00\n"
+                "review_notes: Fixture review record.\n-->\n<html></html>\n",
+                encoding="utf-8",
             )
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
                 self.assertEqual(workflow.init_version(), 0)
