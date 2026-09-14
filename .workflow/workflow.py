@@ -413,6 +413,16 @@ def init_version(iteration: str | None = None) -> int:
     for stage in STAGES:
         (root / stage).mkdir(parents=True)
     if predecessor:
+        workspace_errors: list[str] = []
+        check_workspace_readme_freshness(predecessor, workspace_errors)
+        if workspace_errors:
+            # Roll back only the newly created empty successor skeleton. The
+            # predecessor has not been moved yet, so archive state is intact.
+            shutil.rmtree(root)
+            raise ValueError(
+                "workspace README refresh required before archiving "
+                f"{predecessor}: " + "; ".join(workspace_errors)
+            )
         archive_iteration(predecessor, target)
     index(target)
     print(f"version initialized: iteration/{target}")
@@ -747,6 +757,31 @@ def check_readme_freshness(iteration: str, errors: list[str]) -> None:
             )
 
 
+def check_workspace_readme_freshness(iteration: str, errors: list[str]) -> None:
+    """Require the workspace system-function manual to include ``iteration``.
+
+    The workflow deliberately does not synthesize business documentation from
+    arbitrary release artifacts. A human-reviewed version handoff must merge
+    the completed functionality into ``workspace/README.md`` and add the
+    marker and heading checked here. This makes the archive handoff
+    deterministic while keeping the product description meaningful.
+    """
+    iteration = canonical_iteration(iteration)
+    readme = ROOT / "workspace" / "README.md"
+    if not readme.exists():
+        errors.append("workspace/README.md missing; required before version archive")
+        return
+    text = readme.read_text(encoding="utf-8")
+    marker = f"<!-- workflow:workspace-readme-version: {iteration} -->"
+    if marker not in text:
+        errors.append(
+            f"workspace/README.md is not refreshed for {iteration}; "
+            f"add marker '{marker}' after merging the version functionality"
+        )
+    if "## 当前系统功能说明" not in text:
+        errors.append("workspace/README.md missing required heading: ## 当前系统功能说明")
+
+
 def validation_report(iteration: str, stage: str | None, artifacts: list[Artifact] | None = None) -> tuple[list[Artifact], list[str], list[str]]:
     artifacts = artifacts if artifacts is not None else load_artifacts(iteration)
     by_path = {item.path: item for item in artifacts}
@@ -803,6 +838,7 @@ def validation_report(iteration: str, stage: str | None, artifacts: list[Artifac
     # D3: review/release sign-off freshness check (only at the final stage)
     if "05-review-release" in stages:
         check_readme_freshness(iteration, errors)
+        check_workspace_readme_freshness(iteration, errors)
 
     return artifacts, errors, warnings
 
