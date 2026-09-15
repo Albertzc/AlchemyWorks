@@ -32,8 +32,9 @@
 └── .workflow/                       # 工作流 CLI + 状态 + 缓存
     ├── workflow.py                  # 主 CLI（纯 stdlib）
     ├── workflow-file-inventory.md   # 工作流必要文件与目录权威清单
-    ├── manifest.yaml                # 产物索引（自动）
-    ├── traceability.json            # 稳定 ID 追溯图（自动）
+    ├── manifest.yaml                # 实例项目状态索引（自动，Git）
+    ├── traceability.json            # 实例项目稳定 ID 追溯图（自动，Git）
+    ├── current-state.json           # 实例项目恢复检查点（自动，Git）
     ├── cache/                       # context-pack 缓存
     ├── context-packs/               # TASK-scoped 上下文包
     ├── task-runs/                   # TASK 结论 JSON
@@ -249,7 +250,7 @@ python .workflow/workflow.py verify-workflow                 # 检查工作流�
 
 所有命令子命令接受 `--iteration`（默认从 `iteration/` 推断最大值；不存在则返回 `v1.0`）。
 
-产品开发期间，工作流核心文件默认为只读。`AGENTS.md`、工作流说明、`.workflow/workflow.py`、`.workflow/scripts/`、`.workflow/tests/`、`.agents/skills/` 和 `templates/` 被修改且未提交时，工作流 CLI 会阻断；通过 `verify-workflow` 检查后，必须在独立的工作流维护变更中完成提交。`baseline/`、`iteration/`、`workspace/` 及工作流生成缓存不受此保护。
+产品开发期间，工作流核心文件默认为只读。`AGENTS.md`、工作流说明、`.workflow/workflow.py`、`.workflow/scripts/`、`.workflow/tests/`、`.agents/skills/` 和 `templates/` 被修改且未提交时，工作流 CLI 会阻断；通过 `verify-workflow` 检查后，必须在独立的工作流维护变更中完成提交。`baseline/`、`iteration/`、`workspace/` 以及 `.workflow/manifest.yaml`、`.workflow/traceability.json`、`.workflow/current-state.json` 属于实例项目内容，不受核心骨架保护；其他工作流缓存和临时运行产物仍不纳入 Git。
 
 工作流生成的 `generated_at`、`checked_at`、`recorded_at` 和 Context Pack 时间均使用执行 Codex 客户端的本地时区，并保留 ISO 8601 偏移量。
 

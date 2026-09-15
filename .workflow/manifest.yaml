@@ -1,0 +1,41 @@
+schema_version: '1'
+generated_at: '2026-09-10T17:07:42+08:00'
+iteration: 'v1.0'
+stages:
+  00-baseline:
+    artifacts:
+      - path: 'baseline/01-product-vision.md'
+        status: 'missing'
+        sha256: ''
+        lines: 0
+        frontmatter: false
+      - path: 'baseline/02-product-charter.md'
+        status: 'missing'
+        sha256: ''
+        lines: 0
+        frontmatter: false
+      - path: 'baseline/03-tech-stack-decision.md'
+        status: 'missing'
+        sha256: ''
+        lines: 0
+        frontmatter: false
+      - path: 'baseline/04-glossary.md'
+        status: 'missing'
+        sha256: ''
+        lines: 0
+        frontmatter: false
+      - path: 'baseline/05-core-user-flow-prototype.html'
+        status: 'missing'
+        sha256: ''
+        lines: 0
+        frontmatter: false
+  01-product:
+    artifacts: []
+  02-design:
+    artifacts: []
+  03-planning:
+    artifacts: []
+  04-implementation:
+    artifacts: []
+  05-review-release:
+    artifacts: []

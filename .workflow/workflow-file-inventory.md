@@ -12,7 +12,7 @@
 ## 1.1 核心骨架保护
 
 - 上表登记的工作流定义、Skill、模板、治理规则、脚本和测试，在产品开发期间视为只读核心骨架。
-- `baseline/`、`iteration/` 和 `workspace/` 下的项目产物不属于核心骨架；`.workflow/` 下的 manifest、traceability、current-state、cache、Context Pack、task-runs 和 dashboard/index.html 是可再生运行状态，也不属于核心骨架。
+- `baseline/`、`iteration/` 和 `workspace/` 下的项目产物不属于核心骨架；`.workflow/` 下的 manifest、traceability、current-state 属于实例项目的可再生项目状态，应由实例项目 Git 管理；cache、Context Pack、task-runs 和 dashboard/index.html 仍是本地可再生运行状态。
 - `python .workflow/workflow.py verify-workflow` 检查核心骨架是否有未提交修改；产品工作流 CLI 在发现修改时阻断。
 - 核心骨架只能通过独立的 workflow-maintenance 变更修改；该变更必须同步更新本清单、说明、测试和同步脚本，并在提交后恢复产品工作流。
 
@@ -22,7 +22,7 @@
 |---|---|---|
 | `AGENTS.md` | 治理规则 | 定义协作、审批、版本、变更与安全约束。 |
 | `README.md` | 工作流总览 | 定义目录结构、阶段流程、命令和端到端使用方式。 |
-| `.gitignore` | 版本控制规则 | 排除 Python 缓存和工作流可再生运行状态。 |
+| `.gitignore` | 版本控制规则 | 排除 Python 缓存、本地工作流缓存与临时运行产物；不排除实例项目的 manifest、traceability、current-state。 |
 
 ## 3. 必要的工作流执行与校验目录
 
@@ -75,7 +75,8 @@
 | `iteration/raw-requirement/` 下除 `README.md` 外的文件 | 用户原始输入 | 原样保留，不由 Agent 修改。 |
 | `iteration/v{major}.{minor}/`、`iteration/archive/` | 版本化交付物 | 属于具体项目和版本，遵循阶段审批与归档规则。 |
 | `workspace/` 下的内容 | 业务实现与实例文档 | 属于被工作流驱动的产品代码、测试、配置和项目自行维护的功能说明。 |
-| `.workflow/manifest.yaml`、`traceability.json`、`current-state.json`、`cache/`、`context-packs/`、`task-runs/`、`dashboard/index.html` | 可再生运行状态与审计记录 | 不属于工作流源定义；按命令生成，受 `.gitignore` 管理。 |
+| `.workflow/manifest.yaml`、`traceability.json`、`current-state.json` | 实例项目状态与审计索引 | 不属于工作流源定义；按命令生成，但属于实例项目版本控制内容，不受 `.gitignore` 管理。 |
+| `.workflow/cache/`、`context-packs/`、`task-runs/`、`dashboard/index.html` | 本地可再生运行状态 | 不属于工作流源定义；按命令生成，受 `.gitignore` 管理。 |
 
 ## 8. 一致性检查
 
@@ -83,5 +84,5 @@
 
 1. 变更涉及的必要路径已在本清单中正确登记。
 2. 本清单未将项目输入、版本产物、业务代码或可再生状态误列为工作流必要项。
-3. `.gitignore` 仍与“可再生运行状态”分类一致。
+3. `.gitignore` 仅排除本地缓存和临时运行产物；实例项目的 manifest、traceability、current-state 保持可提交。
 4. 工作流测试通过：`python .workflow/tests/test_workflow.py`。

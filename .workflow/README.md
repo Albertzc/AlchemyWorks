@@ -37,9 +37,9 @@ python .workflow/workflow.py verify-workflow
 
 Generated files:
 
-- `manifest.yaml` — discovered artifacts, status, line count, and content hash.
-- `traceability.json` — stable IDs and evidence-backed co-occurrence edges.
-- `current-state.json` — derived recovery checkpoint: current stage, blockers, next action, latest gate, and reusable Context Pack.
+- `manifest.yaml` — discovered artifacts, status, line count, and content hash. This is instance-project state and is committed to Git.
+- `traceability.json` — stable IDs and evidence-backed co-occurrence edges. This is instance-project state and is committed to Git.
+- `current-state.json` — derived recovery checkpoint: current stage, blockers, next action, latest gate, and reusable Context Pack. This is instance-project state and is committed to Git.
 - `cache/context-packs.json` — Context Pack cache keys.
 - `context-packs/` — compact task-specific context for implementation agents.
 - `task-runs/` — task completion conclusions and gate/context metadata.
