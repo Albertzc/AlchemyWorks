@@ -62,7 +62,7 @@
 |---|---|---|
 | `baseline/` | `README.md`、`raw-requirement/README.md` | 项目首次立项时的基线、必需核心流程原型和原始需求入口。 |
 | `iteration/` | `README.md`、`raw-requirement/README.md` | 版本化交付物及后续原始需求的入口。 |
-| `workspace/` | `README.md` | 真实业务代码仓库的承载目录；每个已完成版本归档前，必须在其中维护当前系统功能说明并记录已融合版本标记。 |
+| `workspace/` | 目录本身 | 真实业务代码仓库的承载目录；其中内容由实例项目自行维护。每个已完成版本归档前，实例项目必须在其中维护当前系统功能说明并记录已融合版本标记。 |
 
 ## 7. 明确不属于工作流必要项的内容
 
@@ -74,7 +74,7 @@
 | `baseline/raw-requirement/` 下除 `README.md` 外的文件 | 用户原始输入 | 原样保留，不由 Agent 修改。 |
 | `iteration/raw-requirement/` 下除 `README.md` 外的文件 | 用户原始输入 | 原样保留，不由 Agent 修改。 |
 | `iteration/v{major}.{minor}/`、`iteration/archive/` | 版本化交付物 | 属于具体项目和版本，遵循阶段审批与归档规则。 |
-| `workspace/` 下除 `README.md` 外的内容 | 业务实现 | 属于被工作流驱动的产品代码、测试和配置。 |
+| `workspace/` 下的内容 | 业务实现与实例文档 | 属于被工作流驱动的产品代码、测试、配置和项目自行维护的功能说明。 |
 | `.workflow/manifest.yaml`、`traceability.json`、`current-state.json`、`cache/`、`context-packs/`、`task-runs/`、`dashboard/index.html` | 可再生运行状态与审计记录 | 不属于工作流源定义；按命令生成，受 `.gitignore` 管理。 |
 
 ## 8. 一致性检查

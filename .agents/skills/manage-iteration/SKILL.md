@@ -34,7 +34,7 @@ python .workflow/workflow.py init
 python .workflow/workflow.py init-version
 ```
 
-`init` 创建 `baseline/raw-requirement/`、`iteration/raw-requirement/`、`iteration/` 和 `workspace/`，并在每个目录写入用途说明 `README.md`。`iteration/raw-requirement/README.md` 是唯一的说明文件；除此之外仅保存用户原始材料。适用于尚未开始的项目，不创建版本目录。
+`init` 创建 `baseline/raw-requirement/`、`iteration/raw-requirement/`、`iteration/` 和 `workspace/`，并为工作流入口写入说明文件；`workspace/README.md` 由实例项目自行创建和维护，不由工作流生成。`iteration/raw-requirement/README.md` 是唯一的说明文件；除此之外仅保存用户原始材料。适用于尚未开始的项目，不创建版本目录。
 
 `init-version` 只能在 `validate --stage 00-baseline` 通过后创建下一个连续版本的目录骨架，并自动刷新 manifest。首个版本为 `v1.0`；它只创建五个正式阶段目录，不创建或批准任何产物。后续版本创建前，上一活动版本必须通过 `validate --stage 05-review-release`，且 `workspace/README.md` 必须完成当前系统功能说明刷新。新骨架创建成功后 CLI 自动归档该上一版本；刷新检查失败时，旧版本和新骨架均保持不变。
 

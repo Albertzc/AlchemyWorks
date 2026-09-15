@@ -374,10 +374,6 @@ def init_project() -> int:
             "除本说明文件外，目录中的原始需求归用户所有且只读：Agent 不得修改、"
             "重命名或删除。归一化产物必须记录所读取的原始文件路径和目标版本。\n"
         ),
-        "workspace/README.md": (
-            "# Workspace\n\n"
-            "存放实际应用源码、配置和测试。版本化工作流文档不应放入此目录。\n"
-        ),
     }
     for relative, content in readmes.items():
         path = ROOT / relative

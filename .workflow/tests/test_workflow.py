@@ -728,7 +728,7 @@ class WorkflowTests(unittest.TestCase):
             self.assertTrue((root / "workspace").is_dir())
             self.assertTrue((root / "baseline" / "raw-requirement" / "README.md").is_file())
             self.assertTrue((root / "iteration" / "README.md").is_file())
-            self.assertTrue((root / "workspace" / "README.md").is_file())
+            self.assertFalse((root / "workspace" / "README.md").exists())
             self.assertTrue((root / "iteration" / "raw-requirement" / "README.md").is_file())
 
     def test_init_version_requires_baseline_then_creates_skeleton(self):

@@ -41,7 +41,6 @@ $items = @(
     'baseline/raw-requirement/README.md',
     'iteration/README.md',
     'iteration/raw-requirement/README.md',
-    'workspace/README.md',
     '.agents/skills/stage-gate',
     '.agents/skills/normalize-requirement',
     '.agents/skills/manage-iteration',

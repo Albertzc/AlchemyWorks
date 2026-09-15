@@ -27,7 +27,7 @@
 │       └── 05-review-release/
 ├── templates/                       # 跨版本复用的文档与代码模板（已合并为 3 个）
 ├── workspace/                       # 真实代码仓库（Git；后端 + 前端）
-│   └── README.md                     # 源码工作区说明
+│   └── README.md                     # 实例项目自行维护的功能说明（非工作流骨架）
 ├── .agents/skills/                  # 阶段化 AI Agent Skill（6 个）
 └── .workflow/                       # 工作流 CLI + 状态 + 缓存
     ├── workflow.py                  # 主 CLI（纯 stdlib）
