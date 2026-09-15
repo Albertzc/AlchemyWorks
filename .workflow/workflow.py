@@ -711,15 +711,13 @@ def check_task_id_consistency(iteration: str, errors: list[str]) -> None:
             )
 
 
-def check_readme_freshness(iteration: str, errors: list[str]) -> None:
-    """RC sign-off requires README.md to reference the current state.
+def check_readme_freshness(errors: list[str]) -> None:
+    """Check that the workflow framework README covers current tooling.
 
-    Triggered only on the final 05-review-release stage. Reports three classes of
-    staleness: missing README, missing current-iteration mention, and
-    missing current skill / script mention. Does not modify files.
-
-    All three classes are checked independently so callers get a
-    complete picture even when README is absent.
+    The root README documents the shared workflow framework, not the active
+    product iteration. Product-version freshness is checked separately by
+    ``check_workspace_readme_freshness`` against ``workspace/README.md``.
+    Triggered only on the final 05-review-release stage. Does not modify files.
     """
     readme = ROOT / "README.md"
     if not readme.exists():
@@ -729,13 +727,7 @@ def check_readme_freshness(iteration: str, errors: list[str]) -> None:
         text = ""
     else:
         text = readme.read_text(encoding="utf-8")
-    # 1) README must mention the current iteration (e.g. "v1.0")
-    if iteration not in text:
-        errors.append(
-            f"README.md does not mention iteration '{iteration}'; "
-            f"may be out of date"
-        )
-    # 2) README must mention all current skills
+    # README must mention all current skills.
     skills_dir = ROOT / ".agents" / "skills"
     if skills_dir.exists():
         current_skills = {p.name for p in skills_dir.iterdir() if p.is_dir()}
@@ -745,7 +737,7 @@ def check_readme_freshness(iteration: str, errors: list[str]) -> None:
                 f"README.md does not mention {len(missing)} current skill(s): "
                 f"{', '.join(missing)}"
             )
-    # 3) README must mention all current scripts
+    # README must mention all current scripts.
     scripts_dir = ROOT / ".workflow" / "scripts"
     if scripts_dir.exists():
         current_scripts = {p.stem for p in scripts_dir.glob("*.py")}
@@ -837,7 +829,7 @@ def validation_report(iteration: str, stage: str | None, artifacts: list[Artifac
 
     # D3: review/release sign-off freshness check (only at the final stage)
     if "05-review-release" in stages:
-        check_readme_freshness(iteration, errors)
+        check_readme_freshness(errors)
         check_workspace_readme_freshness(iteration, errors)
 
     return artifacts, errors, warnings

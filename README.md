@@ -108,6 +108,7 @@ iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 - `Approved` 状态下若含占位词（`TODO` / `TBD` / `XXX` / `[待确认]` / `[未提供]` / `占位`），validate 视为 unresolved blocker
 - 上游产物必须 Approved 才能作为下游阶段的正式输入
 - 05-review-release 完成前，必须把本版本新增功能融合进 `workspace/README.md` 的 `## 当前系统功能说明`，并更新 `<!-- workflow:workspace-readme-version: v{major}.{minor} -->`；`init-version` 会在归档前再次校验，失败时不移动旧版本。
+- 根目录 `README.md` 只描述共享工作流框架并校验当前 Skill / 脚本；实例版本的功能说明和版本刷新标记只维护在 `workspace/README.md`，不要求根 README 逐版本更新。
 - Agent 只能创建或更新 `status: draft` / `status: In Review` 的产物，**不得**写入或修改 `status: Approved`。每个阶段完成时，Agent 必须列出待人工审核的全部必需产物及验证证据；人类手动审核并将各产物改为 `Approved` 后，才可运行该阶段的 `validate` 并开始下一阶段。
 
 每阶段的交接闭环：`Agent 起草产物 → Agent 列出待审产物与验证证据 → 人类手动设为 Approved → validate --stage <当前阶段> 通过 → 开始下一阶段`。

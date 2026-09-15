@@ -318,7 +318,7 @@ class WorkflowTests(unittest.TestCase):
                 # Direct unit test of check_readme_freshness — bypasses
                 # upstream gate noise so we isolate the freshness rule.
                 errors: list[str] = []
-                workflow.check_readme_freshness("v1", errors)
+                workflow.check_readme_freshness(errors)
                 self.assertTrue(
                     any("README.md" in e for e in errors),
                     msg=f"freshness check did not flag missing README; errors={errors}",
@@ -368,11 +368,34 @@ class WorkflowTests(unittest.TestCase):
                 (final_dir / "v1-review-release.md").write_text(
                     "---\nstatus: Approved\n---\n# review release\n", encoding="utf-8"
                 )
-                (root / "README.md").write_text("# v1\n", encoding="utf-8")
+                (root / "README.md").write_text("# Workflow\n", encoding="utf-8")
                 buf2 = io.StringIO()
                 with contextlib.redirect_stdout(buf2):
                     rc = workflow.validate("v1", "05-review-release")
                 self.assertEqual(rc, 0, msg=buf2.getvalue())
+        finally:
+            temp.cleanup()
+
+    def test_workflow_readme_freshness_does_not_require_instance_iteration(self):
+        """The framework README must not be coupled to a product iteration."""
+        temp, root = self.make_repo()
+        try:
+            (root / "README.md").write_text(
+                "# Workflow\n\nstage-gate stale-skill stage_status\n",
+                encoding="utf-8",
+            )
+            skills = root / ".agents" / "skills"
+            skills.mkdir(parents=True)
+            (skills / "stale-skill").mkdir()
+            (skills / "stale-skill" / "SKILL.md").write_text("# skill\n", encoding="utf-8")
+            scripts = root / ".workflow" / "scripts"
+            scripts.mkdir(parents=True)
+            (scripts / "stage_status.py").write_text("# script\n", encoding="utf-8")
+
+            errors: list[str] = []
+            workflow.check_readme_freshness(errors)
+
+            self.assertEqual(errors, [])
         finally:
             temp.cleanup()
 
