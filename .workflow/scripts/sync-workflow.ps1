@@ -106,4 +106,5 @@ foreach ($relativePath in $items) {
     }
 }
 
-Write-Host "Workflow synchronized from $sourceRoot to $targetRoot."
+Write-Host "Workflow definition synchronized from $sourceRoot to $targetRoot."
+Write-Host "Run the framework CLI with --project-root '$targetRoot' to generate instance-project state in the target."

@@ -21,7 +21,8 @@ from pathlib import Path
 from typing import Iterable
 
 
-ROOT = Path(__file__).resolve().parents[1]
+FRAMEWORK_ROOT = Path(__file__).resolve().parents[1]
+ROOT = FRAMEWORK_ROOT
 WORKFLOW_DIR = ROOT / ".workflow"
 BASELINE_STAGE = "00-baseline"
 STAGES = [
@@ -83,11 +84,29 @@ def _is_workflow_protected_path(path: str) -> bool:
     )
 
 
+def configure_project_root(project_root: str | Path | None = None) -> Path:
+    """Select the instance project whose documents and state are processed.
+
+    The framework source tree remains the default when the CLI is copied into
+    an instance project. An external framework invocation must pass
+    ``--project-root`` so generated state is written to the instance instead
+    of the framework source tree.
+    """
+    global ROOT, WORKFLOW_DIR
+    selected = FRAMEWORK_ROOT if project_root is None else Path(project_root).expanduser()
+    selected = selected.resolve()
+    if not selected.is_dir():
+        raise ValueError(f"project root does not exist or is not a directory: {selected}")
+    ROOT = selected
+    WORKFLOW_DIR = ROOT / ".workflow"
+    return ROOT
+
+
 def workflow_changed_paths() -> list[str]:
     """Return modified or untracked workflow-definition paths in this Git tree."""
     try:
         result = subprocess.run(
-            ["git", "-C", str(ROOT), "status", "--porcelain=v1", "--untracked-files=all"],
+            ["git", "-C", str(FRAMEWORK_ROOT), "status", "--porcelain=v1", "--untracked-files=all"],
             capture_output=True,
             text=True,
             check=False,
@@ -1666,14 +1685,18 @@ def task_finished(iteration: str, task_id: str, result: str, *, refresh_index: b
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--project-root",
+        help="Instance project root whose documents and .workflow state are read and written.",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
     for name in ("index", "validate"):
         sub = subparsers.add_parser(name)
-        sub.add_argument("--iteration", default=discover_iteration())
+        sub.add_argument("--iteration", default=None)
         if name == "validate":
             sub.add_argument("--stage", choices=GATE_STAGES)
     context = subparsers.add_parser("context")
-    context.add_argument("--iteration", default=discover_iteration())
+    context.add_argument("--iteration", default=None)
     context.add_argument("--task", required=True)
     context.add_argument("--compact", action="store_true", help="Deduplicate and bound excerpts before handing the pack to an agent.")
     context.add_argument("--max-chars", type=int, default=24000)
@@ -1689,15 +1712,15 @@ def main(argv: list[str] | None = None) -> int:
         help="Perform deletion. Without this flag cleanup is a dry run.",
     )
     dashboard_parser = subparsers.add_parser("dashboard")
-    dashboard_parser.add_argument("--iteration", default=discover_iteration())
+    dashboard_parser.add_argument("--iteration", default=None)
     state_parser = subparsers.add_parser("state", help="Show the derived workflow recovery checkpoint.")
-    state_parser.add_argument("--iteration", default=discover_iteration())
+    state_parser.add_argument("--iteration", default=None)
     state_parser.add_argument("--refresh", action="store_true", help="Rebuild manifest, traceability, and checkpoint before showing state.")
     refresh_parser = subparsers.add_parser(
         "refresh",
         help="Run index, state --refresh, and stage validation after document changes.",
     )
-    refresh_parser.add_argument("--iteration", default=discover_iteration())
+    refresh_parser.add_argument("--iteration", default=None)
     refresh_parser.add_argument("--stage", choices=GATE_STAGES)
     resume_parser = subparsers.add_parser("resume", help="Emit the smallest local recovery payload for a new agent turn.")
     resume_parser.add_argument("--iteration", default=None)
@@ -1714,7 +1737,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Verify that workflow core files are clean before product workflow commands run.",
     )
     finished = subparsers.add_parser("task-finished")
-    finished.add_argument("--iteration", default=discover_iteration())
+    finished.add_argument("--iteration", default=None)
     finished.add_argument("--task", required=True)
     finished.add_argument("--result", choices=["succeeded", "failed", "blocked"], required=True)
     finished.add_argument("--refresh-index", action="store_true", help="Also re-run `index` after writing the task record. Off by default; only enable when the task changed artifact state.")
@@ -1726,6 +1749,9 @@ def main(argv: list[str] | None = None) -> int:
     version = subparsers.add_parser("init-version", help="Create the next iteration skeleton after the baseline gate passes.")
     version.add_argument("--iteration", help="Use the expected next version explicitly.")
     args = parser.parse_args(argv)
+    configure_project_root(args.project_root)
+    if args.command in {"index", "validate", "context", "dashboard", "state", "refresh", "task-finished"} and args.iteration is None:
+        args.iteration = discover_iteration()
     # Normalize legacy short form (v1) to canonical v1.0 so path lookups
     # stay consistent with discover_iteration() and the on-disk directory
     # naming. Without this, --iteration v1 would search iteration/v1/...

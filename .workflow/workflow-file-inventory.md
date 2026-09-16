@@ -75,8 +75,8 @@
 | `iteration/raw-requirement/` 下除 `README.md` 外的文件 | 用户原始输入 | 原样保留，不由 Agent 修改。 |
 | `iteration/v{major}.{minor}/`、`iteration/archive/` | 版本化交付物 | 属于具体项目和版本，遵循阶段审批与归档规则。 |
 | `workspace/` 下的内容 | 业务实现与实例文档 | 属于被工作流驱动的产品代码、测试、配置和项目自行维护的功能说明。 |
-| `.workflow/manifest.yaml`、`traceability.json`、`current-state.json` | 实例项目状态与审计索引 | 不属于工作流源定义；按命令生成，但属于实例项目版本控制内容，不受 `.gitignore` 管理。 |
-| `.workflow/cache/`、`context-packs/`、`task-runs/`、`dashboard/index.html` | 本地可再生运行状态 | 不属于工作流源定义；按命令生成，受 `.gitignore` 管理。 |
+| `.workflow/manifest.yaml`、`traceability.json`、`current-state.json` | 实例项目状态与审计索引 | 不属于工作流源定义；由选定的实例项目根目录生成，属于实例项目版本控制内容，不受 `.gitignore` 管理。 |
+| `.workflow/cache/`、`context-packs/`、`task-runs/`、`dashboard/index.html` | 本地可再生运行状态与任务执行记录 | 不属于工作流源定义；按命令生成，默认受 `.gitignore` 管理；如需审计，可由人工选择性提交。 |
 
 ## 8. 一致性检查
 
@@ -84,5 +84,5 @@
 
 1. 变更涉及的必要路径已在本清单中正确登记。
 2. 本清单未将项目输入、版本产物、业务代码或可再生状态误列为工作流必要项。
-3. `.gitignore` 仅排除本地缓存和临时运行产物；实例项目的 manifest、traceability、current-state 保持可提交。
+3. `.gitignore` 排除本地缓存、Context Pack、task-runs 和临时运行视图；实例项目的 manifest、traceability、current-state 保持可提交。
 4. 工作流测试通过：`python .workflow/tests/test_workflow.py`。

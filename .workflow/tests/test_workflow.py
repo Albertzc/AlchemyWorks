@@ -213,6 +213,53 @@ class WorkflowTests(unittest.TestCase):
         finally:
             temp.cleanup()
 
+    def test_index_uses_explicit_project_root(self):
+        temp, project_root = self.make_repo()
+        try:
+            (project_root / "iteration" / "v1").rename(project_root / "iteration" / "v1.0")
+            for path in sorted((project_root / "iteration" / "v1.0").rglob("*"), reverse=True):
+                if path.is_file() and "v1" in path.name:
+                    path.rename(path.with_name(path.name.replace("v1", "v1.0")))
+            with patch.object(workflow, "workflow_protection_errors", return_value=[]):
+                self.assertEqual(
+                    workflow.main(
+                        ["--project-root", str(project_root), "index"]
+                    ),
+                    0,
+                )
+            self.assertTrue((project_root / ".workflow" / "manifest.yaml").exists())
+            self.assertTrue((project_root / ".workflow" / "traceability.json").exists())
+            self.assertTrue((project_root / ".workflow" / "current-state.json").exists())
+            self.assertFalse((workflow.FRAMEWORK_ROOT / ".workflow" / "manifest.yaml").resolve() == (project_root / ".workflow" / "manifest.yaml").resolve())
+        finally:
+            temp.cleanup()
+
+    def test_task_commands_use_explicit_project_root(self):
+        temp, project_root = self.make_repo()
+        try:
+            (project_root / "iteration" / "v1").rename(project_root / "iteration" / "v1.0")
+            for path in sorted((project_root / "iteration" / "v1.0").rglob("*"), reverse=True):
+                if path.is_file() and "v1" in path.name:
+                    path.rename(path.with_name(path.name.replace("v1", "v1.0")))
+            with patch.object(workflow, "workflow_protection_errors", return_value=[]):
+                self.assertEqual(
+                    workflow.main(
+                        ["--project-root", str(project_root), "context", "--iteration", "v1.0", "--task", "TASK-API-010"]
+                    ),
+                    0,
+                )
+                self.assertEqual(
+                    workflow.main(
+                        ["--project-root", str(project_root), "task-finished", "--iteration", "v1.0", "--task", "TASK-API-010", "--result", "succeeded"]
+                    ),
+                    0,
+                )
+            self.assertTrue((project_root / ".workflow" / "context-packs" / "v1.0-TASK-API-010.md").exists())
+            self.assertTrue((project_root / ".workflow" / "task-runs" / "v1.0-TASK-API-010.json").exists())
+            self.assertFalse((workflow.FRAMEWORK_ROOT / ".workflow" / "task-runs" / "v1.0-TASK-API-010.json").exists())
+        finally:
+            temp.cleanup()
+
     def test_cleanup_context_packs_requires_archive_and_preserves_task_runs(self):
         temp, root = self.make_repo()
         try:
@@ -393,7 +440,8 @@ class WorkflowTests(unittest.TestCase):
             (scripts / "stage_status.py").write_text("# script\n", encoding="utf-8")
 
             errors: list[str] = []
-            workflow.check_readme_freshness(errors)
+            with patch.object(workflow, "ROOT", root):
+                workflow.check_readme_freshness(errors)
 
             self.assertEqual(errors, [])
         finally:
@@ -891,10 +939,12 @@ class WorkflowTests(unittest.TestCase):
             legacy.rename(canonical)
             with patch.object(workflow, "ROOT", root), patch.object(
                 workflow, "WORKFLOW_DIR", root / ".workflow"
-            ), patch.object(workflow, "discover_iteration", return_value="v1.0"):
+            ), patch.object(workflow, "discover_iteration", return_value="v1.0"), patch.object(
+                workflow, "workflow_protection_errors", return_value=[]
+            ):
                 output = io.StringIO()
                 with contextlib.redirect_stdout(output):
-                    workflow.main(["validate", "--iteration", "v1", "--stage", "03-planning"])
+                    workflow.main(["--project-root", str(root), "validate", "--iteration", "v1", "--stage", "03-planning"])
             self.assertIn("iteration=v1.0", output.getvalue())
             self.assertNotIn("iteration=v1/", output.getvalue())
             major, minor = workflow.iteration_number("v1")

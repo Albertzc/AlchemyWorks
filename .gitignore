@@ -27,7 +27,7 @@ Thumbs.db
 .env
 .env.*
 
-# Workflow auto-generated state (regenerable via `python .workflow/workflow.py index`)
+# Workflow local caches and derived views (regenerable via workflow commands)
 .workflow/cache/
 .workflow/dashboard/index.html
 .workflow/context-packs/

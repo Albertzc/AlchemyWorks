@@ -29,7 +29,7 @@
 ├── workspace/                       # 真实代码仓库（Git；后端 + 前端）
 │   └── README.md                     # 实例项目自行维护的功能说明（非工作流骨架）
 ├── .agents/skills/                  # 阶段化 AI Agent Skill（6 个）
-└── .workflow/                       # 工作流 CLI + 状态 + 缓存
+└── .workflow/                       # 工作流 CLI + 框架定义；实例状态可输出到指定项目
     ├── workflow.py                  # 主 CLI（纯 stdlib）
     ├── workflow-file-inventory.md   # 工作流必要文件与目录权威清单
     ├── manifest.yaml                # 实例项目状态索引（自动，Git）
@@ -37,7 +37,7 @@
     ├── current-state.json           # 实例项目恢复检查点（自动，Git）
     ├── cache/                       # context-pack 缓存
     ├── context-packs/               # TASK-scoped 上下文包
-    ├── task-runs/                   # TASK 结论 JSON
+    ├── task-runs/                   # TASK 结论与审计记录（默认忽略，可人工提交）
     ├── dashboard/                   # 静态 HTML 仪表盘
     └── scripts/                     # 5 个 LLM 辅助脚本 + 1 个工作流同步脚本
 ```
@@ -208,6 +208,7 @@ flowchart TD
 ```bash
 # 索引与门禁
 python .workflow/workflow.py index      --iteration v1.0       # 生成 manifest + traceability + 缓存
+python .workflow/workflow.py --project-root 'E:\path\to\instance-project' index --iteration v1.0 # 从框架仓库操作实例项目
 python .workflow/workflow.py state      --iteration v1.0 --refresh # 刷新并显示恢复工作所需的最小状态
 python .workflow/workflow.py refresh    --iteration v1.0 --stage 02-design # 文档变更后：索引、刷新状态并运行门禁
 python .workflow/workflow.py resume     --json                   # 新会话首选：只输出最小恢复状态
@@ -249,6 +250,8 @@ python .workflow/workflow.py verify-workflow                 # 检查工作流�
 | `dashboard` | 渲染静态 HTML 仪表盘 | `dashboard/index.html` |
 
 所有命令子命令接受 `--iteration`（默认从 `iteration/` 推断最大值；不存在则返回 `v1.0`）。
+
+从工作流框架仓库操作实例项目时，将 `--project-root '<instance-project-root>'` 放在子命令之前。框架代码、模板和 Skills 从框架根目录读取；产品文档和 `.workflow` 生成状态全部从实例项目根目录读取或写入。同步到实例项目后，可以省略该参数并继续使用实例项目本地根目录。
 
 产品开发期间，工作流核心文件默认为只读。`AGENTS.md`、工作流说明、`.workflow/workflow.py`、`.workflow/scripts/`、`.workflow/tests/`、`.agents/skills/` 和 `templates/` 被修改且未提交时，工作流 CLI 会阻断；通过 `verify-workflow` 检查后，必须在独立的工作流维护变更中完成提交。`baseline/`、`iteration/`、`workspace/` 以及 `.workflow/manifest.yaml`、`.workflow/traceability.json`、`.workflow/current-state.json` 属于实例项目内容，不受核心骨架保护；其他工作流缓存和临时运行产物仍不纳入 Git。
 
