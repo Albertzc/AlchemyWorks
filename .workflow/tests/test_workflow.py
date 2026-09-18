@@ -420,6 +420,12 @@ class WorkflowTests(unittest.TestCase):
                 with contextlib.redirect_stdout(buf2):
                     rc = workflow.validate("v1", "05-review-release")
                 self.assertEqual(rc, 0, msg=buf2.getvalue())
+                self.assertEqual(
+                    (root / "workspace" / "README.md").read_text(encoding="utf-8"),
+                    "<!-- workflow:workspace-readme-version: v1.0 -->\n\n"
+                    "## 当前系统功能说明\n\n"
+                    "# Req\n## AC-001\n",
+                )
         finally:
             temp.cleanup()
 
@@ -858,7 +864,7 @@ class WorkflowTests(unittest.TestCase):
         finally:
             temp.cleanup()
 
-    def test_init_version_does_not_archive_when_workspace_readme_is_stale(self):
+    def test_init_version_archives_after_generating_workspace_readme(self):
         temp, root = self.make_repo()
         try:
             (root / "iteration" / "v1").rename(root / "iteration" / "v1.0")
@@ -884,13 +890,18 @@ class WorkflowTests(unittest.TestCase):
             plan.write_text("---\nstatus: Approved\n---\nTASK-API-010\n", encoding="utf-8")
             (root / "README.md").write_text("# v1.0\n", encoding="utf-8")
             (root / "workspace" / "README.md").write_text("# Workspace\n", encoding="utf-8")
-            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"), patch.object(workflow, "validate", side_effect=[0, 0]):
-                with self.assertRaises(ValueError) as ctx:
-                    workflow.init_version()
-            self.assertIn("workspace README refresh required", str(ctx.exception))
-            self.assertTrue((root / "iteration" / "v1.0").is_dir())
-            self.assertFalse((root / "iteration" / "v1.1").exists())
-            self.assertFalse((root / "iteration" / "archive" / "v1.0").exists())
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                self.assertEqual(workflow.init_version(), 0)
+            self.assertFalse((root / "iteration" / "v1.0").exists())
+            self.assertTrue((root / "iteration" / "v1.1").is_dir())
+            archived = root / "iteration" / "archive" / "v1.0"
+            self.assertTrue(archived.is_dir())
+            self.assertEqual(
+                (root / "workspace" / "README.md").read_text(encoding="utf-8"),
+                "<!-- workflow:workspace-readme-version: v1.0 -->\n\n"
+                "## 当前系统功能说明\n\n"
+                "# Req\nAC-001\n",
+            )
         finally:
             temp.cleanup()
 

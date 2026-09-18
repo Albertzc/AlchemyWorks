@@ -55,7 +55,7 @@
 | **重大变更** | `v{major+1}.0`（架构重置、新项目、技术栈变更）|
 | **目录命名** | `iteration/v{major}.{minor}/` |
 | **文件前缀** | `v{major}.{minor}-*.md` / `.html` |
-| **归档** | 下一连续版本创建成功后，将已 RC 完成且已把功能融合进 `workspace/README.md` 的上一版迁移至 `iteration/archive/v{major}.{minor}/` |
+| **归档** | 下一连续版本创建成功后，将已 RC 完成且已自动生成 `workspace/README.md` 的上一版迁移至 `iteration/archive/v{major}.{minor}/` |
 
 详细规则见 `AGENTS.md §17 Versioning and Archive Rules`。
 
@@ -98,7 +98,7 @@ iteration/v{major}.{minor}/04-implementation/
 iteration/v{major}.{minor}/05-review-release/
         v{major}.{minor}-review-release.md           # 评审、合并、发布决定与 release notes
         ↓ validate 05-review-release
-        ↓ 先刷新 workspace/README.md，再创建下一版本
+        ↓ 先自动生成 workspace/README.md，再创建下一版本
 iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 ```
 
@@ -108,7 +108,7 @@ iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 - HTML 原型还必须保留审核 frontmatter：`review_decision`、`reviewer`、`reviewed_at`、`review_notes`；只有 `status: Approved` 且 `review_decision: approved`、审核人/时间/结论齐全时，原型门禁才会通过。
 - `Approved` 状态下若含占位词（`TODO` / `TBD` / `XXX` / `[待确认]` / `[未提供]` / `占位`），validate 视为 unresolved blocker
 - 上游产物必须 Approved 才能作为下游阶段的正式输入
-- 05-review-release 完成前，必须把本版本新增功能融合进 `workspace/README.md` 的 `## 当前系统功能说明`，并更新 `<!-- workflow:workspace-readme-version: v{major}.{minor} -->`；`init-version` 会在归档前再次校验，失败时不移动旧版本。
+- 05-review-release 通过后，CLI 根据当前版本 requirement 自动生成 `workspace/README.md` 的 `## 当前系统功能说明`，并更新 `<!-- workflow:workspace-readme-version: v{major}.{minor} -->`；`init-version` 会在归档前再次校验，失败时不移动旧版本。
 - 根目录 `README.md` 只描述共享工作流框架并校验当前 Skill / 脚本；实例版本的功能说明和版本刷新标记只维护在 `workspace/README.md`，不要求根 README 逐版本更新。
 - Agent 只能创建或更新 `status: draft` / `status: In Review` 的产物，**不得**写入或修改 `status: Approved`。每个阶段完成时，Agent 必须列出待人工审核的全部必需产物及验证证据；人类手动审核并将各产物改为 `Approved` 后，才可运行该阶段的 `validate` 并开始下一阶段。
 
@@ -324,20 +324,20 @@ python .workflow/scripts/check_links.py --iteration v1.0
 5. 触发 normalize-requirement → 生成 v1.0-requirement.md
 6. 人工审核 → status: Approved
 7. 进入 02-design / 03-planning / 04-implementation / 05-review-release
-8. RC 完成 → 刷新 `workspace/README.md`，合并 v1.0 功能并更新版本标记；生成 v1.0-iteration-changelog.md；v1.0 保持活动状态，直至 v1.1 创建成功后归档
+8. RC 完成 → 自动生成 `workspace/README.md`，写入 v1.0 功能并更新版本标记；生成 v1.0-iteration-changelog.md；v1.0 保持活动状态，直至 v1.1 创建成功后归档
 ```
 
 ### 9.2 启动 v1.1+ 增量迭代
 
 ```
 1. 用户提供原始需求；`route-requirement` 从 manifest.yaml（缺失时目录发现）解析目标版本
-2. 确认上一版本已通过 05-review-release 且已刷新 `workspace/README.md`；创建目标版本骨架后，CLI 自动归档上一版本；将原始材料原样保存到 `iteration/raw-requirement/`，并以 `route-requirement` 返回的目标版本归一化
+2. 确认上一版本已通过 05-review-release 且已自动生成 `workspace/README.md`；创建目标版本骨架后，CLI 自动归档上一版本；将原始材料原样保存到 `iteration/raw-requirement/`，并以 `route-requirement` 返回的目标版本归一化
 3. 触发 normalize-requirement → 读项目基线、原始需求、上一版 requirement 与 changelog
 4. 输出对应版本 requirement.md（含 change_set: added / modified / deprecated）
 5. 人工审核 → status: Approved
 6. 触发 iterate-implementation skill（按 TASK 列表实施）
 7. 每个 TASK 完成 → python .workflow/workflow.py task-finished --result succeeded
-8. RC 完成 → 刷新 `workspace/README.md`，合并本版本功能并更新版本标记；生成本版本 changelog 并保持活动状态；下一个版本创建成功时归档本版本
+8. RC 完成 → 自动生成 `workspace/README.md`，写入本版本功能并更新版本标记；生成本版本 changelog 并保持活动状态；下一个版本创建成功时归档本版本
 ```
 
 ### 9.3 实施单个 TASK

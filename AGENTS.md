@@ -401,7 +401,7 @@ Iterations use a two-segment identifier **`v{major}.{minor}`** (e.g. `v1.0`, `v1
   - Cross-version references in frontmatter must point to a real existing iteration (e.g. `base_version: v1.0`).
 - **RC-complete** is reached only when `iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-review-release.md` has `status: Approved`.
 - Upon RC completion of `v{major}.{minor}`, create its iteration changelog and keep the version active as the baseline for the next iteration.
-- Before archiving, merge the completed predecessor's functionality into `workspace/README.md` under `## 当前系统功能说明` and update `<!-- workflow:workspace-readme-version: v{major}.{minor} -->`.
+- After `05-review-release` passes, the workflow automatically regenerates `workspace/README.md` from the approved current-version requirement under `## 当前系统功能说明` and updates `<!-- workflow:workspace-readme-version: v{major}.{minor} -->`; do not manually maintain this file.
 - When the next consecutive version is successfully created, archive that completed predecessor to `iteration/archive/v{major}.{minor}/`. The predecessor must first pass the `05-review-release` gate and the workspace README refresh check; the first version (`v1.0`) has no predecessor to archive.
 - Never skip a version number — `v1.1` cannot jump to `v1.3`.
 - **Discovery**: `discover_iteration()` returns the numerically highest `(major, minor)` pair present under `iteration/`. When no directory exists yet, it returns `v1.0`.

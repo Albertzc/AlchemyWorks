@@ -765,14 +765,7 @@ def check_readme_freshness(errors: list[str]) -> None:
 
 
 def check_workspace_readme_freshness(iteration: str, errors: list[str]) -> None:
-    """Require the workspace system-function manual to include ``iteration``.
-
-    The workflow deliberately does not synthesize business documentation from
-    arbitrary release artifacts. A human-reviewed version handoff must merge
-    the completed functionality into ``workspace/README.md`` and add the
-    marker and heading checked here. This makes the archive handoff
-    deterministic while keeping the product description meaningful.
-    """
+    """Require the generated workspace system-function manual to include ``iteration``."""
     iteration = canonical_iteration(iteration)
     readme = ROOT / "workspace" / "README.md"
     if not readme.exists():
@@ -787,6 +780,24 @@ def check_workspace_readme_freshness(iteration: str, errors: list[str]) -> None:
         )
     if "## 当前系统功能说明" not in text:
         errors.append("workspace/README.md missing required heading: ## 当前系统功能说明")
+
+
+def generate_workspace_readme(iteration: str) -> None:
+    """Generate the instance functionality manual from the approved requirement."""
+    requested_iteration = iteration
+    iteration = canonical_iteration(iteration)
+    requirement = ROOT / f"iteration/{iteration}/01-product/{iteration}-requirement.md"
+    if not requirement.exists() and requested_iteration != iteration:
+        requirement = ROOT / f"iteration/{requested_iteration}/01-product/{requested_iteration}-requirement.md"
+    if not requirement.exists():
+        raise ValueError(f"workspace README source missing: {requirement.relative_to(ROOT)}")
+    _, body = parse_frontmatter(requirement.read_text(encoding="utf-8"))
+    content = (
+        f"<!-- workflow:workspace-readme-version: {iteration} -->\n\n"
+        "## 当前系统功能说明\n\n"
+        f"{body.strip()}\n"
+    )
+    write_text_atomic(ROOT / "workspace" / "README.md", content)
 
 
 def validation_report(iteration: str, stage: str | None, artifacts: list[Artifact] | None = None) -> tuple[list[Artifact], list[str], list[str]]:
@@ -842,10 +853,9 @@ def validation_report(iteration: str, stage: str | None, artifacts: list[Artifac
     if "04-implementation" in stages:
         check_task_id_consistency(iteration, errors)
 
-    # D3: review/release sign-off freshness check (only at the final stage)
+    # D3: review/release sign-off checks (only at the final stage)
     if "05-review-release" in stages:
         check_readme_freshness(errors)
-        check_workspace_readme_freshness(iteration, errors)
 
     return artifacts, errors, warnings
 
@@ -853,6 +863,12 @@ def validation_report(iteration: str, stage: str | None, artifacts: list[Artifac
 def validate(iteration: str, stage: str | None, *, record_state: bool = True) -> int:
     artifacts, errors, warnings = validation_report(iteration, stage)
     target = stage or "all"
+    if not errors and target == "05-review-release":
+        try:
+            generate_workspace_readme(iteration)
+            print(f"workspace README generated: workspace/README.md ({iteration})")
+        except (OSError, ValueError) as error:
+            errors.append(str(error))
     if record_state:
         write_current_state(
             iteration,

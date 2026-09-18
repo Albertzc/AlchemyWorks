@@ -28,7 +28,7 @@
 
 | 路径 | 必需内容 | 用途 |
 |---|---|---|
-| `.workflow/` | `workflow.py`、`README.md` | 工作流 CLI（含 baseline 核心流程原型与迭代按需原型门禁、文档变更后的 `refresh` 同步命令、版本归档前 `workspace/README.md` 功能说明刷新门禁、已归档版本 Context Pack 缓存清理）及其操作说明。 |
+| `.workflow/` | `workflow.py`、`README.md` | 工作流 CLI（含 baseline 核心流程原型与迭代按需原型门禁、文档变更后的 `refresh` 同步命令、05-review-release 通过后的 `workspace/README.md` 自动生成功能说明、版本归档校验、已归档版本 Context Pack 缓存清理）及其操作说明。 |
 | `.workflow/scripts/` | `stage_status.py`、`id_registry.py`、`query_id.py`、`check_links.py`、`diff_versions.py`、`sync-workflow.ps1` | 供 Agent 和维护者调用的状态、ID、链接与版本比较工具，以及向指定项目同步工作流源定义的受保护脚本。 |
 | `.workflow/dashboard/` | `template.html` | 工作流仪表盘的源模板。 |
 | `.workflow/tests/` | `test_workflow.py` | 工作流 CLI 的回归测试。 |
@@ -62,7 +62,7 @@
 |---|---|---|
 | `baseline/` | `README.md`、`raw-requirement/README.md` | 项目首次立项时的基线、必需核心流程原型和原始需求入口。 |
 | `iteration/` | `README.md`、`raw-requirement/README.md` | 版本化交付物及后续原始需求的入口。 |
-| `workspace/` | 目录本身 | 真实业务代码仓库的承载目录；其中内容由实例项目自行维护。每个已完成版本归档前，实例项目必须在其中维护当前系统功能说明并记录已融合版本标记。 |
+| `workspace/` | 目录本身 | 真实业务代码仓库的承载目录；其中 `README.md` 由 05-review-release 通过后的当前版本 requirement 自动生成，记录当前系统功能说明和版本标记。 |
 
 ## 7. 明确不属于工作流必要项的内容
 
