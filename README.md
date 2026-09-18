@@ -27,14 +27,15 @@
 │       └── 05-review-release/
 ├── templates/                       # 跨版本复用的文档与代码模板（已合并为 3 个）
 ├── workspace/                       # 真实代码仓库（Git；后端 + 前端）
-│   └── README.md                     # 实例项目自行维护的功能说明（非工作流骨架）
+│   ├── README.md                     # 实例项目自行维护的功能说明（非工作流骨架）
+│   └── workflow/                     # 实例项目状态（Git）
+│       ├── manifest.yaml             # 产物索引
+│       ├── traceability.json         # 稳定 ID 追溯图
+│       └── current-state.json        # 恢复检查点
 ├── .agents/skills/                  # 阶段化 AI Agent Skill（6 个）
-└── .workflow/                       # 工作流 CLI + 框架定义；实例状态可输出到指定项目
+└── .workflow/                       # 工作流 CLI + 框架定义；实例项目中整体忽略
     ├── workflow.py                  # 主 CLI（纯 stdlib）
     ├── workflow-file-inventory.md   # 工作流必要文件与目录权威清单
-    ├── manifest.yaml                # 实例项目状态索引（自动，Git）
-    ├── traceability.json            # 实例项目稳定 ID 追溯图（自动，Git）
-    ├── current-state.json           # 实例项目恢复检查点（自动，Git）
     ├── cache/                       # context-pack 缓存
     ├── context-packs/               # TASK-scoped 上下文包
     ├── task-runs/                   # TASK 结论与审计记录（默认忽略，可人工提交）
@@ -237,8 +238,8 @@ python .workflow/workflow.py verify-workflow                 # 检查工作流�
 
 | 子命令 | 功能 | 写入文件 |
 |---|---|---|
-| `index` | 全产物索引 + traceability 图 + 恢复检查点 | `manifest.yaml` / `traceability.json` / `current-state.json` |
-| `state` | 刷新或读取当前阶段、阻塞项、下一动作和 Context Pack | `current-state.json` |
+| `index` | 全产物索引 + traceability 图 + 恢复检查点 | `workspace/workflow/manifest.yaml` / `traceability.json` / `current-state.json` |
+| `state` | 刷新或读取当前阶段、阻塞项、下一动作和 Context Pack | `workspace/workflow/current-state.json` |
 | `refresh` | 文档变更后依次执行 `index`、`state --refresh` 和 `validate`；首个失败即停止 | 同 `index` / `state`，并输出门禁结果 |
 | `resume` | 输出新会话所需的最小恢复 JSON | stdout |
 | `preflight` | 本地执行门禁、TASK DAG 和 AC/TASK 覆盖率检查 | stdout / JSON |
@@ -251,9 +252,9 @@ python .workflow/workflow.py verify-workflow                 # 检查工作流�
 
 所有命令子命令接受 `--iteration`（默认从 `iteration/` 推断最大值；不存在则返回 `v1.0`）。
 
-从工作流框架仓库操作实例项目时，将 `--project-root '<instance-project-root>'` 放在子命令之前。框架代码、模板和 Skills 从框架根目录读取；产品文档和 `.workflow` 生成状态全部从实例项目根目录读取或写入。同步到实例项目后，可以省略该参数并继续使用实例项目本地根目录。
+从工作流框架仓库操作实例项目时，将 `--project-root '<instance-project-root>'` 放在子命令之前。框架代码、模板和 Skills 从框架根目录读取；产品文档和实例状态写入实例项目的 `workspace/workflow/`，本地运行数据写入实例项目的 `.workflow/`。同步到实例项目后，可以省略该参数并继续使用实例项目本地根目录。
 
-产品开发期间，工作流核心文件默认为只读。`AGENTS.md`、工作流说明、`.workflow/workflow.py`、`.workflow/scripts/`、`.workflow/tests/`、`.agents/skills/` 和 `templates/` 被修改且未提交时，工作流 CLI 会阻断；通过 `verify-workflow` 检查后，必须在独立的工作流维护变更中完成提交。`baseline/`、`iteration/`、`workspace/` 以及 `.workflow/manifest.yaml`、`.workflow/traceability.json`、`.workflow/current-state.json` 属于实例项目内容，不受核心骨架保护；其他工作流缓存和临时运行产物仍不纳入 Git。
+产品开发期间，工作流核心文件默认为只读。`AGENTS.md`、工作流说明、`.workflow/workflow.py`、`.workflow/scripts/`、`.workflow/tests/`、`.agents/skills/` 和 `templates/` 被修改且未提交时，工作流 CLI 会阻断；通过 `verify-workflow` 检查后，必须在独立的工作流维护变更中完成提交。`baseline/`、`iteration/`、`workspace/` 以及 `workspace/workflow/manifest.yaml`、`workspace/workflow/traceability.json`、`workspace/workflow/current-state.json` 属于实例项目内容，不受核心骨架保护；实例项目中的 `.workflow/` 是同步框架和本地运行目录，默认不纳入 Git。
 
 工作流生成的 `generated_at`、`checked_at`、`recorded_at` 和 Context Pack 时间均使用执行 Codex 客户端的本地时区，并保留 ISO 8601 偏移量。
 
@@ -308,7 +309,7 @@ python .workflow/scripts/check_links.py --iteration v1.0
 | `AC-NNN` | 验收标准 | `AC-007` |
 | `ISSUE-NNN` | Issue 记录 | `ISSUE-014` |
 
-追溯自动从 markdown 中提取并存入 `.workflow/traceability.json`（`index` 子命令产出）。
+追溯自动从 markdown 中提取并存入 `workspace/workflow/traceability.json`（`index` 子命令产出）。
 
 ---
 

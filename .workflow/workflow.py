@@ -102,6 +102,11 @@ def configure_project_root(project_root: str | Path | None = None) -> Path:
     return ROOT
 
 
+def project_state_dir() -> Path:
+    """Return the Git-managed workflow state directory for the instance."""
+    return ROOT / "workspace" / "workflow"
+
+
 def workflow_changed_paths() -> list[str]:
     """Return modified or untracked workflow-definition paths in this Git tree."""
     try:
@@ -312,7 +317,7 @@ def baseline_is_empty() -> bool:
 
 def manifest_iteration() -> str | None:
     """Read the iteration recorded by the generated manifest, if valid."""
-    path = WORKFLOW_DIR / "manifest.yaml"
+    path = project_state_dir() / "manifest.yaml"
     if not path.exists():
         return None
     match = MANIFEST_ITERATION_RE.search(path.read_text(encoding="utf-8"))
@@ -734,7 +739,7 @@ def check_readme_freshness(errors: list[str]) -> None:
     ``check_workspace_readme_freshness`` against ``workspace/README.md``.
     Triggered only on the final 05-review-release stage. Does not modify files.
     """
-    readme = ROOT / "README.md"
+    readme = FRAMEWORK_ROOT / "README.md"
     if not readme.exists():
         errors.append("README.md missing; required for RC sign-off")
         # Continue checking skills / scripts against an empty string so
@@ -743,7 +748,7 @@ def check_readme_freshness(errors: list[str]) -> None:
     else:
         text = readme.read_text(encoding="utf-8")
     # README must mention all current skills.
-    skills_dir = ROOT / ".agents" / "skills"
+    skills_dir = FRAMEWORK_ROOT / ".agents" / "skills"
     if skills_dir.exists():
         current_skills = {p.name for p in skills_dir.iterdir() if p.is_dir()}
         missing = sorted(s for s in current_skills if s not in text)
@@ -753,7 +758,7 @@ def check_readme_freshness(errors: list[str]) -> None:
                 f"{', '.join(missing)}"
             )
     # README must mention all current scripts.
-    scripts_dir = ROOT / ".workflow" / "scripts"
+    scripts_dir = FRAMEWORK_ROOT / ".workflow" / "scripts"
     if scripts_dir.exists():
         current_scripts = {p.stem for p in scripts_dir.glob("*.py")}
         missing = sorted(s for s in current_scripts if s not in text)
@@ -1006,21 +1011,23 @@ def write_manifest(iteration: str, artifacts: list[Artifact]) -> None:
                     f"        lines: {item.lines}",
                     f"        frontmatter: {str(item.frontmatter).lower()}",
                 ])
-    WORKFLOW_DIR.mkdir(parents=True, exist_ok=True)
-    write_text_atomic(WORKFLOW_DIR / "manifest.yaml", "\n".join(lines) + "\n")
+    state_dir = project_state_dir()
+    state_dir.mkdir(parents=True, exist_ok=True)
+    write_text_atomic(state_dir / "manifest.yaml", "\n".join(lines) + "\n")
 
 
 def index(iteration: str) -> int:
     artifacts = load_artifacts(iteration)
     write_manifest(iteration, artifacts)
-    write_json_atomic(WORKFLOW_DIR / "traceability.json", traceability(iteration, artifacts))
+    state_dir = project_state_dir()
+    write_json_atomic(state_dir / "traceability.json", traceability(iteration, artifacts))
     write_current_state(iteration, artifacts)
     # NOTE: per-artifact sha256 hashes are already in manifest.yaml. There
     # is intentionally no cache/index.json: it was never read by any
     # consumer and only duplicated manifest content. See S2 in audit.
     print(f"workflow index: {len(artifacts)} artifacts indexed for {iteration}")
-    print(f"manifest: {(WORKFLOW_DIR / 'manifest.yaml').relative_to(ROOT)}")
-    print(f"traceability: {(WORKFLOW_DIR / 'traceability.json').relative_to(ROOT)}")
+    print(f"manifest: {(state_dir / 'manifest.yaml').relative_to(ROOT)}")
+    print(f"traceability: {(state_dir / 'traceability.json').relative_to(ROOT)}")
     return 0
 
 
@@ -1286,7 +1293,7 @@ def write_current_state(
     records = task_records(iteration)
     fingerprint = state_source_fingerprint(artifacts, records)
     previous: dict = {}
-    state_path = WORKFLOW_DIR / "current-state.json"
+    state_path = project_state_dir() / "current-state.json"
     if state_path.exists():
         try:
             previous = json.loads(state_path.read_text(encoding="utf-8"))
@@ -1314,8 +1321,8 @@ def write_current_state(
             for path in sorted((WORKFLOW_DIR / "context-packs").glob(f"{iteration}-*.md"))
         ] if (WORKFLOW_DIR / "context-packs").exists() else [],
         "sources": {
-            "manifest": ".workflow/manifest.yaml",
-            "traceability": ".workflow/traceability.json",
+            "manifest": "workspace/workflow/manifest.yaml",
+            "traceability": "workspace/workflow/traceability.json",
             "task_runs": ".workflow/task-runs/",
         },
     }
@@ -1324,20 +1331,20 @@ def write_current_state(
 
 
 def state(iteration: str, *, refresh: bool = False) -> int:
-    path = WORKFLOW_DIR / "current-state.json"
+    path = project_state_dir() / "current-state.json"
     artifacts = load_artifacts(iteration)
     records = task_records(iteration)
     fingerprint = state_source_fingerprint(artifacts, records)
     if refresh or not path.exists():
         write_manifest(iteration, artifacts)
-        write_json_atomic(WORKFLOW_DIR / "traceability.json", traceability(iteration, artifacts))
+        write_json_atomic(project_state_dir() / "traceability.json", traceability(iteration, artifacts))
         data = write_current_state(iteration, artifacts)
         mode = "refreshed"
     else:
         data = json.loads(path.read_text(encoding="utf-8"))
         if data.get("iteration") != iteration or data.get("source_fingerprint") != fingerprint:
             write_manifest(iteration, artifacts)
-            write_json_atomic(WORKFLOW_DIR / "traceability.json", traceability(iteration, artifacts))
+            write_json_atomic(project_state_dir() / "traceability.json", traceability(iteration, artifacts))
             data = write_current_state(iteration, artifacts)
             mode = "refreshed"
         else:
@@ -1404,7 +1411,7 @@ def resume_data(iteration: str | None = None) -> dict:
     artifacts = load_artifacts(resolved)
     records = task_records(resolved)
     fingerprint = state_source_fingerprint(artifacts, records)
-    state_path = WORKFLOW_DIR / "current-state.json"
+    state_path = project_state_dir() / "current-state.json"
     data = None
     if state_path.exists():
         try:
@@ -1415,7 +1422,7 @@ def resume_data(iteration: str | None = None) -> dict:
             data = None
     if data is None:
         write_manifest(resolved, artifacts)
-        write_json_atomic(WORKFLOW_DIR / "traceability.json", traceability(resolved, artifacts))
+        write_json_atomic(project_state_dir() / "traceability.json", traceability(resolved, artifacts))
         data = write_current_state(resolved, artifacts)
     current = data["current_stage"]
     reads = [item["path"] for item in current.get("blocking_artifacts", [])]
@@ -1607,13 +1614,13 @@ def dashboard_data(iteration: str) -> dict:
         "stages": stages,
         "tasks": records,
         "current_stage": checkpoint["current_stage"],
-        "traceability_path": ".workflow/traceability.json",
-        "manifest_path": ".workflow/manifest.yaml",
+        "traceability_path": "workspace/workflow/traceability.json",
+        "manifest_path": "workspace/workflow/manifest.yaml",
     }
 
 
 def dashboard(iteration: str) -> int:
-    template_path = WORKFLOW_DIR / "dashboard" / "template.html"
+    template_path = FRAMEWORK_ROOT / ".workflow" / "dashboard" / "template.html"
     if not template_path.exists():
         raise ValueError(f"dashboard template not found: {template_path.relative_to(ROOT)}")
     data = dashboard_data(iteration)
@@ -1645,7 +1652,7 @@ def static_dashboard_fallback(data: dict) -> str:
         f'<p class="muted">迭代 {html.escape(data["iteration"])} · 当前阶段 {html.escape(data["current_stage"]["name"])} · 更新时间 {html.escape(data["generated_at"])}</p>'
         f'</div><span class="badge {html.escape(data["gate_status"])}">门禁：{html.escape(data["gate_status"])}</span></header>'
         f'<div class="summary-grid"><section class="summary-item"><h2>下一步</h2><p><strong>{html.escape(data["current_stage"]["name"])}</strong> · {html.escape(data["current_stage"]["status"])}</p><p class="muted">{html.escape(data["current_stage"]["next_action"])}</p></section><section class="summary-item"><h2>最近任务结论</h2>{tasks}</section>'
-        f'<section class="summary-item"><h2>数据来源</h2><p class="muted"><code>.workflow/manifest.yaml</code></p><p class="muted"><code>.workflow/traceability.json</code></p></section>'
+        f'<section class="summary-item"><h2>数据来源</h2><p class="muted"><code>workspace/workflow/manifest.yaml</code></p><p class="muted"><code>workspace/workflow/traceability.json</code></p></section>'
         f'<section class="summary-item"><h2>使用方式</h2><p class="muted">恢复工作时运行 <code>state --refresh</code>；TASK 完成后运行 <code>task-finished</code>。</p></section></div></section>'
         f'<section class="stage-list">{stages}</section></div>'
     )

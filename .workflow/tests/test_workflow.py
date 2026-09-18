@@ -142,9 +142,9 @@ class WorkflowTests(unittest.TestCase):
         try:
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
                 self.assertEqual(workflow.index("v1"), 0)
-                trace = json.loads((root / ".workflow" / "traceability.json").read_text(encoding="utf-8"))
+                trace = json.loads((root / "workspace" / "workflow" / "traceability.json").read_text(encoding="utf-8"))
                 self.assertTrue(any(node["id"] == "API-PROJ-001" for node in trace["nodes"]))
-                checkpoint = json.loads((root / ".workflow" / "current-state.json").read_text(encoding="utf-8"))
+                checkpoint = json.loads((root / "workspace" / "workflow" / "current-state.json").read_text(encoding="utf-8"))
                 self.assertEqual(checkpoint["iteration"], "v1")
                 self.assertEqual(checkpoint["current_stage"]["name"], "01-product")
                 self.assertTrue(checkpoint["source_fingerprint"])
@@ -165,7 +165,7 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual(workflow.context_pack("v1", "TASK-API-010"), 0)
                 self.assertEqual(first, output.stat().st_mtime_ns)
                 self.assertIn("API-PROJ-001", output.read_text(encoding="utf-8"))
-                checkpoint = json.loads((root / ".workflow" / "current-state.json").read_text(encoding="utf-8"))
+                checkpoint = json.loads((root / "workspace" / "workflow" / "current-state.json").read_text(encoding="utf-8"))
                 self.assertEqual(checkpoint["active_context"]["task_id"], "TASK-API-010")
                 self.assertIn("v1-TASK-API-010.md", checkpoint["active_context"]["path"])
         finally:
@@ -198,7 +198,7 @@ class WorkflowTests(unittest.TestCase):
                 record = json.loads((root / ".workflow" / "task-runs" / "v1-TASK-API-010.json").read_text(encoding="utf-8"))
                 self.assertEqual(record["result"], "succeeded")
                 self.assertEqual(record["project_gate_status"], "blocked")
-                checkpoint = json.loads((root / ".workflow" / "current-state.json").read_text(encoding="utf-8"))
+                checkpoint = json.loads((root / "workspace" / "workflow" / "current-state.json").read_text(encoding="utf-8"))
                 self.assertEqual(checkpoint["last_task"]["task_id"], "TASK-API-010")
                 history = list((root / ".workflow" / "task-runs" / "history").glob("*.json"))
                 self.assertEqual(len(history), 1)
@@ -227,10 +227,12 @@ class WorkflowTests(unittest.TestCase):
                     ),
                     0,
                 )
-            self.assertTrue((project_root / ".workflow" / "manifest.yaml").exists())
-            self.assertTrue((project_root / ".workflow" / "traceability.json").exists())
-            self.assertTrue((project_root / ".workflow" / "current-state.json").exists())
-            self.assertFalse((workflow.FRAMEWORK_ROOT / ".workflow" / "manifest.yaml").resolve() == (project_root / ".workflow" / "manifest.yaml").resolve())
+            self.assertTrue((project_root / "workspace" / "workflow" / "manifest.yaml").exists())
+            self.assertTrue((project_root / "workspace" / "workflow" / "traceability.json").exists())
+            self.assertTrue((project_root / "workspace" / "workflow" / "current-state.json").exists())
+            self.assertFalse((project_root / ".workflow" / "manifest.yaml").exists())
+            self.assertFalse((project_root / ".workflow" / "traceability.json").exists())
+            self.assertFalse((project_root / ".workflow" / "current-state.json").exists())
         finally:
             temp.cleanup()
 
@@ -361,7 +363,7 @@ class WorkflowTests(unittest.TestCase):
                 "---\nname: stale-skill\n---\n# stale\n", encoding="utf-8"
             )
             # No README.md present in the temp repo
-            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "FRAMEWORK_ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
                 # Direct unit test of check_readme_freshness — bypasses
                 # upstream gate noise so we isolate the freshness rule.
                 errors: list[str] = []
@@ -446,7 +448,7 @@ class WorkflowTests(unittest.TestCase):
             (scripts / "stage_status.py").write_text("# script\n", encoding="utf-8")
 
             errors: list[str] = []
-            with patch.object(workflow, "ROOT", root):
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "FRAMEWORK_ROOT", root):
                 workflow.check_readme_freshness(errors)
 
             self.assertEqual(errors, [])
@@ -532,7 +534,7 @@ class WorkflowTests(unittest.TestCase):
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
                 self.assertEqual(workflow.validate("v1", "01-product"), 1)
                 self.assertIn("iteration/v1/01-product/v1-prototype.html", workflow.required_inputs("v1", "01-product"))
-                checkpoint = json.loads((root / ".workflow" / "current-state.json").read_text(encoding="utf-8"))
+                checkpoint = json.loads((root / "workspace" / "workflow" / "current-state.json").read_text(encoding="utf-8"))
                 self.assertEqual(checkpoint["latest_gate"]["target"], "01-product")
                 self.assertEqual(checkpoint["latest_gate"]["result"], "blocked")
         finally:
@@ -673,7 +675,7 @@ class WorkflowTests(unittest.TestCase):
         try:
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
                 self.assertEqual(workflow.state("v1", refresh=True), 0)
-                checkpoint = json.loads((root / ".workflow" / "current-state.json").read_text(encoding="utf-8"))
+                checkpoint = json.loads((root / "workspace" / "workflow" / "current-state.json").read_text(encoding="utf-8"))
                 self.assertEqual(checkpoint["iteration"], "v1")
                 self.assertEqual(checkpoint["current_stage"]["name"], "01-product")
         finally:
@@ -723,11 +725,11 @@ class WorkflowTests(unittest.TestCase):
         try:
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
                 self.assertEqual(workflow.state("v1", refresh=True), 0)
-                before = json.loads((root / ".workflow" / "current-state.json").read_text(encoding="utf-8"))
+                before = json.loads((root / "workspace" / "workflow" / "current-state.json").read_text(encoding="utf-8"))
                 requirement = root / "iteration" / "v1" / "01-product" / "v1-requirement.md"
                 requirement.write_text(requirement.read_text(encoding="utf-8") + "\nUpdated\n", encoding="utf-8")
                 self.assertEqual(workflow.state("v1"), 0)
-                after = json.loads((root / ".workflow" / "current-state.json").read_text(encoding="utf-8"))
+                after = json.loads((root / "workspace" / "workflow" / "current-state.json").read_text(encoding="utf-8"))
                 self.assertNotEqual(before["source_fingerprint"], after["source_fingerprint"])
         finally:
             temp.cleanup()
@@ -758,7 +760,8 @@ class WorkflowTests(unittest.TestCase):
     def test_requirement_route_prefers_manifest_iteration(self):
         temp, root = self.make_repo()
         try:
-            (root / ".workflow" / "manifest.yaml").write_text(
+            (root / "workspace" / "workflow").mkdir(parents=True, exist_ok=True)
+            (root / "workspace" / "workflow" / "manifest.yaml").write_text(
                 "schema_version: '1'\niteration: 'v1.1'\n", encoding="utf-8"
             )
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
@@ -890,7 +893,7 @@ class WorkflowTests(unittest.TestCase):
             plan.write_text("---\nstatus: Approved\n---\nTASK-API-010\n", encoding="utf-8")
             (root / "README.md").write_text("# v1.0\n", encoding="utf-8")
             (root / "workspace" / "README.md").write_text("# Workspace\n", encoding="utf-8")
-            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "FRAMEWORK_ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
                 self.assertEqual(workflow.init_version(), 0)
             self.assertFalse((root / "iteration" / "v1.0").exists())
             self.assertTrue((root / "iteration" / "v1.1").is_dir())

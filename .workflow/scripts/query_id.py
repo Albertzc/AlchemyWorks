@@ -1,6 +1,6 @@
 """ID lookup — answers 'where does FR-005 appear in artifacts?' without LLM.
 
-Reads .workflow/traceability.json (already maintained by `index`) and
+Reads workspace/workflow/traceability.json (already maintained by `index`) and
 returns every artifact path + line range that mentions the requested ID.
 
 Usage:
@@ -20,7 +20,7 @@ sys.path.insert(0, str(THIS.parents[1]))
 
 from workflow import canonical_iteration, discover_iteration  # noqa: E402
 
-TRACEABILITY = THIS.parents[1] / "traceability.json"
+TRACEABILITY = THIS.parents[2] / "workspace" / "workflow" / "traceability.json"
 
 
 def load_edges(iteration: str) -> dict[str, list[dict]]:

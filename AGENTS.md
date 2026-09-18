@@ -92,7 +92,7 @@ The authoritative inventory of workflow-owned files and directories is [`.workfl
 5. **Before implementing a TASK**, create and use exactly one task-scoped Context Pack:
    `python .workflow/workflow.py context --iteration v{N} --task TASK-XXX-NNN`
 6. The Context Pack is the default implementation context. Load complete upstream documents only when the pack lacks a required detail, and record that exception in the implementation record.
-7. **After changing workflow artifacts**, rerun `index` so `.workflow/manifest.yaml`, `.workflow/traceability.json`, and hash caches reflect the new content.
+7. **After changing workflow artifacts**, rerun `index` so `workspace/workflow/manifest.yaml`, `workspace/workflow/traceability.json`, and the local hash/runtime caches reflect the new content.
 8. **After completing every TASK**, run:
    `python .workflow/workflow.py task-finished --iteration v{N} --task TASK-XXX-NNN --result <succeeded|failed|blocked>`
 9. Do not report a TASK as complete until this command has written the task record and printed the task conclusion for human confirmation. Refresh the dashboard separately when needed.

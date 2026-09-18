@@ -20,7 +20,7 @@ if (-not (Test-Path (Join-Path $targetRoot '.git'))) {
 }
 
 # Keep this list aligned with .workflow/workflow-file-inventory.md. It deliberately
-# excludes project deliverables, business code, and generated workflow state.
+# excludes project deliverables, business code, and generated instance state.
 $items = @(
     'AGENTS.md',
     'README.md',
@@ -107,4 +107,4 @@ foreach ($relativePath in $items) {
 }
 
 Write-Host "Workflow definition synchronized from $sourceRoot to $targetRoot."
-Write-Host "Run the framework CLI with --project-root '$targetRoot' to generate instance-project state in the target."
+Write-Host "Run the framework CLI with --project-root '$targetRoot' to generate instance-project state under workspace/workflow/."

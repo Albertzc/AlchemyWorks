@@ -27,12 +27,10 @@ Thumbs.db
 .env
 .env.*
 
-# Workflow local caches and derived views (regenerable via workflow commands)
-.workflow/cache/
-.workflow/dashboard/index.html
-.workflow/context-packs/
-.workflow/task-runs/
-.workflow/__pycache__/
+# Synchronized workflow framework and local runtime (instance projects)
+# The framework repository tracks its own .workflow source files; this rule
+# prevents synchronized framework/runtime files from entering instance commits.
+.workflow/
 
 # Logs
 logs/
