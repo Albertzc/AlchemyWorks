@@ -646,6 +646,17 @@ def next_iteration() -> str:
 
 def project_scaffold_readmes() -> dict[str, str]:
     return {
+        "baseline/README.md": (
+            "# Baseline\n\n"
+            "> `baseline/` 保存项目级基线、核心流程原型、原始需求和 ADR；这些内容不随迭代版本化。\n\n"
+            "首次创建版本前，必须完成并人工批准以下基线产物：\n\n"
+            "- `01-product-vision.md`：产品愿景\n"
+            "- `02-product-charter.md`：项目章程\n"
+            "- `03-tech-stack-decision.md`：技术选型决议\n"
+            "- `04-glossary.md`：术语表\n"
+            "- `05-core-user-flow-prototype.html`：核心用户流程原型\n\n"
+            "用户原始需求请放入 `raw-requirement/`；不要将业务代码或迭代交付物放入本目录。\n"
+        ),
         "baseline/raw-requirement/README.md": (
             "# 原始需求输入\n\n"
             "存放用户提供的原始需求材料，保留原文件格式与原文。baseline 尚未初始化时，"
@@ -665,6 +676,12 @@ def project_scaffold_readmes() -> dict[str, str]:
             "`python .workflow/workflow.py route-requirement` 确定当前输入对应的目标版本。\n\n"
             "除本说明文件外，目录中的原始需求归用户所有且只读：Agent 不得修改、"
             "重命名或删除。归一化产物必须记录所读取的原始文件路径和目标版本。\n"
+        ),
+        "workspace/README.md": (
+            "# Workspace\n\n"
+            "本目录承载实例项目的业务代码、测试、配置和当前系统功能说明。\n\n"
+            "首次初始化时，本文件作为目录说明生成；05-review-release 通过后，工作流会根据当前版本需求"
+            "更新本文件，并写入 `<!-- workflow:workspace-readme-version: v{major}.{minor} -->` 版本标记。\n"
         ),
     }
 

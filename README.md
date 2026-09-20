@@ -5,7 +5,11 @@
 
 ---
 
-## 1. 项目结构与所有权
+## 第一部分：工作流框架的工作原理
+
+本部分说明 AlchemyWorks 如何组织需求、版本、阶段产物、自动化能力和治理约束。它面向工作流维护者，也用于理解实例项目中 `.aw/` 工作流副本的运行方式。
+
+### 1. 项目结构与所有权
 
 ```
 ├── baseline/                        # 实例初始化时创建：项目级常量和原始需求
@@ -44,7 +48,7 @@
         └── scripts/                 # 实例需要的辅助脚本
 ```
 
-### 1.1 工作流源定义与实例项目边界
+#### 1.1 工作流源定义与实例项目边界
 
 本仓库既是工作流源仓库，也是一个可运行的工作流目录样例。阅读或维护时，按下面的归属判断文件是否属于工作流本身：
 
@@ -58,12 +62,12 @@
 | `baseline/` | 实例项目的 baseline 产物和用户原始输入 | `init-instance` 创建；`normalize-requirement` 起草，人工审核后进入门禁 | 提交 |
 | `iteration/raw-requirement/` | 实例项目的用户原始需求 | `init-instance` 创建；用户提供，`route-requirement` 返回目标版本；Agent 只读 | 提交 |
 | `iteration/v{major}.{minor}/`、`iteration/archive/` | 实例项目的版本产物和归档快照 | `init-version` 创建/归档，阶段 Skill 产出文档 | 提交 |
-| `workspace/`（含 `workspace/workflow/`） | 实例项目的代码、配置、测试、功能说明和可再生追溯状态 | 04 阶段写入业务代码；`index`/`state`/`refresh` 生成状态；05 阶段生成 `workspace/README.md` | 提交 |
+| `workspace/`（含 `workspace/workflow/`） | 实例项目的代码、配置、测试、功能说明和可再生追溯状态 | 初始化时生成 `workspace/README.md` 目录说明；04 阶段写入业务代码；`index`/`state`/`refresh` 生成状态；05 阶段更新功能说明 | 提交 |
 | `.aw/workflow-version.yaml` | 实例本地工作流源版本信息 | `init-instance` / `sync` 写入；实例 Git 忽略 | 不提交 |
 
 一句话判断：工作流负责“规则、工具、能力、模板和脚手架说明”；实例项目负责“需求输入、版本产物、业务实现、测试、功能说明和工作流生成的项目状态”。同步副本可以在实例目录中运行，但不属于实例业务提交。
 
-### 1.2 目录生成逻辑
+#### 1.2 目录生成逻辑
 
 实例目录应通过统一入口创建，不要手工复制目录或直接创建版本号目录：
 
@@ -81,11 +85,11 @@ python .workflow/workflow.py init-instance --name "Product A" --directory "E:\pa
 python .workflow/workflow.py sync --directory "E:\path\to\product-a"
 ```
 
-`init-instance` 的生成顺序是：初始化实例 Git → 创建 `baseline/`、`iteration/`、`workspace/` 和默认 `templates/` → 将完整工作流规则同时写入实例根 `AGENTS.md` 和 `.aw/AGENTS.md` → 将工作流副本同步到 `.aw/`，写入 `.aw/workflow-version.yaml`，并追加只忽略 `.aw/` 的受管 `.gitignore` 区块。实例根 `AGENTS.md` 和 `templates/` 是初始化开发的顶层可维护内容；`.aw/AGENTS.md` 是同步的工作流副本。`init` 只用于当前工作流仓库内创建 intake 目录；`init-version` 只能在实例 baseline 门禁通过后创建版本骨架。
+`init-instance` 的生成顺序是：初始化实例 Git → 创建 `baseline/`、`iteration/`、`workspace/` 和默认 `templates/` 及其目录说明 README → 将完整工作流规则同时写入实例根 `AGENTS.md` 和 `.aw/AGENTS.md` → 将工作流副本同步到 `.aw/`，写入 `.aw/workflow-version.yaml`，并追加只忽略 `.aw/` 的受管 `.gitignore` 区块。实例根 `AGENTS.md` 和 `templates/` 是初始化开发的顶层可维护内容；`.aw/AGENTS.md` 是同步的工作流副本。`workspace/README.md` 在 05-review-release 通过后更新为当前系统功能说明。`init` 只用于当前工作流仓库内创建 intake 目录；`init-version` 只能在实例 baseline 门禁通过后创建版本骨架。
 
 ---
 
-## 2. 版本号规范
+### 2. 版本号规范
 
 格式：`v{major}.{minor}`（双段号）。
 
@@ -109,7 +113,7 @@ python .workflow/workflow.py init-version  # baseline 门禁通过后创建下�
 
 ---
 
-## 3. 阶段流水线（原始需求输入 + 5 个交付阶段）
+### 3. 阶段流水线（原始需求输入 + 5 个交付阶段）
 
 ```text
 用户提供的原始需求（格式不限）
@@ -157,7 +161,7 @@ iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 
 ---
 
-## 4. AI Agent Skill 体系（9 个）
+### 4. AI Agent Skill 体系（9 个）
 
 | Skill | 触发场景 | 输出 |
 |---|---|---|
@@ -183,7 +187,7 @@ iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 
 ---
 
-## 5. 模板体系（3 个跨版本模板）
+### 5. 模板体系（3 个跨版本模板）
 
 位于 `templates/`：
 
@@ -199,7 +203,7 @@ iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 
 ---
 
-## 6. 工作流 CLI（`.workflow/workflow.py`，纯 Python 标准库）
+### 6. 工作流 CLI（`.workflow/workflow.py`，纯 Python 标准库）
 
 > §3 是阶段产物清单，本节是**端到端流程图**——把 baseline gate、5 个 stage gate、横切的 index/dashboard/ID 注册，以及"未通过 → 修产物"的回路一次性画出来。
 
@@ -300,7 +304,7 @@ python .workflow/workflow.py verify-workflow                 # 检查工作流�
 
 ---
 
-## 7. LLM 自动化脚本（`.workflow/scripts/`）
+### 7. LLM 自动化脚本（`.workflow/scripts/`）
 
 5 个本地脚本，让 LLM 不必亲自 grep / read 多份文档：
 
@@ -321,9 +325,43 @@ python .workflow/scripts/query_id.py --id TASK-API-010 --iteration v1.0
 python .workflow/scripts/check_links.py --iteration v1.0
 ```
 
+### 8. 稳定 ID 与追溯
+
+通过 9 类前缀保证跨版本稳定：
+
+| 前缀 | 含义 | 例 |
+|---|---|---|
+| `FR-NNN` | 功能需求 | `FR-001` |
+| `BR-NNN` | 业务规则 | `BR-005` |
+| `NFR-NNN` | 非功能需求 | `NFR-030` |
+| `FS-NNN` | 功能规格（v1.0+ 并入 requirement 作为 FR 子项；不再独立成文）| `FS-001` |
+| `API-NNN-NNN` | API 端点 | `API-PROJ-001` |
+| `TBL-NNN-NNN` | 数据表 | `TBL-USER-001` |
+| `TASK-NNN-NNN` | 实施任务 | `TASK-API-010` |
+| `AC-NNN` | 验收标准 | `AC-007` |
+| `ISSUE-NNN` | Issue 记录 | `ISSUE-014` |
+
+追溯自动从 markdown 中提取并存入 `workspace/workflow/traceability.json`（`index` 子命令产出）。
+
 ---
 
-### 7.1 同步工作流到指定项目
+### 9. 阶段产物精简（当前状态）
+
+| 阶段 | 产物 |
+|---|---|
+| 01-product | `requirement.md`（FS-XXX 作为 FR-XXX 子项内嵌，含 `prototype_required` 决策）；`prototype.html` 仅在该决策为 `true` 时必需 |
+| 02-design | `architecture-design.md`、`api-spec.md`、`database-dictionary.md` |
+| 03-planning | `task-plan-dag.md`、`validation-plan.md` |
+| 04-implementation | `source-code.md`（含 ISSUE 列表）、`test-results.md` |
+| 05-review-release | `review-release.md`（评审、合并、发布决定、release notes） |
+
+---
+
+## 第二部分：实例项目使用说明
+
+本部分面向实例项目的开发者，说明如何初始化、同步和使用工作流。实例项目的业务内容位于 `baseline/`、`iteration/`、`workspace/` 和根目录 `templates/`；同步到 `.aw/` 的框架副本仅作为本地执行环境，不属于实例业务提交。
+
+### 1. 初始化与同步工作流
 
 实例初始化和工作流同步的唯一实现入口是 Python CLI：
 
@@ -352,29 +390,9 @@ python .workflow/workflow.py sync --directory "E:\path\to\target-project"
 
 该脚本仅同步 `workflow-file-inventory.md` 规定的共享规则、CLI 和 Skills 到实例 `.aw/`，并向根目录 `templates/` 补充缺失的默认模板；不会覆盖实例项目的 `README.md`、根 `AGENTS.md`、`templates/` 或 `.gitignore`，也不会复制项目的 `baseline/`、`iteration/`、`workspace/` 内容或运行状态。同步后会在实例 `.gitignore` 中幂等维护仅包含 `.aw/` 的工作流忽略区块，`workspace/workflow/` 和 `templates/` 状态仍可提交。目标项目可以有不相关的修改；只有同步路径发生重叠时默认拒绝执行，确认需要覆盖时才使用 `-AllowDirtyTarget`，预览可使用 `-WhatIf`。
 
-## 8. 稳定 ID 与追溯
+### 2. 常用工作流
 
-通过 9 类前缀保证跨版本稳定：
-
-| 前缀 | 含义 | 例 |
-|---|---|---|
-| `FR-NNN` | 功能需求 | `FR-001` |
-| `BR-NNN` | 业务规则 | `BR-005` |
-| `NFR-NNN` | 非功能需求 | `NFR-030` |
-| `FS-NNN` | 功能规格（v1.0+ 并入 requirement 作为 FR 子项；不再独立成文）| `FS-001` |
-| `API-NNN-NNN` | API 端点 | `API-PROJ-001` |
-| `TBL-NNN-NNN` | 数据表 | `TBL-USER-001` |
-| `TASK-NNN-NNN` | 实施任务 | `TASK-API-010` |
-| `AC-NNN` | 验收标准 | `AC-007` |
-| `ISSUE-NNN` | Issue 记录 | `ISSUE-014` |
-
-追溯自动从 markdown 中提取并存入 `workspace/workflow/traceability.json`（`index` 子命令产出）。
-
----
-
-## 9. 常用工作流
-
-### 9.1 启动一个新版本（v1.0）
+#### 2.1 启动一个新版本（v1.0）
 
 ```
 1. 用户提供原始需求；`route-requirement` 发现 baseline 为空并返回 `baseline/raw-requirement/`
@@ -387,7 +405,7 @@ python .workflow/workflow.py sync --directory "E:\path\to\target-project"
 8. RC 完成 → 自动生成 `workspace/README.md`，写入 v1.0 功能并更新版本标记；生成 v1.0-iteration-changelog.md；v1.0 保持活动状态，直至 v1.1 创建成功后归档
 ```
 
-### 9.2 启动 v1.1+ 增量迭代
+#### 2.2 启动 v1.1+ 增量迭代
 
 ```
 1. 用户提供原始需求；`route-requirement` 从 manifest.yaml（缺失时目录发现）解析目标版本
@@ -400,7 +418,7 @@ python .workflow/workflow.py sync --directory "E:\path\to\target-project"
 8. RC 完成 → 自动生成 `workspace/README.md`，写入本版本功能并更新版本标记；生成本版本 changelog 并保持活动状态；下一个版本创建成功时归档本版本
 ```
 
-### 9.3 实施单个 TASK
+#### 2.3 实施单个 TASK
 
 ```bash
 # 1. 启动前：本地生成最小恢复状态
@@ -427,7 +445,7 @@ python .workflow/workflow.py task-finished ... --refresh-dashboard
 python .workflow/scripts/stage_status.py --iteration v1.0
 ```
 
-### 9.4 跨版本引用查询
+#### 2.4 跨版本引用查询
 
 ```bash
 # "FR-005 出现在 v1.0 的哪里？"
@@ -436,7 +454,7 @@ python .workflow/scripts/query_id.py --id FR-005 --iteration v1.0
 #   - iteration/v1.0/01-product/v1.0-requirement.md  (FS 作为 FR 子项内嵌)
 ```
 
-### 9.5 跨版本 ID diff
+#### 2.5 跨版本 ID diff
 
 ```bash
 # "v1.0 → v1.1 改了哪些 ID？哪些 FR 被废弃了？"
@@ -448,19 +466,7 @@ python .workflow/scripts/diff_versions.py --from v1.0 --to v1.1
 
 ---
 
-## 10. 阶段产物精简（当前状态）
-
-| 阶段 | 产物 |
-|---|---|
-| 01-product | `requirement.md`（FS-XXX 作为 FR-XXX 子项内嵌，含 `prototype_required` 决策）；`prototype.html` 仅在该决策为 `true` 时必需 |
-| 02-design | `architecture-design.md`、`api-spec.md`、`database-dictionary.md` |
-| 03-planning | `task-plan-dag.md`、`validation-plan.md` |
-| 04-implementation | `source-code.md`（含 ISSUE 列表）、`test-results.md` |
-| 05-review-release | `review-release.md`（评审、合并、发布决定、release notes） |
-
----
-
-## 11. 验证检查清单
+### 3. 验证检查清单
 
 ```bash
 # 1. 验证当前迭代
@@ -484,19 +490,19 @@ python .workflow/scripts/check_links.py --iteration v1.0
 
 ---
 
-## 12. AGENTS.md 角色
+### 4. AGENTS.md 角色
 
 `AGENTS.md` 是项目级 AI Agent 与开发者协作规则（含 §17 版本化规则、source-of-truth 优先级、TDD 标准、commit 约定等）。它是**唯一**对所有 Skill / Agent 生效的全局规则文件。详见 `AGENTS.md`。
 
 ---
 
-## 13. License
+### 5. License
 
 MIT
 
 ---
 
-## 14. ⚠️ 免责声明 / Disclaimer
+### 6. ⚠️ 免责声明 / Disclaimer
 
 > 本项目当前处于 **实验阶段**，仅供 AI 工作流自动化的学习与研究使用。
 >

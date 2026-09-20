@@ -27,15 +27,5 @@ Thumbs.db
 .env
 .env.*
 
-# Synchronized workflow framework and local runtime (instance projects)
-# The framework repository tracks its own .workflow source files; this rule
-# prevents synchronized framework/runtime files from entering instance commits.
-.workflow/
-!.workflow/
-.workflow/*
-!.workflow/scripts/
-.workflow/scripts/*
-!.workflow/scripts/init-instance.ps1
-
 # Logs
 logs/

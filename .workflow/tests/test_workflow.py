@@ -566,6 +566,8 @@ class WorkflowTests(unittest.TestCase):
             self.assertIn("source_ref: HEAD", version)
             self.assertTrue((target / ".aw" / ".workflow" / "workflow.py").is_file())
             self.assertTrue((target / "workspace").is_dir())
+            self.assertTrue((target / "baseline" / "README.md").is_file())
+            self.assertTrue((target / "workspace" / "README.md").is_file())
             self.assertEqual(
                 (target / "AGENTS.md").read_text(encoding="utf-8"),
                 (target / ".aw" / "AGENTS.md").read_text(encoding="utf-8"),
@@ -982,9 +984,10 @@ class WorkflowTests(unittest.TestCase):
             self.assertTrue((root / "iteration").is_dir())
             self.assertTrue((root / "iteration" / "raw-requirement").is_dir())
             self.assertTrue((root / "workspace").is_dir())
+            self.assertTrue((root / "baseline" / "README.md").is_file())
             self.assertTrue((root / "baseline" / "raw-requirement" / "README.md").is_file())
             self.assertTrue((root / "iteration" / "README.md").is_file())
-            self.assertFalse((root / "workspace" / "README.md").exists())
+            self.assertTrue((root / "workspace" / "README.md").is_file())
             self.assertTrue((root / "iteration" / "raw-requirement" / "README.md").is_file())
 
     def test_init_version_requires_baseline_then_creates_skeleton(self):
