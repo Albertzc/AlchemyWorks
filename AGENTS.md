@@ -6,6 +6,21 @@ This file defines the general collaboration rules for AI agents and developers w
 
 The goal is to produce maintainable, testable, secure, and production-ready software with the smallest reasonable change.
 
+## 1.1 Workflow directory layout
+
+The AlchemyWorks source repository keeps its framework source files at the repository root for maintainability. When initialized or synchronized into an instance project, workflow execution files are placed under `.aw/`; the instance-maintained default templates remain at the project root:
+
+```text
+.aw/README.md
+.aw/AGENTS.md
+.aw/.workflow/
+.aw/.agents/
+templates/
+.aw/workflow-version.yaml
+```
+
+The instance root `AGENTS.md` starts as an identical copy of `.aw/AGENTS.md` and may then be customized by the instance project. In a synchronized instance, use `python .aw/.workflow/workflow.py ...` for local commands; when operating from the framework source repository, use the source-repository path `python .workflow/workflow.py ...` with `--project-root` for an external instance.
+
 ## 2. Source of Truth
 
 Use the following priority order when information conflicts:

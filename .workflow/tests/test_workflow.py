@@ -256,8 +256,8 @@ class WorkflowTests(unittest.TestCase):
                     ),
                     0,
                 )
-            self.assertTrue((project_root / ".workflow" / "context-packs" / "v1.0-TASK-API-010.md").exists())
-            self.assertTrue((project_root / ".workflow" / "task-runs" / "v1.0-TASK-API-010.json").exists())
+            self.assertTrue((project_root / ".aw" / ".workflow" / "context-packs" / "v1.0-TASK-API-010.md").exists())
+            self.assertTrue((project_root / ".aw" / ".workflow" / "task-runs" / "v1.0-TASK-API-010.json").exists())
             self.assertFalse((workflow.FRAMEWORK_ROOT / ".workflow" / "task-runs" / "v1.0-TASK-API-010.json").exists())
         finally:
             temp.cleanup()
@@ -436,8 +436,19 @@ class WorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             target = Path(raw) / "instance"
             target.mkdir()
-            (target / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
+            (target / ".gitignore").write_text(
+                "node_modules/\n"
+                "# BEGIN ALCHEMYWORKS WORKFLOW (managed)\n"
+                ".aw/\n"
+                "baseline/README.md\n"
+                "iteration/README.md\n"
+                ".aw/runtime/\n"
+                "# END ALCHEMYWORKS WORKFLOW (managed)\n",
+                encoding="utf-8",
+            )
             (target / "README.md").write_text("# Product A\n", encoding="utf-8")
+            (target / "templates").mkdir()
+            (target / "templates" / "custom.md").write_text("custom\n", encoding="utf-8")
             subprocess.run(["git", "init", "--quiet", str(target)], check=True)
             subprocess.run(["git", "-C", str(target), "add", "."], check=True)
             subprocess.run(
@@ -456,16 +467,25 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual((target / "README.md").read_text(encoding="utf-8"), "# Product A\n")
             ignore_text = (target / ".gitignore").read_text(encoding="utf-8")
             self.assertIn("# BEGIN ALCHEMYWORKS WORKFLOW", ignore_text)
-            self.assertTrue((target / ".workflow" / "workflow.py").is_file())
-            self.assertTrue((target / ".workflow" / "scripts" / "init-instance.ps1").is_file())
-            self.assertTrue((target / ".agents" / "skills").is_dir())
+            self.assertTrue((target / ".aw" / ".workflow" / "workflow.py").is_file())
+            self.assertFalse((target / ".aw" / ".workflow" / "scripts" / "init-instance.ps1").exists())
+            self.assertTrue((target / ".aw" / ".agents" / "skills").is_dir())
             self.assertTrue((target / "templates").is_dir())
+            self.assertEqual((target / "templates" / "custom.md").read_text(encoding="utf-8"), "custom\n")
+            self.assertFalse((target / ".aw" / ".workflow" / "tests").exists())
+            self.assertNotIn("baseline/README.md", ignore_text)
+            self.assertNotEqual(
+                subprocess.run(
+                    ["git", "-C", str(target), "check-ignore", "--quiet", "baseline/README.md"],
+                ).returncode,
+                0,
+            )
 
-            (target / ".workflow" / "workflow.py").touch()
+            (target / ".aw" / ".workflow" / "workflow.py").touch()
             (target / "workspace" / "workflow").mkdir(parents=True)
             (target / "workspace" / "workflow" / "manifest.yaml").write_text("state\n", encoding="utf-8")
             ignored_workflow = subprocess.run(
-                ["git", "-C", str(target), "check-ignore", "--quiet", ".workflow/workflow.py"],
+                ["git", "-C", str(target), "check-ignore", "--quiet", ".aw/.workflow/workflow.py"],
             )
             ignored_instance_state = subprocess.run(
                 ["git", "-C", str(target), "check-ignore", "--quiet", "workspace/workflow/manifest.yaml"],
@@ -480,7 +500,7 @@ class WorkflowTests(unittest.TestCase):
             result = subprocess.run(
                 [
                     "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script),
-                    "-InstanceName", "Product A", "-TargetRoot", str(target), "-WhatIf",
+                    "-TargetRoot", str(target), "-WhatIf",
                 ],
                 capture_output=True,
                 text=True,
@@ -503,18 +523,24 @@ class WorkflowTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, msg=result.stderr or result.stdout)
             self.assertEqual((target / "README.md").read_text(encoding="utf-8"), "# Product A\n")
-            lock = (target / ".aw" / "workflow.lock").read_text(encoding="utf-8")
-            self.assertIn("instance_name: Product A", lock)
-            self.assertRegex(lock, r"source_commit: [0-9a-f]{40}")
-            self.assertTrue((target / ".workflow" / "workflow.py").is_file())
+            version = (target / ".aw" / "workflow-version.yaml").read_text(encoding="utf-8")
+            self.assertIn("source_ref: HEAD", version)
+            self.assertRegex(version, r"source_commit: [0-9a-f]{40}")
+            self.assertTrue((target / ".aw" / ".workflow" / "workflow.py").is_file())
+            self.assertTrue((target / ".aw" / "README.md").is_file())
+            self.assertTrue((target / ".aw" / "AGENTS.md").is_file())
+            self.assertEqual(
+                (target / "AGENTS.md").read_text(encoding="utf-8"),
+                (target / ".aw" / "AGENTS.md").read_text(encoding="utf-8"),
+            )
             self.assertTrue((target / "baseline" / "raw-requirement").is_dir())
             self.assertTrue((target / "iteration" / "raw-requirement").is_dir())
             self.assertTrue((target / "workspace").is_dir())
             self.assertEqual(
                 subprocess.run(
-                    ["git", "-C", str(target), "check-ignore", "--quiet", ".aw/workflow.lock"],
+                    ["git", "-C", str(target), "check-ignore", "--quiet", ".aw/workflow-version.yaml"],
                 ).returncode,
-                1,
+                0,
             )
 
     def test_python_init_instance_dry_run_does_not_create_target(self):
@@ -536,10 +562,46 @@ class WorkflowTests(unittest.TestCase):
                 )
             self.assertEqual(result, 0)
             self.assertEqual((target / "README.md").read_text(encoding="utf-8"), "# Product Python\n")
-            lock = (target / ".aw" / "workflow.lock").read_text(encoding="utf-8")
-            self.assertIn("instance_name: Product Python", lock)
-            self.assertTrue((target / ".workflow" / "workflow.py").is_file())
+            version = (target / ".aw" / "workflow-version.yaml").read_text(encoding="utf-8")
+            self.assertIn("source_ref: HEAD", version)
+            self.assertTrue((target / ".aw" / ".workflow" / "workflow.py").is_file())
             self.assertTrue((target / "workspace").is_dir())
+            self.assertEqual(
+                (target / "AGENTS.md").read_text(encoding="utf-8"),
+                (target / ".aw" / "AGENTS.md").read_text(encoding="utf-8"),
+            )
+
+    def test_init_instance_defaults_name_to_target_directory(self):
+        with tempfile.TemporaryDirectory() as raw:
+            target = Path(raw) / "default-named-product"
+            with patch.object(workflow, "workflow_protection_errors", return_value=[]):
+                result = workflow.main(
+                    ["init-instance", "--directory", str(target)]
+                )
+            self.assertEqual(result, 0)
+            self.assertEqual(
+                (target / "README.md").read_text(encoding="utf-8"),
+                "# default-named-product\n",
+            )
+            version = (target / ".aw" / "workflow-version.yaml").read_text(encoding="utf-8")
+            self.assertIn("source_ref: HEAD", version)
+
+    def test_init_instance_accepts_workflow_ref(self):
+        with tempfile.TemporaryDirectory() as raw:
+            target = Path(raw) / "ref-product"
+            with patch.object(workflow, "workflow_protection_errors", return_value=[]):
+                result = workflow.main(
+                    [
+                        "init-instance",
+                        "--workflow-version",
+                        "HEAD",
+                        "--directory",
+                        str(target),
+                    ]
+                )
+            self.assertEqual(result, 0)
+            version = (target / ".aw" / "workflow-version.yaml").read_text(encoding="utf-8")
+            self.assertIn("source_ref: HEAD", version)
 
     def test_python_sync_preserves_instance_readme_and_tracks_state(self):
         with tempfile.TemporaryDirectory() as raw:
@@ -560,7 +622,7 @@ class WorkflowTests(unittest.TestCase):
             (target / "workspace" / "workflow").mkdir(parents=True)
             (target / "workspace" / "workflow" / "manifest.yaml").write_text("state\n", encoding="utf-8")
             self.assertEqual(
-                subprocess.run(["git", "-C", str(target), "check-ignore", "--quiet", ".workflow/workflow.py"]).returncode,
+                subprocess.run(["git", "-C", str(target), "check-ignore", "--quiet", ".aw/.workflow/workflow.py"]).returncode,
                 0,
             )
             self.assertNotEqual(

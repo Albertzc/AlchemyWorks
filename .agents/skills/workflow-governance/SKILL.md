@@ -7,6 +7,11 @@ description: Run this project’s deterministic stage gates, artifact index, tra
 
 Use this project skill when starting or reviewing a versioned workflow stage.
 
+In a synchronized instance project, the workflow root is `.aw/`: use
+`python .aw/.workflow/workflow.py ...`, and read generated runtime files from
+`.aw/.workflow/`. The framework source repository itself continues to use
+`.workflow/` in these examples.
+
 ## Required commands
 
 Run from the project root:

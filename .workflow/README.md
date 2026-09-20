@@ -1,10 +1,10 @@
 # Workflow Control Layer
 
-> 所有权：`.workflow/` 是工作流本身的执行层和本地运行层。源仓库维护其中的 CLI、脚本、测试和说明；同步到实例后，它们只是可运行的本地副本，默认由实例 `.gitignore` 忽略。实例项目状态不写入这里，而写入实例根目录的 `workspace/workflow/`。
+> 所有权：源仓库中的 `.workflow/` 是工作流执行层；同步到实例后，工作流执行文件位于 `.aw/`，Skills 位于 `.aw/.agents/`，实例可维护模板位于根目录 `templates/`。实例项目状态写入 `workspace/workflow/`。
 
 This directory contains the standard-library CLI and workflow source definitions. When the CLI is run with `--project-root`, generated state is written to the selected instance project instead of this framework source directory.
 
-`init-instance` creates a new instance Git tree, writes the instance-owned `README.md` and `.aw/workflow.lock`, creates `baseline/raw-requirement/`, `iteration/raw-requirement/`, and `workspace/`, then calls `sync`. `sync` copies only workflow definitions, Skills, templates, and scaffold READMEs; it never copies or overwrites instance baseline deliverables, iteration deliverables, workspace content, instance README, or instance `.gitignore`. `sync` appends a marked ignore block so synchronized `.workflow/`, `.agents/`, `templates/`, root `AGENTS.md`, and scaffold files stay out of instance commits while `workspace/workflow/` remains committable.
+`init-instance` creates a new instance Git tree, writes the instance-owned `README.md`, copies the complete workflow rules identically to root `AGENTS.md` and `.aw/AGENTS.md`, and writes ignored `.aw/workflow-version.yaml`. It creates `baseline/`, `iteration/`, `workspace/`, and root `templates/`, then calls `sync`. `sync` copies workflow definitions and Skills into `.aw/`, copies missing default template files into root `templates/`, and never overwrites instance templates, baseline/iteration/workspace content, instance README, root `AGENTS.md`, or instance `.gitignore`. `sync` maintains a marked ignore block containing only `.aw/` while `workspace/workflow/` remains committable.
 
 Workflow-owned source files and required scaffold directories are authoritatively listed in [`workflow-file-inventory.md`](workflow-file-inventory.md). Keep that inventory synchronized with every workflow change.
 
@@ -38,21 +38,22 @@ python .workflow/workflow.py verify-workflow
 
 `init` creates only the non-versioned intake directories, including `iteration/raw-requirement/README.md`. `init-version` creates the next version skeleton only after the baseline gate passes, and refreshes `workspace/workflow/manifest.yaml`. `route-requirement` determines where newly received, unstructured user requirements are archived. With an empty baseline it returns the baseline intake directory; otherwise it uses the `iteration` in the instance state's `workspace/workflow/manifest.yaml` when available, falling back to version discovery, and returns that target version with the centralized `iteration/raw-requirement/` directory. Except for its README, this directory contains user-owned source material only: Agents must not modify, rename, or delete its files. `validate` is the `stage-gate` controller: a nonzero exit code means the requested formal stage cannot proceed. Raw requirements are source material, not approved stage artifacts. `index` writes the artifact manifest, stable-ID traceability graph, and derived recovery checkpoint. `state` compares the cached checkpoint's input fingerprint with current artifact and TASK metadata, rebuilding the manifest, traceability graph, and checkpoint when it is stale; `state --refresh` forces that same rebuild. `refresh` is the standard post-document-edit sequence: it runs `index`, then `state --refresh`, then `validate`; a nonzero result stops the sequence. `context` creates a task-scoped pack under `context-packs/` and reuses it when its input fingerprint is unchanged. `resume --json` is the preferred low-context startup command; it emits only the active iteration, current stage, blockers, next action, recommended reads and gate command. It returns `NO_ACTIVE_ITERATION` when no active version exists. `context --compact` deduplicates excerpts and enforces local character/section limits. `preflight` runs gate, DAG and coverage checks locally. `review-pack` emits human-review evidence without approving artifacts. `task-finished --auto-refresh` refreshes local indexes when a task changed artifact files.
 
-When the CLI is run from the framework source repository, pass `--project-root` before the subcommand. The selected instance project is then the only root used for product documents and generated `workspace/workflow` state plus `.workflow` runtime data; the framework source tree is used only for framework code, templates, Skills, and protection checks. When the workflow CLI has been synchronized into an instance project, omitting `--project-root` keeps the existing local-root behavior.
+When the CLI is run from the framework source repository, pass `--project-root` before the subcommand. The selected instance project is then the only root used for product documents and generated `workspace/workflow` state plus `.aw/.workflow` runtime data; the framework source tree is used only for framework code and Skills, while instance templates are read from root `templates/`. When the workflow CLI has been synchronized into an instance project, omitting `--project-root` uses the local `.aw/` layout.
 
 `workspace/README.md` is an automatically generated instance artifact. A successful `validate --stage 05-review-release` replaces it with the current iteration's approved requirement body, prefixed by the iteration marker and `## 当前系统功能说明`; it is not manually maintained. The root `README.md` documents the shared workflow framework and is checked only for current Skills and scripts. Archive policy: `v1.0` has no predecessor. For a later version, `init-version` first validates the active predecessor through `05-review-release`, which regenerates the workspace README, checks its marker, creates the successor skeleton, and only then moves that predecessor to `iteration/archive/`. A failed predecessor gate or README generation/check removes the empty successor skeleton and leaves the predecessor and archive unchanged.
 
 Generated files:
 
+- `.aw/workflow-version.yaml` — current synchronized workflow ref and commit; ignored by the instance project and refreshed by `init-instance` / `sync`.
 - `workspace/workflow/manifest.yaml` — discovered artifacts, status, line count, and content hash. This is instance-project state and is committed to Git.
 - `workspace/workflow/traceability.json` — stable IDs and evidence-backed co-occurrence edges. This is instance-project state and is committed to Git.
 - `workspace/workflow/current-state.json` — derived recovery checkpoint: current stage, blockers, next action, latest gate, and reusable Context Pack. This is instance-project state and is committed to Git.
-- `.workflow/cache/`, `.workflow/context-packs/`, `.workflow/task-runs/`, and `.workflow/dashboard/index.html` — local runtime and audit data, ignored in instance projects.
-- `.workflow/cache/context-packs.json` — Context Pack cache keys.
-- `.workflow/context-packs/` — compact task-specific context for implementation agents.
-- `.workflow/task-runs/` — task completion conclusions and gate/context metadata. This is local instance-project audit evidence and is ignored by default; commit selected records manually when needed.
-- `.workflow/task-runs/history/` — immutable task completion history. This is local instance-project audit evidence and is ignored by default; commit selected records manually when needed.
-- `.workflow/dashboard/index.html` — static project execution view.
+- `.aw/.workflow/cache/`, `.aw/.workflow/context-packs/`, `.aw/.workflow/task-runs/`, and `.aw/.workflow/dashboard/index.html` — local runtime and audit data, ignored in instance projects and created on demand.
+- `.aw/.workflow/cache/context-packs.json` — Context Pack cache keys.
+- `.aw/.workflow/context-packs/` — compact task-specific context for implementation agents.
+- `.aw/.workflow/task-runs/` — task completion conclusions and gate/context metadata. This is local instance-project audit evidence and is ignored by default; commit selected records manually when needed.
+- `.aw/.workflow/task-runs/history/` — immutable task completion history. This is local instance-project audit evidence and is ignored by default; commit selected records manually when needed.
+- `.aw/.workflow/dashboard/index.html` — static project execution view.
 
 ## Generated-state retention
 
@@ -72,7 +73,7 @@ The gate validates the complete upstream chain through the requested stage, incl
 
 ## Workflow core protection
 
-During product development, the workflow core is read-only. `AGENTS.md`, the root workflow documentation, `.workflow/workflow.py`, workflow scripts/tests, `.agents/skills/`, and `templates/` are protected definitions; `baseline/`, `iteration/`, and `workspace/` remain project-owned inputs and outputs. `index`, `validate`, `init-version`, `refresh`, `context`, `task-finished`, and other operational commands stop when a protected file has uncommitted changes. Run `python .workflow/workflow.py verify-workflow` to inspect the guard. Workflow maintainers may edit the protected files in a dedicated maintenance change, run the workflow tests, and commit the change before resuming product workflow commands.
+During product development, the workflow core is read-only. `AGENTS.md`, the root workflow documentation, `.workflow/workflow.py`, workflow scripts/tests, `.agents/skills/`, and source `templates/` are protected definitions; `baseline/`, `iteration/`, `workspace/`, and instance root `templates/` remain project-owned inputs and outputs. `index`, `validate`, `init-version`, `refresh`, `context`, `task-finished`, and other operational commands stop when a protected file has uncommitted changes. Run `python .workflow/workflow.py verify-workflow` to inspect the guard. Workflow maintainers may edit the protected files in a dedicated maintenance change, run the workflow tests, and commit the change before resuming product workflow commands.
 
 ## Synchronizing this workflow to another project
 
@@ -85,16 +86,17 @@ python .workflow/workflow.py sync --directory "E:\path\to\target-project"
 
 Use `--dry-run` to preview either operation and `--allow-dirty` only after reviewing intentional target overlap. The `.ps1` files below remain Windows compatibility wrappers only.
 
-The Python CLI is the single implementation for instance initialization and synchronization. To create a new instance with an instance name and directory, run:
+The Python CLI is the single implementation for instance initialization and synchronization. The instance name is optional; when omitted, the final directory name is used:
 
 ```text
 python .workflow/workflow.py init-instance --name "Product A" --directory "E:\path\to\product-a"
+python .workflow/workflow.py init-instance --directory "E:\path\to\product-a"
 ```
 
-Use `--dry-run` to preview the initialization. The command creates the instance Git repository, instance `README.md`, `baseline/`, `iteration/`, `workspace/`, and `.aw/workflow.lock`, then synchronizes the workflow definition.
+Use `--dry-run` to preview the initialization. The command creates the instance Git repository, instance `README.md`, `AGENTS.md`, root `templates/`, `baseline/`, `iteration/`, `workspace/`, and ignored `.aw/workflow-version.yaml`, then synchronizes the workflow definition. Pass `--workflow-version '<tag|branch|commit>'` to initialize from a specific workflow ref.
 
 Run `.\.workflow\scripts\sync-workflow.ps1 -TargetRoot '<target-project-root>'` from this repository to copy the workflow definition to a target Git working tree. The script copies only the items governed by `workflow-file-inventory.md`: shared rules, CLI, templates, scaffold READMEs, and Skills. It does not copy `baseline/` deliverables, `iteration/` deliverables, `workspace/` business code, or generated workflow state.
 
-The script permits unrelated target changes, but rejects uncommitted changes that overlap a synchronized workflow path. After reviewing an intentional overlap, use `-AllowDirtyTarget`; use PowerShell's `-WhatIf` to preview the copy. The target `.gitignore` receives an idempotent managed block for `.workflow/`, `.agents/`, `templates/`, synchronized scaffold files, and `.aw/runtime/`; `workspace/workflow/` remains visible to Git. Invoke the framework CLI with `--project-root '<target-project-root>'` to write state to the target instance.
+The script permits unrelated target changes, but rejects uncommitted changes that overlap a synchronized workflow path. Existing instance templates are preserved; use the Python CLI with `--workflow-version '<tag|branch|commit>'` when changing the source ref. After reviewing an intentional overlap, use `-AllowDirtyTarget`; use PowerShell's `-WhatIf` to preview the copy. The target `.gitignore` receives an idempotent managed block for `.aw/`; `workspace/workflow/` and `templates/` remain visible to Git. Invoke the framework CLI with `--project-root '<target-project-root>'` to write state to the target instance, or run `.aw/.workflow/workflow.py` locally after synchronization.
 
 Every completed TASK must use `context` first, then `task-finished`. The latter validates that the task exists in the current task plan, requires the Context Pack, writes the latest conclusion plus an immutable history record, refreshes the recovery checkpoint, and prints a concise result. `index`, `validate`, `context`, and `task-finished` all refresh the checkpoint. It is a cache only: artifact frontmatter and gate results remain authoritative. Use `--refresh-index` or `--refresh-dashboard` when those generated views must also be refreshed.

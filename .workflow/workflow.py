@@ -15,15 +15,27 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tarfile
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
 
-FRAMEWORK_ROOT = Path(__file__).resolve().parents[1]
+_WORKFLOW_SOURCE_FILE = Path(__file__).resolve()
+if (
+    _WORKFLOW_SOURCE_FILE.parent.name == ".workflow"
+    and _WORKFLOW_SOURCE_FILE.parent.parent.name == ".aw"
+):
+    # The synchronized instance layout is `.aw/.workflow/workflow.py`.
+    FRAMEWORK_ROOT = _WORKFLOW_SOURCE_FILE.parents[2]
+    FRAMEWORK_WORKFLOW_DIR = FRAMEWORK_ROOT / ".aw" / ".workflow"
+else:
+    # The framework repository keeps its source layout at the repository root.
+    FRAMEWORK_ROOT = _WORKFLOW_SOURCE_FILE.parents[1]
+    FRAMEWORK_WORKFLOW_DIR = FRAMEWORK_ROOT / ".workflow"
 ROOT = FRAMEWORK_ROOT
-WORKFLOW_DIR = ROOT / ".workflow"
+WORKFLOW_DIR = FRAMEWORK_WORKFLOW_DIR
 BASELINE_STAGE = "00-baseline"
 STAGES = [
     "01-product",
@@ -50,52 +62,39 @@ BASELINE_FILES = [
     "baseline/05-core-user-flow-prototype.html",
 ]
 WORKFLOW_SYNC_ITEMS = (
-    "AGENTS.md",
-    ".workflow/README.md",
-    ".workflow/workflow.py",
-    ".workflow/workflow-file-inventory.md",
-    ".workflow/dashboard/template.html",
-    ".workflow/tests/test_workflow.py",
-    ".workflow/scripts/stage_status.py",
-    ".workflow/scripts/id_registry.py",
-    ".workflow/scripts/query_id.py",
-    ".workflow/scripts/check_links.py",
-    ".workflow/scripts/diff_versions.py",
-    ".workflow/scripts/sync-workflow.ps1",
-    ".workflow/scripts/init-instance.ps1",
-    "templates",
-    "baseline/README.md",
-    "baseline/raw-requirement/README.md",
-    "iteration/README.md",
-    "iteration/raw-requirement/README.md",
-    ".agents/skills/stage-gate",
-    ".agents/skills/normalize-requirement",
-    ".agents/skills/manage-iteration",
-    ".agents/skills/prototype-design-system",
-    ".agents/skills/design-specification",
-    ".agents/skills/planning-validation",
-    ".agents/skills/iterate-implementation",
-    ".agents/skills/review-release",
-    ".agents/skills/workflow-governance",
+    ("AGENTS.md", ".aw/AGENTS.md"),
+    ("README.md", ".aw/README.md"),
+    (".workflow/README.md", ".aw/.workflow/README.md"),
+    (".workflow/workflow.py", ".aw/.workflow/workflow.py"),
+    (".workflow/workflow-file-inventory.md", ".aw/.workflow/workflow-file-inventory.md"),
+    (".workflow/dashboard/template.html", ".aw/.workflow/dashboard/template.html"),
+    (".workflow/scripts/stage_status.py", ".aw/.workflow/scripts/stage_status.py"),
+    (".workflow/scripts/id_registry.py", ".aw/.workflow/scripts/id_registry.py"),
+    (".workflow/scripts/query_id.py", ".aw/.workflow/scripts/query_id.py"),
+    (".workflow/scripts/check_links.py", ".aw/.workflow/scripts/check_links.py"),
+    (".workflow/scripts/diff_versions.py", ".aw/.workflow/scripts/diff_versions.py"),
+    ("templates", "templates"),
+    (".agents/skills/stage-gate", ".aw/.agents/skills/stage-gate"),
+    (".agents/skills/normalize-requirement", ".aw/.agents/skills/normalize-requirement"),
+    (".agents/skills/manage-iteration", ".aw/.agents/skills/manage-iteration"),
+    (".agents/skills/prototype-design-system", ".aw/.agents/skills/prototype-design-system"),
+    (".agents/skills/design-specification", ".aw/.agents/skills/design-specification"),
+    (".agents/skills/planning-validation", ".aw/.agents/skills/planning-validation"),
+    (".agents/skills/iterate-implementation", ".aw/.agents/skills/iterate-implementation"),
+    (".agents/skills/review-release", ".aw/.agents/skills/review-release"),
+    (".agents/skills/workflow-governance", ".aw/.agents/skills/workflow-governance"),
 )
 WORKFLOW_IGNORE_START = "# BEGIN ALCHEMYWORKS WORKFLOW (managed)"
 WORKFLOW_IGNORE_END = "# END ALCHEMYWORKS WORKFLOW (managed)"
 WORKFLOW_IGNORE_LINES = (
     WORKFLOW_IGNORE_START,
-    ".workflow/",
-    ".agents/",
-    "templates/",
-    "AGENTS.md",
-    "baseline/README.md",
-    "iteration/README.md",
-    "iteration/raw-requirement/README.md",
-    ".aw/runtime/",
+    ".aw/",
     WORKFLOW_IGNORE_END,
 )
 # These are workflow definitions and governance controls, not product
 # artifacts. Product-stage CLI commands refuse to run while any of them has
 # uncommitted changes, so a product task cannot silently alter its own gates.
-WORKFLOW_PROTECTED_PATHS = (
+SOURCE_WORKFLOW_PROTECTED_PATHS = (
     "AGENTS.md",
     "README.md",
     ".gitignore",
@@ -107,6 +106,12 @@ WORKFLOW_PROTECTED_PATHS = (
     ".workflow/tests/",
     ".agents/skills/",
     "templates/",
+)
+INSTANCE_WORKFLOW_PROTECTED_PATHS = (
+    ".aw/AGENTS.md",
+    ".aw/README.md",
+    ".aw/.workflow/",
+    ".aw/.agents/skills/",
 )
 ID_RE = re.compile(r"\b(?:FR|BR|NFR|FS|API|TBL|TASK|AC|ISSUE)(?:-[A-Z0-9]+)+\b")
 TASK_ID_RE = re.compile(r"^TASK(?:-[A-Z0-9]+)+$")
@@ -120,11 +125,19 @@ def _is_workflow_protected_path(path: str) -> bool:
     normalized = path.replace("\\", "/")
     if normalized.startswith("./"):
         normalized = normalized[2:]
+    protected_paths = workflow_protected_paths()
     return any(
         normalized == protected.rstrip("/")
         or normalized.startswith(protected)
-        for protected in WORKFLOW_PROTECTED_PATHS
+        for protected in protected_paths
     )
+
+
+def workflow_protected_paths() -> tuple[str, ...]:
+    """Return protected paths for the active source or synchronized layout."""
+    if (FRAMEWORK_ROOT / ".aw" / ".workflow").exists():
+        return INSTANCE_WORKFLOW_PROTECTED_PATHS
+    return SOURCE_WORKFLOW_PROTECTED_PATHS
 
 
 def configure_project_root(project_root: str | Path | None = None) -> Path:
@@ -141,8 +154,23 @@ def configure_project_root(project_root: str | Path | None = None) -> Path:
     if not selected.is_dir():
         raise ValueError(f"project root does not exist or is not a directory: {selected}")
     ROOT = selected
-    WORKFLOW_DIR = ROOT / ".workflow"
+    WORKFLOW_DIR = framework_workflow_dir(ROOT)
     return ROOT
+
+
+def framework_workflow_dir(root: Path) -> Path:
+    """Return the workflow source/runtime directory for a project root."""
+    synchronized = root / ".aw" / ".workflow"
+    if root != FRAMEWORK_ROOT or synchronized.exists():
+        return synchronized
+    return root / ".workflow"
+
+
+def framework_skills_dir() -> Path:
+    """Return the Skills directory for either source or synchronized layout."""
+    if (FRAMEWORK_ROOT / ".aw" / ".agents" / "skills").exists():
+        return FRAMEWORK_ROOT / ".aw" / ".agents" / "skills"
+    return FRAMEWORK_ROOT / ".agents" / "skills"
 
 
 def project_state_dir() -> Path:
@@ -188,17 +216,39 @@ def workflow_protection_errors() -> list[str]:
     ]
 
 
-def _workflow_source_commit() -> str:
+def _workflow_ref_commit(workflow_version: str | None = None) -> str:
+    ref = workflow_version or "HEAD"
     result = subprocess.run(
-        ["git", "-C", str(FRAMEWORK_ROOT), "rev-parse", "HEAD"],
+        ["git", "-C", str(FRAMEWORK_ROOT), "rev-parse", f"{ref}^{{commit}}"],
         capture_output=True,
         text=True,
         check=False,
     )
     commit = result.stdout.strip()
     if result.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40}", commit):
-        raise ValueError(f"could not resolve workflow source commit: {FRAMEWORK_ROOT}")
+        raise ValueError(f"could not resolve workflow version: {ref}")
     return commit
+
+
+@contextlib.contextmanager
+def _workflow_source_snapshot(workflow_version: str | None = None):
+    """Yield the source root and commit for the requested framework ref."""
+    if not workflow_version:
+        yield FRAMEWORK_ROOT, _workflow_ref_commit()
+        return
+    commit = _workflow_ref_commit(workflow_version)
+    with tempfile.TemporaryDirectory(prefix="alchemyworks-workflow-") as temp:
+        result = subprocess.run(
+            ["git", "-C", str(FRAMEWORK_ROOT), "archive", "--format=tar", workflow_version],
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            message = result.stderr.decode(errors="replace").strip()
+            raise ValueError(f"could not export workflow version {workflow_version}: {message}")
+        with tarfile.open(fileobj=io.BytesIO(result.stdout), mode="r:") as archive:
+            archive.extractall(temp)
+        yield Path(temp), commit
 
 
 def _git_status_paths(root: Path) -> list[str]:
@@ -224,17 +274,48 @@ def _git_status_paths(root: Path) -> list[str]:
 def _ensure_workflow_ignore_block(target: Path, *, dry_run: bool = False) -> None:
     path = target / ".gitignore"
     existing = path.read_text(encoding="utf-8") if path.exists() else ""
-    if WORKFLOW_IGNORE_START in existing:
-        return
     suffix = "\n".join(WORKFLOW_IGNORE_LINES) + "\n"
-    content = suffix if not existing else existing.rstrip("\r\n") + "\n" + suffix
+    if WORKFLOW_IGNORE_START in existing:
+        start = existing.index(WORKFLOW_IGNORE_START)
+        end_marker = existing.find(WORKFLOW_IGNORE_END, start)
+        if end_marker >= 0:
+            end = end_marker + len(WORKFLOW_IGNORE_END)
+            prefix = existing[:start].rstrip("\r\n")
+            content = (prefix + "\n" if prefix else "") + suffix + existing[end:].lstrip("\r\n")
+        else:
+            content = existing[:start].rstrip("\r\n") + "\n" + suffix
+    else:
+        content = suffix if not existing else existing.rstrip("\r\n") + "\n" + suffix
+    if content == existing:
+        return
     if dry_run:
         print(f"would update: {path}")
     else:
         path.write_text(content, encoding="utf-8")
 
 
-def sync_workflow(target_root: str | Path, *, allow_dirty: bool = False, dry_run: bool = False) -> int:
+def _write_workflow_version(target: Path, *, source_ref: str, source_commit: str, dry_run: bool = False) -> None:
+    path = target / ".aw" / "workflow-version.yaml"
+    content = (
+        "schema_version: 1\n"
+        "framework: AlchemyWorks\n"
+        f"source_ref: {source_ref}\n"
+        f"source_commit: {source_commit}\n"
+    )
+    if dry_run:
+        print(f"would update: {path}")
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
+def sync_workflow(
+    target_root: str | Path,
+    *,
+    allow_dirty: bool = False,
+    dry_run: bool = False,
+    workflow_version: str | None = None,
+) -> int:
     """Synchronize workflow definitions into an existing instance Git tree."""
     target = Path(target_root).expanduser().resolve()
     source = FRAMEWORK_ROOT.resolve()
@@ -249,8 +330,10 @@ def sync_workflow(target_root: str | Path, *, allow_dirty: bool = False, dry_run
         changed = _git_status_paths(target)
         overlaps = []
         for changed_path in changed:
-            for item in WORKFLOW_SYNC_ITEMS:
-                normalized = item.rstrip("/")
+            for _, target_relative in WORKFLOW_SYNC_ITEMS:
+                if target_relative == "templates":
+                    continue
+                normalized = target_relative.rstrip("/")
                 if changed_path == normalized or changed_path.startswith(normalized + "/"):
                     overlaps.append(changed_path)
                     break
@@ -262,36 +345,60 @@ def sync_workflow(target_root: str | Path, *, allow_dirty: bool = False, dry_run
             )
 
     _ensure_workflow_ignore_block(target, dry_run=dry_run)
-    for relative in WORKFLOW_SYNC_ITEMS:
-        source_item = source / relative
-        target_item = target / relative
-        if not source_item.exists():
-            raise ValueError(f"workflow source item is missing: {source_item}")
-        if dry_run:
-            print(f"would copy: {relative}")
-            continue
-        if source_item.is_dir():
-            shutil.copytree(source_item, target_item, dirs_exist_ok=True)
-        else:
-            target_item.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source_item, target_item)
+    with _workflow_source_snapshot(workflow_version) as snapshot:
+        source, source_commit = snapshot
+        for source_relative, target_relative in WORKFLOW_SYNC_ITEMS:
+            source_item = source / source_relative
+            target_item = target / target_relative
+            if not source_item.exists():
+                raise ValueError(f"workflow source item is missing: {source_item}")
+            if dry_run:
+                print(f"would copy: {source_relative} -> {target_relative}")
+                continue
+            if source_item.is_dir() and target_relative == "templates":
+                for child in source_item.rglob("*"):
+                    relative = child.relative_to(source_item)
+                    destination = target_item / relative
+                    if child.is_dir():
+                        destination.mkdir(parents=True, exist_ok=True)
+                    elif not destination.exists():
+                        destination.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(child, destination)
+            elif source_item.is_dir():
+                shutil.copytree(source_item, target_item, dirs_exist_ok=True)
+            else:
+                target_item.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source_item, target_item)
+        _write_workflow_version(
+            target,
+            source_ref=workflow_version or "HEAD",
+            source_commit=source_commit,
+            dry_run=dry_run,
+        )
     print(f"workflow synchronized: {source} -> {target}")
     return 0
 
 
-def init_instance(instance_name: str, directory: str | Path, *, dry_run: bool = False) -> int:
+def init_instance(
+    instance_name: str | None,
+    directory: str | Path,
+    *,
+    dry_run: bool = False,
+    workflow_version: str | None = None,
+) -> int:
     """Create a named instance and pin it to the current workflow commit."""
-    if not instance_name.strip() or "\n" in instance_name or "\r" in instance_name:
-        raise ValueError("instance name must be non-empty and single-line")
     target = Path(directory).expanduser().resolve()
+    resolved_name = instance_name if instance_name is not None else target.name
+    if not resolved_name.strip() or "\n" in resolved_name or "\r" in resolved_name:
+        raise ValueError("instance name must be non-empty and single-line")
     if target.exists() and any(target.iterdir()):
         raise ValueError(f"target directory must be missing or empty: {target}")
-    commit = _workflow_source_commit()
+    commit = _workflow_ref_commit(workflow_version)
     if dry_run:
-        print(f"would initialize instance: {instance_name}")
+        print(f"would initialize instance: {resolved_name}")
         print(f"would create target: {target}")
         print(f"would pin workflow commit: {commit}")
-        print("would create: baseline/, iteration/, workspace/, README.md, .aw/workflow.lock")
+        print("would create: baseline/, iteration/, workspace/, README.md, AGENTS.md, templates/")
         print("would synchronize workflow definitions")
         return 0
 
@@ -301,25 +408,15 @@ def init_instance(instance_name: str, directory: str | Path, *, dry_run: bool = 
         raise ValueError(f"could not initialize Git repository: {target}")
     for relative in ("baseline/raw-requirement", "iteration/raw-requirement", "workspace"):
         (target / relative).mkdir(parents=True, exist_ok=True)
-    (target / "README.md").write_text(f"# {instance_name}\n", encoding="utf-8")
-    lock = target / ".aw" / "workflow.lock"
-    lock.parent.mkdir(parents=True, exist_ok=True)
-    lock.write_text(
-        "\n".join(
-            (
-                "schema_version: 1",
-                "framework: AlchemyWorks",
-                f"instance_name: {instance_name}",
-                f"source_commit: {commit}",
-            )
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    sync_workflow(target)
-    print(f"instance initialized: {instance_name}")
+    (target / "README.md").write_text(f"# {resolved_name}\n", encoding="utf-8")
+    write_project_scaffold_readmes(target)
+    sync_workflow(target, workflow_version=workflow_version)
+    # The root rule file is intentionally project-editable, but starts as an
+    # exact copy of the synchronized workflow rule file.
+    shutil.copy2(target / ".aw" / "AGENTS.md", target / "AGENTS.md")
+    print(f"instance initialized: {resolved_name}")
     print(f"target: {target}")
-    print(f"workflow lock: {lock}")
+    print(f"workflow version: {target / '.aw' / 'workflow-version.yaml'}")
     return 0
 
 
@@ -547,15 +644,8 @@ def next_iteration() -> str:
     return f"v{major}.{minor + 1}"
 
 
-def init_project() -> int:
-    """Create the non-versioned project directories required for intake."""
-    created = []
-    for relative in ("baseline/raw-requirement", "iteration/raw-requirement", "workspace"):
-        path = ROOT / relative
-        if not path.exists():
-            path.mkdir(parents=True)
-            created.append(relative)
-    readmes = {
+def project_scaffold_readmes() -> dict[str, str]:
+    return {
         "baseline/raw-requirement/README.md": (
             "# 原始需求输入\n\n"
             "存放用户提供的原始需求材料，保留原文件格式与原文。baseline 尚未初始化时，"
@@ -577,10 +667,25 @@ def init_project() -> int:
             "重命名或删除。归一化产物必须记录所读取的原始文件路径和目标版本。\n"
         ),
     }
-    for relative, content in readmes.items():
-        path = ROOT / relative
+
+
+def write_project_scaffold_readmes(root: Path) -> None:
+    for relative, content in project_scaffold_readmes().items():
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
         if not path.exists():
             path.write_text(content, encoding="utf-8")
+
+
+def init_project() -> int:
+    """Create the non-versioned project directories required for intake."""
+    created = []
+    for relative in ("baseline/raw-requirement", "iteration/raw-requirement", "workspace"):
+        path = ROOT / relative
+        if not path.exists():
+            path.mkdir(parents=True)
+            created.append(relative)
+    write_project_scaffold_readmes(ROOT)
     print(f"workflow init: created {len(created)} directory(s)")
     for relative in created:
         print(f"  created: {relative}")
@@ -917,7 +1022,9 @@ def check_readme_freshness(errors: list[str]) -> None:
     ``check_workspace_readme_freshness`` against ``workspace/README.md``.
     Triggered only on the final 05-review-release stage. Does not modify files.
     """
-    readme = FRAMEWORK_ROOT / "README.md"
+    readme = FRAMEWORK_ROOT / ".aw" / "README.md"
+    if not readme.exists():
+        readme = FRAMEWORK_ROOT / "README.md"
     if not readme.exists():
         errors.append("README.md missing; required for RC sign-off")
         # Continue checking skills / scripts against an empty string so
@@ -926,7 +1033,7 @@ def check_readme_freshness(errors: list[str]) -> None:
     else:
         text = readme.read_text(encoding="utf-8")
     # README must mention all current skills.
-    skills_dir = FRAMEWORK_ROOT / ".agents" / "skills"
+    skills_dir = framework_skills_dir()
     if skills_dir.exists():
         current_skills = {p.name for p in skills_dir.iterdir() if p.is_dir()}
         missing = sorted(s for s in current_skills if s not in text)
@@ -936,7 +1043,7 @@ def check_readme_freshness(errors: list[str]) -> None:
                 f"{', '.join(missing)}"
             )
     # README must mention all current scripts.
-    scripts_dir = FRAMEWORK_ROOT / ".workflow" / "scripts"
+    scripts_dir = framework_workflow_dir(FRAMEWORK_ROOT) / "scripts"
     if scripts_dir.exists():
         current_scripts = {p.stem for p in scripts_dir.glob("*.py")}
         missing = sorted(s for s in current_scripts if s not in text)
@@ -1798,7 +1905,7 @@ def dashboard_data(iteration: str) -> dict:
 
 
 def dashboard(iteration: str) -> int:
-    template_path = FRAMEWORK_ROOT / ".workflow" / "dashboard" / "template.html"
+    template_path = framework_workflow_dir(FRAMEWORK_ROOT) / "dashboard" / "template.html"
     if not template_path.exists():
         raise ValueError(f"dashboard template not found: {template_path.relative_to(ROOT)}")
     data = dashboard_data(iteration)
@@ -1947,12 +2054,14 @@ def main(argv: list[str] | None = None) -> int:
     route = subparsers.add_parser("route-requirement", help="Resolve the archive location for a newly received raw requirement.")
     route.add_argument("--iteration", help="Override the version recorded in manifest.yaml.")
     subparsers.add_parser("init", help="Create the non-versioned project directory skeleton.")
-    init_instance_parser = subparsers.add_parser("init-instance", help="Create a named instance project and pin its workflow source commit.")
-    init_instance_parser.add_argument("--name", required=True)
+    init_instance_parser = subparsers.add_parser("init-instance", help="Create an instance project and pin its workflow source commit.")
+    init_instance_parser.add_argument("--name", help="Instance name; defaults to the target directory name.")
     init_instance_parser.add_argument("--directory", required=True)
+    init_instance_parser.add_argument("--workflow-version", help="Git ref (tag, branch, or commit) for the workflow source.")
     init_instance_parser.add_argument("--dry-run", action="store_true")
     sync_parser = subparsers.add_parser("sync", help="Synchronize workflow definitions into an existing instance Git tree.")
     sync_parser.add_argument("--directory", required=True)
+    sync_parser.add_argument("--workflow-version", help="Git ref (tag, branch, or commit) for the workflow source.")
     sync_parser.add_argument("--allow-dirty", action="store_true")
     sync_parser.add_argument("--dry-run", action="store_true")
     version = subparsers.add_parser("init-version", help="Create the next iteration skeleton after the baseline gate passes.")
@@ -1975,9 +2084,19 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "verify-workflow":
             return verify_workflow()
         if args.command == "init-instance":
-            return init_instance(args.name, args.directory, dry_run=args.dry_run)
+            return init_instance(
+                args.name,
+                args.directory,
+                dry_run=args.dry_run,
+                workflow_version=args.workflow_version,
+            )
         if args.command == "sync":
-            return sync_workflow(args.directory, allow_dirty=args.allow_dirty, dry_run=args.dry_run)
+            return sync_workflow(
+                args.directory,
+                allow_dirty=args.allow_dirty,
+                dry_run=args.dry_run,
+                workflow_version=args.workflow_version,
+            )
         protection_errors = workflow_protection_errors()
         if protection_errors:
             for error in protection_errors:

@@ -4,6 +4,8 @@ param(
     [ValidateNotNullOrEmpty()]
     [string]$TargetRoot,
 
+    [string]$WorkflowVersion,
+
     [switch]$AllowDirtyTarget,
 
     [switch]$WhatIf
@@ -18,6 +20,9 @@ if ($AllowDirtyTarget) {
 }
 if ($WhatIf) {
     $arguments += '--dry-run'
+}
+if ($WorkflowVersion) {
+    $arguments += @('--workflow-version', $WorkflowVersion)
 }
 
 & python @arguments

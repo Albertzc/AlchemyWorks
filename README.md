@@ -8,16 +8,14 @@
 ## 1. 项目结构与所有权
 
 ```
-├── baseline/                        # 实例项目：项目级常量（章程、愿景、术语、技术选型、ADR）
+├── baseline/                        # 实例初始化时创建：项目级常量和原始需求
 │   ├── 01-product-vision.md
 │   ├── 02-product-charter.md
 │   ├── 03-tech-stack-decision.md
 │   ├── 04-glossary.md
 │   ├── decisions/                   # 重大架构决策记录
 │   └── raw-requirement/             # baseline 为空时归档用户原始需求
-│       └── README.md                 # 原始需求输入说明
-├── iteration/                       # 实例项目：版本化产物（每个迭代一个目录）
-│   ├── README.md                     # 版本目录使用说明
+├── iteration/                       # 实例初始化时创建：版本化产物
 │   ├── raw-requirement/              # 用户原始需求集中库（只读）
 │   └── v{major}.{minor}/            # 双段号；
 │       ├── 01-product/
@@ -25,22 +23,25 @@
 │       ├── 03-planning/
 │       ├── 04-implementation/
 │       └── 05-review-release/
-├── templates/                       # 工作流源定义：跨版本复用的文档与代码模板
-├── workspace/                       # 实例项目：真实代码、配置、测试与实例状态
+├── workspace/                       # 实例项目初始化时创建：真实代码、配置、测试与实例状态
 │   ├── README.md                     # 实例当前系统功能说明（05-review-release 通过后自动生成）
 │   └── workflow/                     # 实例项目状态（Git）
 │       ├── manifest.yaml             # 产物索引
 │       ├── traceability.json         # 稳定 ID 追溯图
 │       └── current-state.json        # 恢复检查点
-├── .agents/skills/                  # 工作流源定义：阶段化 AI Agent Skill
-└── .workflow/                       # 工作流源定义 + 本地运行时；实例项目中整体忽略
-    ├── workflow.py                  # 主 CLI（纯 stdlib）
-    ├── workflow-file-inventory.md   # 工作流必要文件与目录权威清单
-    ├── cache/                       # context-pack 缓存
-    ├── context-packs/               # TASK-scoped 上下文包
-    ├── task-runs/                   # TASK 结论与审计记录（默认忽略，可人工提交）
-    ├── dashboard/                   # 静态 HTML 仪表盘
-    └── scripts/                     # 工作流辅助脚本、初始化与同步包装器
+├── templates/                       # 初始化时复制的默认模板，实例可维护
+└── .aw/                             # 实例项目中的工作流执行目录（整体忽略）
+    ├── README.md                    # AlchemyWorks 工作流总览
+    ├── AGENTS.md                    # 完整工作流协作规则
+    ├── .agents/skills/              # 阶段化 AI Agent Skill
+    └── .workflow/                  # CLI、脚本与本地运行时
+        ├── workflow.py              # 主 CLI（纯 stdlib）
+        ├── workflow-file-inventory.md # 工作流必要文件与目录权威清单
+        ├── cache/                   # 按需生成的 context-pack 缓存
+        ├── context-packs/           # 按需生成的 TASK 上下文包
+        ├── task-runs/               # 按需生成的 TASK 记录
+        ├── dashboard/               # 静态 HTML 仪表盘
+        └── scripts/                 # 实例需要的辅助脚本
 ```
 
 ### 1.1 工作流源定义与实例项目边界
@@ -49,15 +50,16 @@
 
 | 内容 | 归属 | 生成/维护方式 | 实例 Git 是否提交 |
 |---|---|---|---|
-| `AGENTS.md`、根 `README.md`、`.gitignore` | 工作流仓库的治理与说明；实例的 `README.md`、`.gitignore` 由实例自己拥有 | 源仓库手工维护；`init-instance` 只生成实例 README，`sync` 不覆盖实例 README 或 `.gitignore` | 源仓库提交；实例只提交自己的 README 和 `.gitignore` |
-| `.workflow/workflow.py`、`.workflow/scripts/`、`.workflow/tests/` | 工作流定义、执行器、包装器和回归测试 | 源仓库维护；`sync` 同步到实例 | 实例默认忽略同步副本 |
-| `.agents/skills/`、`templates/` | 工作流能力和跨版本模板 | 源仓库维护；`sync` 同步到实例 | 实例默认忽略同步副本 |
-| `baseline/README.md`、`iteration/README.md`、`*/raw-requirement/README.md` | 工作流提供的初始化脚手架说明 | `init` / `init-instance` / `sync` 创建或同步；不得把说明误当成业务产物 | 实例默认忽略同步的说明文件 |
-| `baseline/` 中除脚手架说明和 `raw-requirement/README.md` 外的文件 | 实例项目的 baseline 产物和用户原始输入 | `normalize-requirement` 起草，人工审核后进入门禁 | 提交 |
-| `iteration/raw-requirement/` 中除 README 外的文件 | 实例项目的用户原始需求 | 用户提供，`route-requirement` 返回目标版本；Agent 只读 | 提交 |
+| `AGENTS.md`、根 `README.md`、`.gitignore` | 工作流仓库的治理与说明；实例的 `README.md`、`.gitignore` 由实例自己拥有 | 源仓库手工维护；`init-instance` 将完整规则同时写入实例根 `AGENTS.md` 和 `.aw/AGENTS.md` | 源仓库提交；实例根 `AGENTS.md` 可按项目需要调整 |
+| `.aw/.workflow/workflow.py`、`.aw/.workflow/scripts/` | 实例中的工作流定义、执行器和辅助脚本 | 源仓库维护；`sync` 映射到 `.aw/` | 实例默认忽略同步副本 |
+| `.workflow/tests/` | 源仓库工作流回归测试 | 仅源仓库维护；实例初始化不复制 | 不进入实例 |
+| `.aw/.agents/skills/` | 实例中的工作流能力 | 源仓库维护；`sync` 映射到 `.aw/` | 实例默认忽略同步副本 |
+| `templates/` | 实例项目可维护的默认模板 | `init-instance` 首次复制；后续同步不覆盖实例修改 | 提交 |
+| `baseline/` | 实例项目的 baseline 产物和用户原始输入 | `init-instance` 创建；`normalize-requirement` 起草，人工审核后进入门禁 | 提交 |
+| `iteration/raw-requirement/` | 实例项目的用户原始需求 | `init-instance` 创建；用户提供，`route-requirement` 返回目标版本；Agent 只读 | 提交 |
 | `iteration/v{major}.{minor}/`、`iteration/archive/` | 实例项目的版本产物和归档快照 | `init-version` 创建/归档，阶段 Skill 产出文档 | 提交 |
 | `workspace/`（含 `workspace/workflow/`） | 实例项目的代码、配置、测试、功能说明和可再生追溯状态 | 04 阶段写入业务代码；`index`/`state`/`refresh` 生成状态；05 阶段生成 `workspace/README.md` | 提交 |
-| `.aw/workflow.lock` | 实例项目的工作流源版本锁定 | `init-instance` 创建；后续同步由维护者决定是否更新锁定信息 | 提交 |
+| `.aw/workflow-version.yaml` | 实例本地工作流源版本信息 | `init-instance` / `sync` 写入；实例 Git 忽略 | 不提交 |
 
 一句话判断：工作流负责“规则、工具、能力、模板和脚手架说明”；实例项目负责“需求输入、版本产物、业务实现、测试、功能说明和工作流生成的项目状态”。同步副本可以在实例目录中运行，但不属于实例业务提交。
 
@@ -66,8 +68,11 @@
 实例目录应通过统一入口创建，不要手工复制目录或直接创建版本号目录：
 
 ```powershell
-# 新建实例：创建 Git 仓库、实例 README、.aw/workflow.lock、三类业务目录，随后同步工作流副本
+# 新建实例：创建 Git 仓库、实例 README、templates/、三类业务目录，随后同步工作流副本
 python .workflow/workflow.py init-instance --name "Product A" --directory "E:\path\to\product-a"
+
+# 不传名称时，使用目标目录最后一级名称作为实例名称
+python .workflow/workflow.py init-instance --directory "E:\path\to\product-a"
 
 # 只预览，不创建目录
 python .workflow/workflow.py init-instance --name "Product A" --directory "E:\path\to\product-a" --dry-run
@@ -76,7 +81,7 @@ python .workflow/workflow.py init-instance --name "Product A" --directory "E:\pa
 python .workflow/workflow.py sync --directory "E:\path\to\product-a"
 ```
 
-`init-instance` 的生成顺序是：初始化实例 Git → 创建 `baseline/raw-requirement/`、`iteration/raw-requirement/`、`workspace/` → 写入实例 `README.md` 和 `.aw/workflow.lock` → 同步工作流副本并追加受管 `.gitignore` 区块。`init` 只用于当前工作流仓库内创建 intake 目录；`init-version` 只能在 baseline 门禁通过后创建版本骨架。同步后的 `.workflow/`、`.agents/`、`templates/`、根 `AGENTS.md` 和脚手架说明默认被实例 `.gitignore` 忽略，但 `workspace/workflow/` 始终保持可提交。
+`init-instance` 的生成顺序是：初始化实例 Git → 创建 `baseline/`、`iteration/`、`workspace/` 和默认 `templates/` → 将完整工作流规则同时写入实例根 `AGENTS.md` 和 `.aw/AGENTS.md` → 将工作流副本同步到 `.aw/`，写入 `.aw/workflow-version.yaml`，并追加只忽略 `.aw/` 的受管 `.gitignore` 区块。实例根 `AGENTS.md` 和 `templates/` 是初始化开发的顶层可维护内容；`.aw/AGENTS.md` 是同步的工作流副本。`init` 只用于当前工作流仓库内创建 intake 目录；`init-version` 只能在实例 baseline 门禁通过后创建版本骨架。
 
 ---
 
@@ -287,9 +292,9 @@ python .workflow/workflow.py verify-workflow                 # 检查工作流�
 
 所有命令子命令接受 `--iteration`（默认从 `iteration/` 推断最大值；不存在则返回 `v1.0`）。
 
-从工作流框架仓库操作实例项目时，将 `--project-root '<instance-project-root>'` 放在子命令之前。框架代码、模板和 Skills 从框架根目录读取；产品文档和实例状态写入实例项目的 `workspace/workflow/`，本地运行数据写入实例项目的 `.workflow/`。同步到实例项目后，可以省略该参数并继续使用实例项目本地根目录。
+从工作流框架仓库操作实例项目时，将 `--project-root '<instance-project-root>'` 放在子命令之前。框架代码、Skills 和默认模板从框架根目录读取；实例模板位于实例根目录 `templates/`。产品文档和实例状态写入实例项目的 `workspace/workflow/`，本地运行数据写入实例项目的 `.aw/.workflow/`。同步到实例项目后，可以使用 `.aw/.workflow/workflow.py`，省略 `--project-root`。
 
-产品开发期间，工作流核心文件默认为只读。`AGENTS.md`、工作流说明、`.workflow/workflow.py`、`.workflow/scripts/`、`.workflow/tests/`、`.agents/skills/` 和 `templates/` 被修改且未提交时，工作流 CLI 会阻断；通过 `verify-workflow` 检查后，必须在独立的工作流维护变更中完成提交。`baseline/`、`iteration/`、`workspace/` 以及 `workspace/workflow/manifest.yaml`、`workspace/workflow/traceability.json`、`workspace/workflow/current-state.json` 属于实例项目内容，不受核心骨架保护；实例项目中的 `.workflow/` 是同步框架和本地运行目录，默认不纳入 Git。
+产品开发期间，工作流核心文件默认为只读。源仓库中的 `AGENTS.md`、工作流说明、`.workflow/workflow.py`、`.workflow/scripts/`、`.workflow/tests/`、`.agents/skills/` 和源仓库 `templates/`，以及实例中的对应 `.aw/` 执行路径，被修改且未提交时，工作流 CLI 会阻断；实例根 `AGENTS.md` 和 `templates/` 属于项目内容，可由实例维护。通过 `verify-workflow` 检查后，必须在独立的工作流维护变更中完成提交。`baseline/`、`iteration/`、`workspace/` 以及 `workspace/workflow/manifest.yaml`、`workspace/workflow/traceability.json`、`workspace/workflow/current-state.json` 属于实例项目内容，不受核心骨架保护；实例项目中的 `.aw/` 是同步框架和本地运行目录，默认不纳入 Git。
 
 工作流生成的 `generated_at`、`checked_at`、`recorded_at` 和 Context Pack 时间均使用执行 Codex 客户端的本地时区，并保留 ISO 8601 偏移量。
 
@@ -333,9 +338,11 @@ python .workflow/workflow.py sync --directory "E:\path\to\target-project"
 
 ```powershell
 .\.workflow\scripts\init-instance.ps1 -InstanceName 'Product A' -TargetRoot 'E:\path\to\product-a'
+# 省略 -InstanceName 时使用目标目录名称
+.\.workflow\scripts\init-instance.ps1 -TargetRoot 'E:\path\to\product-a'
 ```
 
-初始化命令会创建实例 Git 仓库、实例 `README.md`、`baseline/`、`iteration/`、`workspace/` 和 `.aw/workflow.lock`，然后同步工作流定义。预览使用 PowerShell 的 `-WhatIf`。
+初始化命令会创建实例 Git 仓库、实例 `README.md`、`AGENTS.md`、`templates/`、`baseline/`、`iteration/` 和 `workspace/`，然后同步工作流定义。可使用 `--workflow-version <tag|branch|commit>` 指定工作流版本；预览使用 PowerShell 的 `-WhatIf`。
 
 已有实例项目则使用以下命令同步工作流源定义：
 
@@ -343,7 +350,7 @@ python .workflow/workflow.py sync --directory "E:\path\to\target-project"
 .\workflow\scripts\sync-workflow.ps1 -TargetRoot 'E:\path\to\target-project'
 ```
 
-该脚本仅同步 `workflow-file-inventory.md` 规定的共享规则、CLI、Skills、模板和脚手架说明；不会覆盖实例项目的 `README.md`、`.gitignore`，也不会复制项目的 `baseline/`、`iteration/`、`workspace/` 内容或 `.workflow/` 的可再生运行状态。同步后会在实例 `.gitignore` 中幂等追加工作流副本的忽略区块，`workspace/workflow/` 状态仍可提交。目标项目可以有不相关的修改；只有同步路径发生重叠时默认拒绝执行，确认需要覆盖时才使用 `-AllowDirtyTarget`，预览可使用 `-WhatIf`。
+该脚本仅同步 `workflow-file-inventory.md` 规定的共享规则、CLI 和 Skills 到实例 `.aw/`，并向根目录 `templates/` 补充缺失的默认模板；不会覆盖实例项目的 `README.md`、根 `AGENTS.md`、`templates/` 或 `.gitignore`，也不会复制项目的 `baseline/`、`iteration/`、`workspace/` 内容或运行状态。同步后会在实例 `.gitignore` 中幂等维护仅包含 `.aw/` 的工作流忽略区块，`workspace/workflow/` 和 `templates/` 状态仍可提交。目标项目可以有不相关的修改；只有同步路径发生重叠时默认拒绝执行，确认需要覆盖时才使用 `-AllowDirtyTarget`，预览可使用 `-WhatIf`。
 
 ## 8. 稳定 ID 与追溯
 
