@@ -12,7 +12,7 @@
 ## 1.1 核心骨架保护
 
 - 上表登记的工作流定义、Skill、模板、治理规则、脚本和测试，在产品开发期间视为只读核心骨架。
-- `baseline/`、`iteration/` 和 `workspace/` 下的项目产物不属于核心骨架；`workspace/workflow/` 下的 manifest、traceability、current-state 属于实例项目的可再生项目状态，应由实例项目 Git 管理；`.workflow/` 是同步到实例项目的框架与本地运行目录，默认整体忽略。
+- `baseline/`、`iteration/` 和 `workspace/` 下的项目产物不属于核心骨架；`workspace/workflow/` 下的 manifest、traceability、current-state 属于实例项目的可再生项目状态，应由实例项目 Git 管理；`.workflow/`、`.agents/`、`templates/` 以及同步的根 `AGENTS.md` 是实例本地工作流副本，默认整体忽略。
 - `python .workflow/workflow.py verify-workflow` 检查核心骨架是否有未提交修改；产品工作流 CLI 在发现修改时阻断。
 - 核心骨架只能通过独立的 workflow-maintenance 变更修改；该变更必须同步更新本清单、说明、测试和同步脚本，并在提交后恢复产品工作流。
 
@@ -22,14 +22,14 @@
 |---|---|---|
 | `AGENTS.md` | 治理规则 | 定义协作、审批、版本、变更与安全约束。 |
 | `README.md` | 工作流总览 | 定义目录结构、阶段流程、命令和端到端使用方式。 |
-| `.gitignore` | 版本控制规则 | 在实例项目中排除同步后的 `.workflow/` 框架与本地运行目录；不排除 `workspace/workflow/` 下的实例状态。 |
+| `.gitignore` | 版本控制规则 | 实例项目自有 Git 配置；同步脚本只幂等追加工作流忽略区块，不覆盖实例已有规则，也不排除 `workspace/workflow/` 下的实例状态。 |
 
 ## 3. 必要的工作流执行与校验目录
 
 | 路径 | 必需内容 | 用途 |
 |---|---|---|
 | `.workflow/` | `workflow.py`、`README.md` | 工作流 CLI（含 baseline 核心流程原型与迭代按需原型门禁、文档变更后的 `refresh` 同步命令、05-review-release 通过后的 `workspace/README.md` 自动生成功能说明、版本归档校验、已归档版本 Context Pack 缓存清理）及其操作说明。 |
-| `.workflow/scripts/` | `stage_status.py`、`id_registry.py`、`query_id.py`、`check_links.py`、`diff_versions.py`、`sync-workflow.ps1` | 供 Agent 和维护者调用的状态、ID、链接与版本比较工具，以及向指定项目同步工作流源定义的受保护脚本。 |
+| `.workflow/scripts/` | `stage_status.py`、`id_registry.py`、`query_id.py`、`check_links.py`、`diff_versions.py`、`sync-workflow.ps1`、`init-instance.ps1` | 供 Agent 和维护者调用的状态、ID、链接与版本比较工具，以及实例初始化、工作流同步的受保护脚本。 |
 | `.workflow/dashboard/` | `template.html` | 工作流仪表盘的源模板。 |
 | `.workflow/tests/` | `test_workflow.py` | 工作流 CLI 的回归测试。 |
 
@@ -76,7 +76,7 @@
 | `iteration/v{major}.{minor}/`、`iteration/archive/` | 版本化交付物 | 属于具体项目和版本，遵循阶段审批与归档规则。 |
 | `workspace/` 下的内容 | 业务实现与实例文档 | 属于被工作流驱动的产品代码、测试、配置和项目自行维护的功能说明。 |
 | `workspace/workflow/manifest.yaml`、`traceability.json`、`current-state.json` | 实例项目状态与审计索引 | 不属于工作流源定义；由选定的实例项目根目录生成，属于实例项目版本控制内容，不受 `.gitignore` 管理。 |
-| `.workflow/` | 同步后的框架文件与本地可再生运行状态 | 不属于实例项目业务提交；由工作流框架同步，默认整体受 `.gitignore` 管理。必要时可在框架仓库或人工指定范围内维护。 |
+| `.workflow/`、`.agents/`、`templates/`、`AGENTS.md` | 同步后的框架文件与本地可再生运行状态 | 可以存在于实例目录供本地运行，但不属于实例项目业务提交；同步脚本默认将其加入实例 `.gitignore`。 |
 
 ## 8. 一致性检查
 
@@ -84,5 +84,5 @@
 
 1. 变更涉及的必要路径已在本清单中正确登记。
 2. 本清单未将项目输入、版本产物、业务代码或可再生状态误列为工作流必要项。
-3. `.gitignore` 排除实例项目中的 `.workflow/` 框架与本地运行目录；`workspace/workflow/manifest.yaml`、`traceability.json`、`current-state.json` 保持可提交。
+3. 同步脚本追加的忽略区块排除工作流副本与本地运行目录；`workspace/workflow/manifest.yaml`、`traceability.json`、`current-state.json` 保持可提交。
 4. 工作流测试通过：`python .workflow/tests/test_workflow.py`。

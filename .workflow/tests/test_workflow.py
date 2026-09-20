@@ -431,6 +431,143 @@ class WorkflowTests(unittest.TestCase):
         finally:
             temp.cleanup()
 
+    def test_sync_preserves_instance_files_and_ignores_workflow_files(self):
+        """Sync must leave instance-owned files intact and hide workflow copies from Git."""
+        with tempfile.TemporaryDirectory() as raw:
+            target = Path(raw) / "instance"
+            target.mkdir()
+            (target / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
+            (target / "README.md").write_text("# Product A\n", encoding="utf-8")
+            subprocess.run(["git", "init", "--quiet", str(target)], check=True)
+            subprocess.run(["git", "-C", str(target), "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", str(target), "-c", "user.email=test@example.com", "-c", "user.name=Test", "commit", "--quiet", "-m", "initial"],
+                check=True,
+            )
+
+            script = Path(__file__).resolve().parents[1] / "scripts" / "sync-workflow.ps1"
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script), "-TargetRoot", str(target)],
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr or result.stdout)
+            self.assertEqual((target / "README.md").read_text(encoding="utf-8"), "# Product A\n")
+            ignore_text = (target / ".gitignore").read_text(encoding="utf-8")
+            self.assertIn("# BEGIN ALCHEMYWORKS WORKFLOW", ignore_text)
+            self.assertTrue((target / ".workflow" / "workflow.py").is_file())
+            self.assertTrue((target / ".workflow" / "scripts" / "init-instance.ps1").is_file())
+            self.assertTrue((target / ".agents" / "skills").is_dir())
+            self.assertTrue((target / "templates").is_dir())
+
+            (target / ".workflow" / "workflow.py").touch()
+            (target / "workspace" / "workflow").mkdir(parents=True)
+            (target / "workspace" / "workflow" / "manifest.yaml").write_text("state\n", encoding="utf-8")
+            ignored_workflow = subprocess.run(
+                ["git", "-C", str(target), "check-ignore", "--quiet", ".workflow/workflow.py"],
+            )
+            ignored_instance_state = subprocess.run(
+                ["git", "-C", str(target), "check-ignore", "--quiet", "workspace/workflow/manifest.yaml"],
+            )
+            self.assertEqual(ignored_workflow.returncode, 0)
+            self.assertNotEqual(ignored_instance_state.returncode, 0)
+
+    def test_init_instance_dry_run_does_not_create_target(self):
+        with tempfile.TemporaryDirectory() as raw:
+            target = Path(raw) / "new-instance"
+            script = Path(__file__).resolve().parents[1] / "scripts" / "init-instance.ps1"
+            result = subprocess.run(
+                [
+                    "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script),
+                    "-InstanceName", "Product A", "-TargetRoot", str(target), "-WhatIf",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr or result.stdout)
+            self.assertFalse(target.exists())
+            self.assertIn("would initialize instance", result.stdout)
+
+    def test_init_instance_creates_readme_lock_and_synced_workflow(self):
+        with tempfile.TemporaryDirectory() as raw:
+            target = Path(raw) / "new-instance"
+            script = Path(__file__).resolve().parents[1] / "scripts" / "init-instance.ps1"
+            result = subprocess.run(
+                [
+                    "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script),
+                    "-InstanceName", "Product A", "-TargetRoot", str(target),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr or result.stdout)
+            self.assertEqual((target / "README.md").read_text(encoding="utf-8"), "# Product A\n")
+            lock = (target / ".aw" / "workflow.lock").read_text(encoding="utf-8")
+            self.assertIn("instance_name: Product A", lock)
+            self.assertRegex(lock, r"source_commit: [0-9a-f]{40}")
+            self.assertTrue((target / ".workflow" / "workflow.py").is_file())
+            self.assertTrue((target / "baseline" / "raw-requirement").is_dir())
+            self.assertTrue((target / "iteration" / "raw-requirement").is_dir())
+            self.assertTrue((target / "workspace").is_dir())
+            self.assertEqual(
+                subprocess.run(
+                    ["git", "-C", str(target), "check-ignore", "--quiet", ".aw/workflow.lock"],
+                ).returncode,
+                1,
+            )
+
+    def test_python_init_instance_dry_run_does_not_create_target(self):
+        with tempfile.TemporaryDirectory() as raw:
+            target = Path(raw) / "python-instance"
+            with patch.object(workflow, "workflow_protection_errors", return_value=[]):
+                result = workflow.main(
+                    ["init-instance", "--name", "Product Python", "--directory", str(target), "--dry-run"]
+                )
+            self.assertEqual(result, 0)
+            self.assertFalse(target.exists())
+
+    def test_python_init_instance_creates_instance_and_lock(self):
+        with tempfile.TemporaryDirectory() as raw:
+            target = Path(raw) / "python-instance"
+            with patch.object(workflow, "workflow_protection_errors", return_value=[]):
+                result = workflow.main(
+                    ["init-instance", "--name", "Product Python", "--directory", str(target)]
+                )
+            self.assertEqual(result, 0)
+            self.assertEqual((target / "README.md").read_text(encoding="utf-8"), "# Product Python\n")
+            lock = (target / ".aw" / "workflow.lock").read_text(encoding="utf-8")
+            self.assertIn("instance_name: Product Python", lock)
+            self.assertTrue((target / ".workflow" / "workflow.py").is_file())
+            self.assertTrue((target / "workspace").is_dir())
+
+    def test_python_sync_preserves_instance_readme_and_tracks_state(self):
+        with tempfile.TemporaryDirectory() as raw:
+            target = Path(raw) / "python-sync"
+            target.mkdir()
+            (target / "README.md").write_text("# Existing Product\n", encoding="utf-8")
+            (target / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
+            subprocess.run(["git", "init", "--quiet", str(target)], check=True)
+            subprocess.run(["git", "-C", str(target), "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", str(target), "-c", "user.email=test@example.com", "-c", "user.name=Test", "commit", "--quiet", "-m", "initial"],
+                check=True,
+            )
+            with patch.object(workflow, "workflow_protection_errors", return_value=[]):
+                result = workflow.main(["sync", "--directory", str(target)])
+            self.assertEqual(result, 0)
+            self.assertEqual((target / "README.md").read_text(encoding="utf-8"), "# Existing Product\n")
+            (target / "workspace" / "workflow").mkdir(parents=True)
+            (target / "workspace" / "workflow" / "manifest.yaml").write_text("state\n", encoding="utf-8")
+            self.assertEqual(
+                subprocess.run(["git", "-C", str(target), "check-ignore", "--quiet", ".workflow/workflow.py"]).returncode,
+                0,
+            )
+            self.assertNotEqual(
+                subprocess.run(["git", "-C", str(target), "check-ignore", "--quiet", "workspace/workflow/manifest.yaml"]).returncode,
+                0,
+            )
+
     def test_workflow_readme_freshness_does_not_require_instance_iteration(self):
         """The framework README must not be coupled to a product iteration."""
         temp, root = self.make_repo()

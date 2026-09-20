@@ -285,13 +285,30 @@ python .workflow/scripts/check_links.py --iteration v1.0
 
 ### 7.1 同步工作流到指定项目
 
-从本仓库根目录执行以下命令，即可把工作流源定义同步到另一个 Git 项目：
+实例初始化和工作流同步的唯一实现入口是 Python CLI：
+
+```text
+python .workflow/workflow.py init-instance --name "Product A" --directory "E:\path\to\product-a"
+python .workflow/workflow.py sync --directory "E:\path\to\target-project"
+```
+
+使用 `--dry-run` 预览操作，只有确认目标项目存在有意修改时才使用 `--allow-dirty`。下方 PowerShell 脚本仅作为 Windows 兼容包装器。
+
+从本仓库根目录执行以下命令，可以按实例名称和目录创建新的实例项目：
+
+```powershell
+.\.workflow\scripts\init-instance.ps1 -InstanceName 'Product A' -TargetRoot 'E:\path\to\product-a'
+```
+
+初始化命令会创建实例 Git 仓库、实例 `README.md`、`baseline/`、`iteration/`、`workspace/` 和 `.aw/workflow.lock`，然后同步工作流定义。预览使用 PowerShell 的 `-WhatIf`。
+
+已有实例项目则使用以下命令同步工作流源定义：
 
 ```powershell
 .\workflow\scripts\sync-workflow.ps1 -TargetRoot 'E:\path\to\target-project'
 ```
 
-该脚本仅同步 `workflow-file-inventory.md` 规定的共享规则、CLI、Skills、模板和脚手架说明；不会复制项目的 `baseline/`、`iteration/`、`workspace/` 内容或 `.workflow/` 的可再生运行状态。目标项目可以有不相关的修改；只有同步路径发生重叠时默认拒绝执行，确认需要覆盖时才使用 `-AllowDirtyTarget`，预览可使用 `-WhatIf`。
+该脚本仅同步 `workflow-file-inventory.md` 规定的共享规则、CLI、Skills、模板和脚手架说明；不会覆盖实例项目的 `README.md`、`.gitignore`，也不会复制项目的 `baseline/`、`iteration/`、`workspace/` 内容或 `.workflow/` 的可再生运行状态。同步后会在实例 `.gitignore` 中幂等追加工作流副本的忽略区块，`workspace/workflow/` 状态仍可提交。目标项目可以有不相关的修改；只有同步路径发生重叠时默认拒绝执行，确认需要覆盖时才使用 `-AllowDirtyTarget`，预览可使用 `-WhatIf`。
 
 ## 8. 稳定 ID 与追溯
 

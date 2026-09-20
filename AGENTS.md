@@ -330,6 +330,12 @@ Pay attention to:
 - Use one branch or worktree per significant feature or fix when practical.
 - Keep generated artifacts separate from unrelated source changes.
 
+When this workflow is synchronized into an instance project, the instance owns its
+`README.md` and `.gitignore`. The synchronized workflow copy (`.workflow/`,
+`.agents/`, `templates/`, and the synchronized root `AGENTS.md`) may exist locally
+for execution but is ignored by the instance Git configuration. The instance commits
+its `baseline/`, `iteration/`, `workspace/`, and `workspace/workflow/` state instead.
+
 Commit messages should explain the change and its purpose. Use the project's existing convention; otherwise prefer:
 
 ```text

@@ -2,9 +2,11 @@
 param(
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]
-    [string]$TargetRoot,
+    [string]$InstanceName,
 
-    [switch]$AllowDirtyTarget,
+    [Parameter(Mandatory = $true)]
+    [ValidateNotNullOrEmpty()]
+    [string]$TargetRoot,
 
     [switch]$WhatIf
 )
@@ -12,10 +14,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $sourceRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $pythonScript = Join-Path $sourceRoot '.workflow\workflow.py'
-$arguments = @($pythonScript, 'sync', '--directory', $TargetRoot)
-if ($AllowDirtyTarget) {
-    $arguments += '--allow-dirty'
-}
+$arguments = @($pythonScript, 'init-instance', '--name', $InstanceName, '--directory', $TargetRoot)
 if ($WhatIf) {
     $arguments += '--dry-run'
 }

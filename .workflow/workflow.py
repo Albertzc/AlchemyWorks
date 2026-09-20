@@ -49,6 +49,49 @@ BASELINE_FILES = [
     "baseline/04-glossary.md",
     "baseline/05-core-user-flow-prototype.html",
 ]
+WORKFLOW_SYNC_ITEMS = (
+    "AGENTS.md",
+    ".workflow/README.md",
+    ".workflow/workflow.py",
+    ".workflow/workflow-file-inventory.md",
+    ".workflow/dashboard/template.html",
+    ".workflow/tests/test_workflow.py",
+    ".workflow/scripts/stage_status.py",
+    ".workflow/scripts/id_registry.py",
+    ".workflow/scripts/query_id.py",
+    ".workflow/scripts/check_links.py",
+    ".workflow/scripts/diff_versions.py",
+    ".workflow/scripts/sync-workflow.ps1",
+    ".workflow/scripts/init-instance.ps1",
+    "templates",
+    "baseline/README.md",
+    "baseline/raw-requirement/README.md",
+    "iteration/README.md",
+    "iteration/raw-requirement/README.md",
+    ".agents/skills/stage-gate",
+    ".agents/skills/normalize-requirement",
+    ".agents/skills/manage-iteration",
+    ".agents/skills/prototype-design-system",
+    ".agents/skills/design-specification",
+    ".agents/skills/planning-validation",
+    ".agents/skills/iterate-implementation",
+    ".agents/skills/review-release",
+    ".agents/skills/workflow-governance",
+)
+WORKFLOW_IGNORE_START = "# BEGIN ALCHEMYWORKS WORKFLOW (managed)"
+WORKFLOW_IGNORE_END = "# END ALCHEMYWORKS WORKFLOW (managed)"
+WORKFLOW_IGNORE_LINES = (
+    WORKFLOW_IGNORE_START,
+    ".workflow/",
+    ".agents/",
+    "templates/",
+    "AGENTS.md",
+    "baseline/README.md",
+    "iteration/README.md",
+    "iteration/raw-requirement/README.md",
+    ".aw/runtime/",
+    WORKFLOW_IGNORE_END,
+)
 # These are workflow definitions and governance controls, not product
 # artifacts. Product-stage CLI commands refuse to run while any of them has
 # uncommitted changes, so a product task cannot silently alter its own gates.
@@ -143,6 +186,141 @@ def workflow_protection_errors() -> list[str]:
         + ", ".join(changed)
         + ". Complete and commit a dedicated workflow-maintenance change first."
     ]
+
+
+def _workflow_source_commit() -> str:
+    result = subprocess.run(
+        ["git", "-C", str(FRAMEWORK_ROOT), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    commit = result.stdout.strip()
+    if result.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise ValueError(f"could not resolve workflow source commit: {FRAMEWORK_ROOT}")
+    return commit
+
+
+def _git_status_paths(root: Path) -> list[str]:
+    result = subprocess.run(
+        ["git", "-C", str(root), "status", "--porcelain=v1", "--untracked-files=all"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise ValueError(f"could not read Git status: {root}")
+    paths: set[str] = set()
+    for line in result.stdout.splitlines():
+        if len(line) < 4:
+            continue
+        path = line[3:]
+        if " -> " in path:
+            path = path.rsplit(" -> ", 1)[1]
+        paths.add(path.replace("\\", "/"))
+    return sorted(paths)
+
+
+def _ensure_workflow_ignore_block(target: Path, *, dry_run: bool = False) -> None:
+    path = target / ".gitignore"
+    existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    if WORKFLOW_IGNORE_START in existing:
+        return
+    suffix = "\n".join(WORKFLOW_IGNORE_LINES) + "\n"
+    content = suffix if not existing else existing.rstrip("\r\n") + "\n" + suffix
+    if dry_run:
+        print(f"would update: {path}")
+    else:
+        path.write_text(content, encoding="utf-8")
+
+
+def sync_workflow(target_root: str | Path, *, allow_dirty: bool = False, dry_run: bool = False) -> int:
+    """Synchronize workflow definitions into an existing instance Git tree."""
+    target = Path(target_root).expanduser().resolve()
+    source = FRAMEWORK_ROOT.resolve()
+    if source == target:
+        raise ValueError("the workflow source and target must be different directories")
+    if not target.is_dir():
+        raise ValueError(f"target directory does not exist: {target}")
+    if not (target / ".git").exists():
+        raise ValueError(f"target is not a Git working tree: {target}")
+
+    if not allow_dirty:
+        changed = _git_status_paths(target)
+        overlaps = []
+        for changed_path in changed:
+            for item in WORKFLOW_SYNC_ITEMS:
+                normalized = item.rstrip("/")
+                if changed_path == normalized or changed_path.startswith(normalized + "/"):
+                    overlaps.append(changed_path)
+                    break
+        if overlaps:
+            joined = ", ".join(sorted(set(overlaps)))
+            raise ValueError(
+                "target has uncommitted changes that overlap synchronized workflow paths: "
+                f"{joined}. Commit or stash them first, or use --allow-dirty."
+            )
+
+    _ensure_workflow_ignore_block(target, dry_run=dry_run)
+    for relative in WORKFLOW_SYNC_ITEMS:
+        source_item = source / relative
+        target_item = target / relative
+        if not source_item.exists():
+            raise ValueError(f"workflow source item is missing: {source_item}")
+        if dry_run:
+            print(f"would copy: {relative}")
+            continue
+        if source_item.is_dir():
+            shutil.copytree(source_item, target_item, dirs_exist_ok=True)
+        else:
+            target_item.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_item, target_item)
+    print(f"workflow synchronized: {source} -> {target}")
+    return 0
+
+
+def init_instance(instance_name: str, directory: str | Path, *, dry_run: bool = False) -> int:
+    """Create a named instance and pin it to the current workflow commit."""
+    if not instance_name.strip() or "\n" in instance_name or "\r" in instance_name:
+        raise ValueError("instance name must be non-empty and single-line")
+    target = Path(directory).expanduser().resolve()
+    if target.exists() and any(target.iterdir()):
+        raise ValueError(f"target directory must be missing or empty: {target}")
+    commit = _workflow_source_commit()
+    if dry_run:
+        print(f"would initialize instance: {instance_name}")
+        print(f"would create target: {target}")
+        print(f"would pin workflow commit: {commit}")
+        print("would create: baseline/, iteration/, workspace/, README.md, .aw/workflow.lock")
+        print("would synchronize workflow definitions")
+        return 0
+
+    target.mkdir(parents=True, exist_ok=True)
+    result = subprocess.run(["git", "-C", str(target), "init", "--quiet"], check=False)
+    if result.returncode != 0:
+        raise ValueError(f"could not initialize Git repository: {target}")
+    for relative in ("baseline/raw-requirement", "iteration/raw-requirement", "workspace"):
+        (target / relative).mkdir(parents=True, exist_ok=True)
+    (target / "README.md").write_text(f"# {instance_name}\n", encoding="utf-8")
+    lock = target / ".aw" / "workflow.lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    lock.write_text(
+        "\n".join(
+            (
+                "schema_version: 1",
+                "framework: AlchemyWorks",
+                f"instance_name: {instance_name}",
+                f"source_commit: {commit}",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    sync_workflow(target)
+    print(f"instance initialized: {instance_name}")
+    print(f"target: {target}")
+    print(f"workflow lock: {lock}")
+    return 0
 
 
 def verify_workflow() -> int:
@@ -1769,6 +1947,14 @@ def main(argv: list[str] | None = None) -> int:
     route = subparsers.add_parser("route-requirement", help="Resolve the archive location for a newly received raw requirement.")
     route.add_argument("--iteration", help="Override the version recorded in manifest.yaml.")
     subparsers.add_parser("init", help="Create the non-versioned project directory skeleton.")
+    init_instance_parser = subparsers.add_parser("init-instance", help="Create a named instance project and pin its workflow source commit.")
+    init_instance_parser.add_argument("--name", required=True)
+    init_instance_parser.add_argument("--directory", required=True)
+    init_instance_parser.add_argument("--dry-run", action="store_true")
+    sync_parser = subparsers.add_parser("sync", help="Synchronize workflow definitions into an existing instance Git tree.")
+    sync_parser.add_argument("--directory", required=True)
+    sync_parser.add_argument("--allow-dirty", action="store_true")
+    sync_parser.add_argument("--dry-run", action="store_true")
     version = subparsers.add_parser("init-version", help="Create the next iteration skeleton after the baseline gate passes.")
     version.add_argument("--iteration", help="Use the expected next version explicitly.")
     args = parser.parse_args(argv)
@@ -1788,6 +1974,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "verify-workflow":
             return verify_workflow()
+        if args.command == "init-instance":
+            return init_instance(args.name, args.directory, dry_run=args.dry_run)
+        if args.command == "sync":
+            return sync_workflow(args.directory, allow_dirty=args.allow_dirty, dry_run=args.dry_run)
         protection_errors = workflow_protection_errors()
         if protection_errors:
             for error in protection_errors:
