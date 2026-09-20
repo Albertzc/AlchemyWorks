@@ -1,5 +1,7 @@
 # Baseline
 
+> 所有权：`baseline/` 是实例项目的项目级产物目录；本文件和 `raw-requirement/README.md` 是工作流同步提供的脚手架说明。实例初始化后，除这些说明文件外，目录内容由实例项目负责并提交。
+
 > 0→1 阶段的项目章程产物。**整个项目周期只创建一次**，被所有版本 `iteration/v{major}.{minor}/` 引用。
 > 变更通过 ADR（Architecture Decision Record）走决策流程，不进入版本号管理。
 
@@ -18,7 +20,7 @@
 
 `stage-gate` 会在首次创建 `iteration/v1.0/` 之前校验上述 5 个必填 baseline 产物**全部存在**且 frontmatter `status: Approved`，未通过则不允许进入版本流水线。原型可以是低保真线框、可点击流程或结构化 HTML；重点是核心用户旅程、信息架构、关键状态与权限差异可被评审，而非视觉精修。
 
-当 `baseline/` 除正式 baseline 文档外为空时，用户原始需求进入 `baseline/raw-requirement/`，可保留其原始格式。`normalize-requirement` 基于该材料起草 baseline 文档；原始材料本身不需要 frontmatter 或 `Approved`。后续每个迭代的用户原始需求统一保存于 `iteration/raw-requirement/`；`route-requirement` 自动返回该输入对应的版本，Agent 只读原文件。
+当 `baseline/` 除正式 baseline 文档外为空时，用户原始需求进入 `baseline/raw-requirement/`，可保留其原始格式。`normalize-requirement` 基于该材料起草 baseline 文档；原始材料本身不需要 frontmatter 或 `Approved`。后续每个迭代的用户原始需求统一保存于 `iteration/raw-requirement/`；`route-requirement` 自动返回该输入对应的版本，Agent 只读原文件。不要把业务代码或版本交付物放入此目录。
 
 ## 引用约定
 

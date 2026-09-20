@@ -1,6 +1,10 @@
 # Workflow Control Layer
 
+> 所有权：`.workflow/` 是工作流本身的执行层和本地运行层。源仓库维护其中的 CLI、脚本、测试和说明；同步到实例后，它们只是可运行的本地副本，默认由实例 `.gitignore` 忽略。实例项目状态不写入这里，而写入实例根目录的 `workspace/workflow/`。
+
 This directory contains the standard-library CLI and workflow source definitions. When the CLI is run with `--project-root`, generated state is written to the selected instance project instead of this framework source directory.
+
+`init-instance` creates a new instance Git tree, writes the instance-owned `README.md` and `.aw/workflow.lock`, creates `baseline/raw-requirement/`, `iteration/raw-requirement/`, and `workspace/`, then calls `sync`. `sync` copies only workflow definitions, Skills, templates, and scaffold READMEs; it never copies or overwrites instance baseline deliverables, iteration deliverables, workspace content, instance README, or instance `.gitignore`. `sync` appends a marked ignore block so synchronized `.workflow/`, `.agents/`, `templates/`, root `AGENTS.md`, and scaffold files stay out of instance commits while `workspace/workflow/` remains committable.
 
 Workflow-owned source files and required scaffold directories are authoritatively listed in [`workflow-file-inventory.md`](workflow-file-inventory.md). Keep that inventory synchronized with every workflow change.
 

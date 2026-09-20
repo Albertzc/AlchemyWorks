@@ -5,10 +5,10 @@
 
 ---
 
-## 1. 项目结构
+## 1. 项目结构与所有权
 
 ```
-├── baseline/                        # 项目级常量（章程、愿景、术语、技术选型、ADR）
+├── baseline/                        # 实例项目：项目级常量（章程、愿景、术语、技术选型、ADR）
 │   ├── 01-product-vision.md
 │   ├── 02-product-charter.md
 │   ├── 03-tech-stack-decision.md
@@ -16,7 +16,7 @@
 │   ├── decisions/                   # 重大架构决策记录
 │   └── raw-requirement/             # baseline 为空时归档用户原始需求
 │       └── README.md                 # 原始需求输入说明
-├── iteration/                       # 版本化产物（每个迭代一个目录）
+├── iteration/                       # 实例项目：版本化产物（每个迭代一个目录）
 │   ├── README.md                     # 版本目录使用说明
 │   ├── raw-requirement/              # 用户原始需求集中库（只读）
 │   └── v{major}.{minor}/            # 双段号；
@@ -25,23 +25,58 @@
 │       ├── 03-planning/
 │       ├── 04-implementation/
 │       └── 05-review-release/
-├── templates/                       # 跨版本复用的文档与代码模板（已合并为 3 个）
-├── workspace/                       # 真实代码仓库（Git；后端 + 前端）
-│   ├── README.md                     # 实例项目自行维护的功能说明（非工作流骨架）
+├── templates/                       # 工作流源定义：跨版本复用的文档与代码模板
+├── workspace/                       # 实例项目：真实代码、配置、测试与实例状态
+│   ├── README.md                     # 实例当前系统功能说明（05-review-release 通过后自动生成）
 │   └── workflow/                     # 实例项目状态（Git）
 │       ├── manifest.yaml             # 产物索引
 │       ├── traceability.json         # 稳定 ID 追溯图
 │       └── current-state.json        # 恢复检查点
-├── .agents/skills/                  # 阶段化 AI Agent Skill（6 个）
-└── .workflow/                       # 工作流 CLI + 框架定义；实例项目中整体忽略
+├── .agents/skills/                  # 工作流源定义：阶段化 AI Agent Skill
+└── .workflow/                       # 工作流源定义 + 本地运行时；实例项目中整体忽略
     ├── workflow.py                  # 主 CLI（纯 stdlib）
     ├── workflow-file-inventory.md   # 工作流必要文件与目录权威清单
     ├── cache/                       # context-pack 缓存
     ├── context-packs/               # TASK-scoped 上下文包
     ├── task-runs/                   # TASK 结论与审计记录（默认忽略，可人工提交）
     ├── dashboard/                   # 静态 HTML 仪表盘
-    └── scripts/                     # 5 个 LLM 辅助脚本 + 1 个工作流同步脚本
+    └── scripts/                     # 工作流辅助脚本、初始化与同步包装器
 ```
+
+### 1.1 工作流源定义与实例项目边界
+
+本仓库既是工作流源仓库，也是一个可运行的工作流目录样例。阅读或维护时，按下面的归属判断文件是否属于工作流本身：
+
+| 内容 | 归属 | 生成/维护方式 | 实例 Git 是否提交 |
+|---|---|---|---|
+| `AGENTS.md`、根 `README.md`、`.gitignore` | 工作流仓库的治理与说明；实例的 `README.md`、`.gitignore` 由实例自己拥有 | 源仓库手工维护；`init-instance` 只生成实例 README，`sync` 不覆盖实例 README 或 `.gitignore` | 源仓库提交；实例只提交自己的 README 和 `.gitignore` |
+| `.workflow/workflow.py`、`.workflow/scripts/`、`.workflow/tests/` | 工作流定义、执行器、包装器和回归测试 | 源仓库维护；`sync` 同步到实例 | 实例默认忽略同步副本 |
+| `.agents/skills/`、`templates/` | 工作流能力和跨版本模板 | 源仓库维护；`sync` 同步到实例 | 实例默认忽略同步副本 |
+| `baseline/README.md`、`iteration/README.md`、`*/raw-requirement/README.md` | 工作流提供的初始化脚手架说明 | `init` / `init-instance` / `sync` 创建或同步；不得把说明误当成业务产物 | 实例默认忽略同步的说明文件 |
+| `baseline/` 中除脚手架说明和 `raw-requirement/README.md` 外的文件 | 实例项目的 baseline 产物和用户原始输入 | `normalize-requirement` 起草，人工审核后进入门禁 | 提交 |
+| `iteration/raw-requirement/` 中除 README 外的文件 | 实例项目的用户原始需求 | 用户提供，`route-requirement` 返回目标版本；Agent 只读 | 提交 |
+| `iteration/v{major}.{minor}/`、`iteration/archive/` | 实例项目的版本产物和归档快照 | `init-version` 创建/归档，阶段 Skill 产出文档 | 提交 |
+| `workspace/`（含 `workspace/workflow/`） | 实例项目的代码、配置、测试、功能说明和可再生追溯状态 | 04 阶段写入业务代码；`index`/`state`/`refresh` 生成状态；05 阶段生成 `workspace/README.md` | 提交 |
+| `.aw/workflow.lock` | 实例项目的工作流源版本锁定 | `init-instance` 创建；后续同步由维护者决定是否更新锁定信息 | 提交 |
+
+一句话判断：工作流负责“规则、工具、能力、模板和脚手架说明”；实例项目负责“需求输入、版本产物、业务实现、测试、功能说明和工作流生成的项目状态”。同步副本可以在实例目录中运行，但不属于实例业务提交。
+
+### 1.2 目录生成逻辑
+
+实例目录应通过统一入口创建，不要手工复制目录或直接创建版本号目录：
+
+```powershell
+# 新建实例：创建 Git 仓库、实例 README、.aw/workflow.lock、三类业务目录，随后同步工作流副本
+python .workflow/workflow.py init-instance --name "Product A" --directory "E:\path\to\product-a"
+
+# 只预览，不创建目录
+python .workflow/workflow.py init-instance --name "Product A" --directory "E:\path\to\product-a" --dry-run
+
+# 已有实例：同步工作流源定义；不会覆盖实例 README、.gitignore、baseline/产物、iteration/产物或 workspace/内容
+python .workflow/workflow.py sync --directory "E:\path\to\product-a"
+```
+
+`init-instance` 的生成顺序是：初始化实例 Git → 创建 `baseline/raw-requirement/`、`iteration/raw-requirement/`、`workspace/` → 写入实例 `README.md` 和 `.aw/workflow.lock` → 同步工作流副本并追加受管 `.gitignore` 区块。`init` 只用于当前工作流仓库内创建 intake 目录；`init-version` 只能在 baseline 门禁通过后创建版本骨架。同步后的 `.workflow/`、`.agents/`、`templates/`、根 `AGENTS.md` 和脚手架说明默认被实例 `.gitignore` 忽略，但 `workspace/workflow/` 始终保持可提交。
 
 ---
 
