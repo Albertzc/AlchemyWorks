@@ -68,7 +68,6 @@ class WorkflowTests(unittest.TestCase):
         (root / "baseline" / "05-core-user-flow-prototype.html").write_text(
             "<!--\n"
             f"status: {'draft' if draft else 'Approved'}\n"
-            f"review_decision: {'pending' if draft else 'approved'}\n"
             "reviewer: Product Owner\n"
             "reviewed_at: 2026-09-10T12:00:00+08:00\n"
             "review_notes: Fixture review record.\n"
@@ -109,7 +108,7 @@ class WorkflowTests(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.suffix.lower() == ".html":
             path.write_text(
-                "<!--\nstatus: Approved\nreview_decision: approved\n"
+                "<!--\nstatus: Approved\n"
                 "reviewer: Product Owner\nreviewed_at: 2026-09-10T12:00:00+08:00\n"
                 "review_notes: Fixture review record.\n-->\n" + body,
                 encoding="utf-8",
@@ -753,7 +752,7 @@ class WorkflowTests(unittest.TestCase):
                 rc = workflow.validate("v1", "01-product")
             self.assertEqual(rc, 1)
             self.assertIn("missing review frontmatter", buf.getvalue())
-            self.assertIn("review_decision", buf.getvalue())
+            self.assertIn("reviewer", buf.getvalue())
         finally:
             temp.cleanup()
 
@@ -763,7 +762,7 @@ class WorkflowTests(unittest.TestCase):
             prototype = root / "iteration" / "v1" / "01-product" / "v1-prototype.html"
             prototype.parent.mkdir(parents=True, exist_ok=True)
             prototype.write_text(
-                "<!--\nstatus: Approved\nreview_decision: pending\nreviewer: \nreviewed_at: \nreview_notes: \n-->\n<html></html>\n",
+                "<!--\nstatus: Approved\nreviewer: \nreviewed_at: \nreview_notes: \n-->\n<html></html>\n",
                 encoding="utf-8",
             )
             import io, contextlib
@@ -771,7 +770,6 @@ class WorkflowTests(unittest.TestCase):
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"), contextlib.redirect_stdout(buf):
                 rc = workflow.validate("v1", "01-product")
             self.assertEqual(rc, 1)
-            self.assertIn("review_decision: approved", buf.getvalue())
             self.assertIn("reviewer", buf.getvalue())
         finally:
             temp.cleanup()
@@ -782,7 +780,7 @@ class WorkflowTests(unittest.TestCase):
             prototype = root / "iteration" / "v1" / "01-product" / "v1-prototype.html"
             prototype.parent.mkdir(parents=True, exist_ok=True)
             prototype.write_text(
-                "<!--\nstatus: Approved\nreview_decision: approved\nreviewer: Product Owner\nreviewed_at: 2026-09-10T12:00:00+08:00\nreview_notes: Reviewed key flows and responsive states.\n-->\n<html></html>\n",
+                "<!--\nstatus: Approved\nreviewer: Product Owner\nreviewed_at: 2026-09-10T12:00:00+08:00\nreview_notes: Reviewed key flows and responsive states.\n-->\n<html></html>\n",
                 encoding="utf-8",
             )
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
@@ -1001,7 +999,7 @@ class WorkflowTests(unittest.TestCase):
                     "---\nstatus: Approved\n---\n# baseline\n", encoding="utf-8"
                 )
             (root / "baseline" / "05-core-user-flow-prototype.html").write_text(
-                "<!--\nstatus: Approved\nreview_decision: approved\n"
+                "<!--\nstatus: Approved\n"
                 "reviewer: Product Owner\nreviewed_at: 2026-09-10T12:00:00+08:00\n"
                 "review_notes: Fixture review record.\n-->\n<html></html>\n",
                 encoding="utf-8",

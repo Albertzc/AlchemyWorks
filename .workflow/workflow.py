@@ -942,7 +942,7 @@ def prototype_review_policy_errors(iteration: str, item: Artifact) -> list[str]:
     if not path.exists():
         return []
     frontmatter, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
-    required = ["status", "review_decision", "reviewer", "reviewed_at", "review_notes"]
+    required = ["status", "reviewer", "reviewed_at", "review_notes"]
     missing = [field for field in required if field not in frontmatter]
     errors: list[str] = []
     if missing:
@@ -950,17 +950,7 @@ def prototype_review_policy_errors(iteration: str, item: Artifact) -> list[str]:
             f"prototype is missing review frontmatter in {item.path}: {', '.join(missing)}"
         )
         return errors
-    decision = frontmatter.get("review_decision", "").lower()
-    if decision not in {"pending", "approved", "changes_requested", "rejected"}:
-        errors.append(
-            f"prototype has invalid review_decision in {item.path}: {decision or '<empty>'}; "
-            "use pending, approved, changes_requested, or rejected"
-        )
     if item.status == "Approved":
-        if decision != "approved":
-            errors.append(
-                f"Approved prototype must have review_decision: approved: {item.path}"
-            )
         for field in ("reviewer", "reviewed_at", "review_notes"):
             if not policy_text_is_supplied(frontmatter.get(field, "")):
                 errors.append(

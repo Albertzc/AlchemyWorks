@@ -52,7 +52,7 @@
 | 路径 | 必需内容 | 用途 |
 |---|---|---|
 | `templates/` | `README.md`、`product.md`、`design.md`、`implementation.md` | 初始化时复制到实例根目录，作为可由实例项目维护的默认模板。 |
-| `templates/` | `Prototype.html`、`prototype-design-system.md`、`design-tokens.json` | 原型基线、视觉规范与机器可读设计令牌。 |
+| `templates/` | `Prototype.html`、`prototype-design-system.md`、`design-tokens.json` | 原型基线、视觉规范与机器可读设计令牌；原型审核使用 `status` 作为唯一结论字段。 |
 
 ## 6. 必要的初始化脚手架目录
 

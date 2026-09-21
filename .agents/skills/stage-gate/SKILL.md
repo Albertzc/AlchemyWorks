@@ -42,7 +42,7 @@ Baseline 核心流程原型始终必需；功能迭代的页面原型按上述�
 
 ### HTML 原型审核记录
 
-每个 HTML 原型必须使用 HTML 注释形式的 frontmatter，至少包含 `status`、`review_decision`、`reviewer`、`reviewed_at` 和 `review_notes`。生成时使用 `status: draft`、`review_decision: pending`；人工审核通过时由人类填写审核人、时间和结论，并同时设置 `status: Approved`、`review_decision: approved`。`validate` 会把缺少这些字段或审核结论未完成视为门禁错误。
+每个 HTML 原型必须使用 HTML 注释形式的 frontmatter，至少包含 `status`、`reviewer`、`reviewed_at` 和 `review_notes`。生成时使用 `status: draft`；人工审核通过时由人类填写审核人、时间和结论，并设置 `status: Approved`。`validate` 会把缺少这些字段或审核记录未完成视为门禁错误。
 ## Raw Requirement Intake
 
 原始需求是用户提供的来源材料，格式可以是不带 frontmatter 的 Markdown、文本、邮件、会议纪要或其他可读取文件。它不属于需要 `Approved` 的阶段产物，Agent 不得改写其原文。
