@@ -14,22 +14,26 @@ In a synchronized instance project, the workflow root is `.aw/`: use
 
 ## Required commands
 
-Run from the project root:
+Run from the project root of a synchronized instance:
 
 ```powershell
-python .workflow/workflow.py init
-python .workflow/workflow.py init-version
-python .workflow/workflow.py index --iteration v1.0
-python .workflow/workflow.py state --iteration v1.0 --refresh
-python .workflow/workflow.py verify-workflow
-python .workflow/workflow.py validate --iteration v1.0 --stage 00-baseline
-python .workflow/workflow.py validate --iteration v1.0 --stage <stage>
-python .workflow/workflow.py context --iteration v1.0 --task TASK-XXX-NNN
-python .workflow/workflow.py cleanup --iteration v1.0
-python .workflow/workflow.py cleanup --iteration v1.0 --execute
-python .workflow/workflow.py dashboard --iteration v1.0
-python .workflow/workflow.py task-finished --iteration v1.0 --task TASK-XXX-NNN --result succeeded
+python .aw/.workflow/workflow.py init
+python .aw/.workflow/workflow.py init-version
+python .aw/.workflow/workflow.py index --iteration v1.0
+python .aw/.workflow/workflow.py state --iteration v1.0 --refresh
+python .aw/.workflow/workflow.py verify-workflow
+python .aw/.workflow/workflow.py validate --iteration v1.0 --stage 00-baseline
+python .aw/.workflow/workflow.py validate --iteration v1.0 --stage <stage>
+python .aw/.workflow/workflow.py context --iteration v1.0 --task TASK-XXX-NNN
+python .aw/.workflow/workflow.py cleanup --iteration v1.0
+python .aw/.workflow/workflow.py cleanup --iteration v1.0 --execute
+python .aw/.workflow/workflow.py dashboard --iteration v1.0
+python .aw/.workflow/workflow.py task-finished --iteration v1.0 --task TASK-XXX-NNN --result succeeded
 ```
+
+When working in the framework source repository, replace `.aw/.workflow/`
+with `.workflow/`; when operating on an external instance, pass
+`--project-root` before the subcommand.
 
 The `--iteration` flag accepts either `v{major}.{minor}` (e.g. `v1.0`, `v1.1`) or the legacy short form `v{N}` (treated as `v{N}.0`). Omit the flag to let `discover_iteration()` pick the highest existing version.
 

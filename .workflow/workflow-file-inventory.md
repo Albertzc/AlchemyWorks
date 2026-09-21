@@ -21,7 +21,7 @@
 | 路径 | 类型 | 用途 |
 |---|---|---|
 | `AGENTS.md` | 治理规则 | 定义协作、审批、版本、变更与安全约束。 |
-| `README.md` | 工作流框架原理与实例项目使用说明 | 分别说明框架的目录、阶段、治理机制，以及实例项目的初始化、同步、开发和验证方式。 |
+| `README.md` | 工作流框架原理与实例项目使用说明 | 分别说明框架的目录、阶段、治理机制，以及实例项目的初始化、同步、开发和验证方式；实例初始化和版本发布生成的根 README 必须保留 `.aw/` 工作流入口和本地 CLI 示例。 |
 | `.gitignore` | 版本控制规则 | 源仓库正常跟踪工作流源文件；同步脚本只向实例项目幂等追加仅忽略 `.aw/` 的区块，不覆盖实例已有规则，也不排除 `workspace/workflow/` 下的实例状态。 |
 
 ## 3. 必要的工作流执行与校验目录
@@ -87,3 +87,4 @@
 2. 本清单未将项目输入、版本产物、业务代码或可再生状态误列为工作流必要项。
 3. 同步脚本追加的忽略区块只排除 `.aw/`；`templates/`、`baseline/`、`iteration/`、`workspace/` 和 `workspace/workflow/` 保持可提交。
 4. 工作流测试通过：`python .workflow/tests/test_workflow.py`。
+5. 新实例根 README 和 05-review-release 生成的根 README 均明确指向 `.aw/.workflow/workflow.py`；同步实例中的 workflow-governance Skill 使用 `.aw/.workflow/` 命令。

@@ -3,6 +3,17 @@
 > AlchemyWorks/ AW软件工厂：以**双段版本号**为顶层单元的阶段化交付流水线。
 > 支持 0→1 项目搭建 + 后续需求迭代；每个版本的所有阶段产物自动与 `v{major}.{minor}` 关联。
 
+## 实例项目工作流入口
+
+实例化项目后，工作流副本统一位于 `.aw/`。请从实例项目根目录开始使用：
+
+```powershell
+python .aw/.workflow/workflow.py resume --json
+python .aw/.workflow/workflow.py index --iteration v1.0
+```
+
+完整协作规则见 `AGENTS.md`；工作流运行时文件位于 `.aw/.workflow/`。本仓库自身是框架源仓库，源仓库内部命令仍使用 `.workflow/`；从源仓库操作外部实例时使用 `--project-root`。
+
 ---
 
 ## 第一部分：工作流框架的工作原理

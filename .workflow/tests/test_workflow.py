@@ -421,7 +421,8 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual(rc, 0, msg=buf2.getvalue())
                 self.assertEqual(
                     (root / "README.md").read_text(encoding="utf-8"),
-                    "<!-- workflow:workspace-readme-version: v1.0 -->\n\n"
+                    workflow.instance_readme_intro(root.name, include_title=False)
+                    + "<!-- workflow:workspace-readme-version: v1.0 -->\n\n"
                     "## 当前系统功能说明\n\n"
                     "# Req\n## AC-001\n",
                 )
@@ -519,7 +520,9 @@ class WorkflowTests(unittest.TestCase):
                 text=True,
             )
             self.assertEqual(result.returncode, 0, msg=result.stderr or result.stdout)
-            self.assertEqual((target / "README.md").read_text(encoding="utf-8"), "# Product A\n")
+            instance_readme = (target / "README.md").read_text(encoding="utf-8")
+            self.assertTrue(instance_readme.startswith("# Product A\n\n## 工作流入口\n"))
+            self.assertIn("python .aw/.workflow/workflow.py index --iteration v1.0", instance_readme)
             version = (target / ".aw" / "workflow-version.yaml").read_text(encoding="utf-8")
             self.assertIn("source_ref: HEAD", version)
             self.assertRegex(version, r"source_commit: [0-9a-f]{40}")
@@ -558,7 +561,9 @@ class WorkflowTests(unittest.TestCase):
                     ["init-instance", "--name", "Product Python", "--directory", str(target)]
                 )
             self.assertEqual(result, 0)
-            self.assertEqual((target / "README.md").read_text(encoding="utf-8"), "# Product Python\n")
+            instance_readme = (target / "README.md").read_text(encoding="utf-8")
+            self.assertTrue(instance_readme.startswith("# Product Python\n\n## 工作流入口\n"))
+            self.assertIn("python .aw/.workflow/workflow.py resume --json", instance_readme)
             version = (target / ".aw" / "workflow-version.yaml").read_text(encoding="utf-8")
             self.assertIn("source_ref: HEAD", version)
             self.assertTrue((target / ".aw" / ".workflow" / "workflow.py").is_file())
@@ -578,10 +583,8 @@ class WorkflowTests(unittest.TestCase):
                     ["init-instance", "--directory", str(target)]
                 )
             self.assertEqual(result, 0)
-            self.assertEqual(
-                (target / "README.md").read_text(encoding="utf-8"),
-                "# default-named-product\n",
-            )
+            instance_readme = (target / "README.md").read_text(encoding="utf-8")
+            self.assertTrue(instance_readme.startswith("# default-named-product\n\n## 工作流入口\n"))
             version = (target / ".aw" / "workflow-version.yaml").read_text(encoding="utf-8")
             self.assertIn("source_ref: HEAD", version)
 
@@ -1098,7 +1101,8 @@ class WorkflowTests(unittest.TestCase):
             self.assertTrue(archived.is_dir())
             self.assertEqual(
                 (root / "README.md").read_text(encoding="utf-8"),
-                "<!-- workflow:workspace-readme-version: v1.0 -->\n\n"
+                workflow.instance_readme_intro(root.name, include_title=False)
+                + "<!-- workflow:workspace-readme-version: v1.0 -->\n\n"
                 "## 当前系统功能说明\n\n"
                 "# Req\nAC-001\n",
             )

@@ -408,7 +408,10 @@ def init_instance(
         raise ValueError(f"could not initialize Git repository: {target}")
     for relative in ("baseline/raw-requirement", "iteration/raw-requirement", "workspace"):
         (target / relative).mkdir(parents=True, exist_ok=True)
-    (target / "README.md").write_text(f"# {resolved_name}\n", encoding="utf-8")
+    (target / "README.md").write_text(
+        instance_readme_intro(resolved_name),
+        encoding="utf-8",
+    )
     write_project_scaffold_readmes(target)
     sync_workflow(target, workflow_version=workflow_version)
     # The root rule file is intentionally project-editable, but starts as an
@@ -665,15 +668,15 @@ def project_scaffold_readmes() -> dict[str, str]:
         "iteration/README.md": (
             "# Iterations\n\n"
             "存放版本化交付物。不要手工创建版本目录；baseline 门禁通过后使用 "
-            "`python .workflow/workflow.py init-version` 创建下一个版本。\n\n"
+            "`python .aw/.workflow/workflow.py init-version` 创建下一个版本。\n\n"
             "`raw-requirement/` 仅存放用户提供的原始需求。运行 "
-            "`python .workflow/workflow.py route-requirement` 确定该输入对应的版本；"
+            "`python .aw/.workflow/workflow.py route-requirement` 确定该输入对应的版本；"
             "Agent 仅可读取，不得修改、重命名或删除其中的文件。\n"
         ),
         "iteration/raw-requirement/README.md": (
             "# 迭代原始需求输入\n\n"
             "本目录保存用户提供的迭代原始需求，保留文件格式、文件名与原文。运行 "
-            "`python .workflow/workflow.py route-requirement` 确定当前输入对应的目标版本。\n\n"
+            "`python .aw/.workflow/workflow.py route-requirement` 确定当前输入对应的目标版本。\n\n"
             "除本说明文件外，目录中的原始需求归用户所有且只读：Agent 不得修改、"
             "重命名或删除。归一化产物必须记录所读取的原始文件路径和目标版本。\n"
         ),
@@ -1090,11 +1093,29 @@ def generate_instance_readme(iteration: str) -> None:
         raise ValueError(f"instance README source missing: {requirement.relative_to(ROOT)}")
     _, body = parse_frontmatter(requirement.read_text(encoding="utf-8"))
     content = (
+        instance_readme_intro(ROOT.name, include_title=False) +
         f"<!-- workflow:workspace-readme-version: {iteration} -->\n\n"
         "## 当前系统功能说明\n\n"
         f"{body.strip()}\n"
     )
     write_text_atomic(ROOT / "README.md", content)
+
+
+def instance_readme_intro(instance_name: str, *, include_title: bool = True) -> str:
+    """Return the always-visible workflow entry point for an instance README."""
+    title = f"# {instance_name}\n\n" if include_title else ""
+    return (
+        title +
+        "## 工作流入口\n\n"
+        "本项目使用 AlchemyWorks 工作流。工作流副本位于 `.aw/`，不是业务代码目录。\n\n"
+        "从项目根目录运行以下命令：\n\n"
+        "```powershell\n"
+        "python .aw/.workflow/workflow.py resume --json\n"
+        "python .aw/.workflow/workflow.py index --iteration v1.0\n"
+        "```\n\n"
+        "完整工作流说明见 `.aw/README.md`；协作规则见 `AGENTS.md`；"
+        "工作流运行时文件位于 `.aw/.workflow/`。\n\n"
+    )
 
 
 def validation_report(iteration: str, stage: str | None, artifacts: list[Artifact] | None = None) -> tuple[list[Artifact], list[str], list[str]]:
