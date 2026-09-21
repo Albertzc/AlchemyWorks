@@ -77,9 +77,7 @@ class WorkflowTests(unittest.TestCase):
         (root / "workspace").mkdir()
         (root / "workspace" / "README.md").write_text(
             "# Workspace\n\n"
-            "<!-- workflow:workspace-readme-version: v1.0 -->\n\n"
-            "## 当前系统功能说明\n\n"
-            "Fixture system functionality.\n",
+            "本目录承载实例项目的业务代码、测试和配置。\n",
             encoding="utf-8",
         )
         plan = root / "iteration" / "v1" / "03-planning"
@@ -422,7 +420,7 @@ class WorkflowTests(unittest.TestCase):
                     rc = workflow.validate("v1", "05-review-release")
                 self.assertEqual(rc, 0, msg=buf2.getvalue())
                 self.assertEqual(
-                    (root / "workspace" / "README.md").read_text(encoding="utf-8"),
+                    (root / "README.md").read_text(encoding="utf-8"),
                     "<!-- workflow:workspace-readme-version: v1.0 -->\n\n"
                     "## 当前系统功能说明\n\n"
                     "# Req\n## AC-001\n",
@@ -655,14 +653,14 @@ class WorkflowTests(unittest.TestCase):
         finally:
             temp.cleanup()
 
-    def test_workspace_readme_refresh_contract_requires_marker_and_heading(self):
+    def test_instance_readme_refresh_contract_requires_marker_and_heading(self):
         temp, root = self.make_repo()
         try:
-            readme = root / "workspace" / "README.md"
+            readme = root / "README.md"
             readme.write_text("# Workspace\n", encoding="utf-8")
             with patch.object(workflow, "ROOT", root):
                 errors: list[str] = []
-                workflow.check_workspace_readme_freshness("v1", errors)
+                workflow.check_instance_readme_freshness("v1", errors)
             self.assertTrue(any("not refreshed" in error for error in errors))
             self.assertTrue(any("当前系统功能说明" in error for error in errors))
         finally:
@@ -1050,8 +1048,7 @@ class WorkflowTests(unittest.TestCase):
             plan = root / "iteration" / "v1.0" / "03-planning" / "v1.0-task-plan-dag.md"
             plan.write_text("---\nstatus: Approved\n---\nTASK-API-010\n", encoding="utf-8")
             (root / "README.md").write_text("# v1.0\n", encoding="utf-8")
-            (root / "workspace" / "README.md").write_text(
-                "# Workspace\n\n"
+            (root / "README.md").write_text(
                 "<!-- workflow:workspace-readme-version: v1.0 -->\n\n"
                 "## 当前系统功能说明\n\n"
                 "Merged v1.0 functionality.\n",
@@ -1092,7 +1089,7 @@ class WorkflowTests(unittest.TestCase):
             plan = root / "iteration" / "v1.0" / "03-planning" / "v1.0-task-plan-dag.md"
             plan.write_text("---\nstatus: Approved\n---\nTASK-API-010\n", encoding="utf-8")
             (root / "README.md").write_text("# v1.0\n", encoding="utf-8")
-            (root / "workspace" / "README.md").write_text("# Workspace\n", encoding="utf-8")
+            (root / "README.md").write_text("# Workspace\n", encoding="utf-8")
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "FRAMEWORK_ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
                 self.assertEqual(workflow.init_version(), 0)
             self.assertFalse((root / "iteration" / "v1.0").exists())
@@ -1100,7 +1097,7 @@ class WorkflowTests(unittest.TestCase):
             archived = root / "iteration" / "archive" / "v1.0"
             self.assertTrue(archived.is_dir())
             self.assertEqual(
-                (root / "workspace" / "README.md").read_text(encoding="utf-8"),
+                (root / "README.md").read_text(encoding="utf-8"),
                 "<!-- workflow:workspace-readme-version: v1.0 -->\n\n"
                 "## 当前系统功能说明\n\n"
                 "# Req\nAC-001\n",

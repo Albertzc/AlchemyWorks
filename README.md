@@ -27,8 +27,9 @@
 │       ├── 03-planning/
 │       ├── 04-implementation/
 │       └── 05-review-release/
+├── README.md                        # 实例当前版本功能说明（05-review-release 通过后自动生成）
 ├── workspace/                       # 实例项目初始化时创建：真实代码、配置、测试与实例状态
-│   ├── README.md                     # 实例当前系统功能说明（05-review-release 通过后自动生成）
+│   ├── README.md                     # workspace 目录职责、代码组织与运行约定
 │   └── workflow/                     # 实例项目状态（Git）
 │       ├── manifest.yaml             # 产物索引
 │       ├── traceability.json         # 稳定 ID 追溯图
@@ -62,7 +63,8 @@
 | `baseline/` | 实例项目的 baseline 产物和用户原始输入 | `init-instance` 创建；`normalize-requirement` 起草，人工审核后进入门禁 | 提交 |
 | `iteration/raw-requirement/` | 实例项目的用户原始需求 | `init-instance` 创建；用户提供，`route-requirement` 返回目标版本；Agent 只读 | 提交 |
 | `iteration/v{major}.{minor}/`、`iteration/archive/` | 实例项目的版本产物和归档快照 | `init-version` 创建/归档，阶段 Skill 产出文档 | 提交 |
-| `workspace/`（含 `workspace/workflow/`） | 实例项目的代码、配置、测试、功能说明和可再生追溯状态 | 初始化时生成 `workspace/README.md` 目录说明；04 阶段写入业务代码；`index`/`state`/`refresh` 生成状态；05 阶段更新功能说明 | 提交 |
+| `README.md` | 实例项目当前版本功能说明 | 初始化时创建实例 README；05 阶段根据 Approved requirement 自动更新 | 提交 |
+| `workspace/`（含 `workspace/workflow/`） | 实例项目的代码、配置、测试、workspace 原理说明和可再生追溯状态 | 初始化时生成 `workspace/README.md` 目录说明；04 阶段写入业务代码；`index`/`state`/`refresh` 生成状态；workspace README 不承载版本功能清单 | 提交 |
 | `.aw/workflow-version.yaml` | 实例本地工作流源版本信息 | `init-instance` / `sync` 写入；实例 Git 忽略 | 不提交 |
 
 一句话判断：工作流负责“规则、工具、能力、模板和脚手架说明”；实例项目负责“需求输入、版本产物、业务实现、测试、功能说明和工作流生成的项目状态”。同步副本可以在实例目录中运行，但不属于实例业务提交。
@@ -85,7 +87,7 @@ python .workflow/workflow.py init-instance --name "Product A" --directory "E:\pa
 python .workflow/workflow.py sync --directory "E:\path\to\product-a"
 ```
 
-`init-instance` 的生成顺序是：初始化实例 Git → 创建 `baseline/`、`iteration/`、`workspace/` 和默认 `templates/` 及其目录说明 README → 将完整工作流规则同时写入实例根 `AGENTS.md` 和 `.aw/AGENTS.md` → 将工作流副本同步到 `.aw/`，写入 `.aw/workflow-version.yaml`，并追加只忽略 `.aw/` 的受管 `.gitignore` 区块。实例根 `AGENTS.md` 和 `templates/` 是初始化开发的顶层可维护内容；`.aw/AGENTS.md` 是同步的工作流副本。`workspace/README.md` 在 05-review-release 通过后更新为当前系统功能说明。`init` 只用于当前工作流仓库内创建 intake 目录；`init-version` 只能在实例 baseline 门禁通过后创建版本骨架。
+`init-instance` 的生成顺序是：初始化实例 Git → 创建 `baseline/`、`iteration/`、`workspace/` 和默认 `templates/` 及其目录说明 README → 创建实例根 `README.md` 初始说明 → 将完整工作流规则同时写入实例根 `AGENTS.md` 和 `.aw/AGENTS.md` → 将工作流副本同步到 `.aw/`，写入 `.aw/workflow-version.yaml`，并追加只忽略 `.aw/` 的受管 `.gitignore` 区块。实例根 `README.md`、`AGENTS.md` 和 `templates/` 是实例可维护内容；`.aw/` 下文件是同步的工作流副本。05-review-release 通过后，工作流根据 Approved requirement 更新根 `README.md`；`workspace/README.md` 只说明 workspace 原理。`init` 只用于当前工作流仓库内创建 intake 目录；`init-version` 只能在实例 baseline 门禁通过后创建版本骨架。
 
 ---
 
@@ -100,7 +102,7 @@ python .workflow/workflow.py sync --directory "E:\path\to\product-a"
 | **重大变更** | `v{major+1}.0`（架构重置、新项目、技术栈变更）|
 | **目录命名** | `iteration/v{major}.{minor}/` |
 | **文件前缀** | `v{major}.{minor}-*.md` / `.html` |
-| **归档** | 下一连续版本创建成功后，将已 RC 完成且已自动生成 `workspace/README.md` 的上一版迁移至 `iteration/archive/v{major}.{minor}/` |
+| **归档** | 下一连续版本创建成功后，将已 RC 完成且已自动生成根 `README.md` 的上一版迁移至 `iteration/archive/v{major}.{minor}/` |
 
 详细规则见 `AGENTS.md §17 Versioning and Archive Rules`。
 
@@ -143,7 +145,7 @@ iteration/v{major}.{minor}/04-implementation/
 iteration/v{major}.{minor}/05-review-release/
         v{major}.{minor}-review-release.md           # 评审、合并、发布决定与 release notes
         ↓ validate 05-review-release
-        ↓ 先自动生成 workspace/README.md，再创建下一版本
+        ↓ 先自动生成实例根 README.md，再创建下一版本
 iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 ```
 
@@ -153,8 +155,8 @@ iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 - HTML 原型还必须保留审核 frontmatter：`reviewer`、`reviewed_at`、`review_notes`；只有 `status: Approved` 且审核人/时间/结论齐全时，原型门禁才会通过。
 - `Approved` 状态下若含占位词（`TODO` / `TBD` / `XXX` / `[待确认]` / `[未提供]` / `占位`），validate 视为 unresolved blocker
 - 上游产物必须 Approved 才能作为下游阶段的正式输入
-- 05-review-release 通过后，CLI 根据当前版本 requirement 自动生成 `workspace/README.md` 的 `## 当前系统功能说明`，并更新 `<!-- workflow:workspace-readme-version: v{major}.{minor} -->`；`init-version` 会在归档前再次校验，失败时不移动旧版本。
-- 根目录 `README.md` 只描述共享工作流框架并校验当前 Skill / 脚本；实例版本的功能说明和版本刷新标记只维护在 `workspace/README.md`，不要求根 README 逐版本更新。
+- 05-review-release 通过后，CLI 根据当前版本 requirement 自动生成实例根 `README.md` 的 `## 当前系统功能说明`，并更新 `<!-- workflow:workspace-readme-version: v{major}.{minor} -->`；`init-version` 会在归档前再次校验，失败时不移动旧版本。
+- `workspace/README.md` 只描述 workspace 的目录职责、代码组织和运行约定，不承载版本功能清单。
 - Agent 只能创建或更新 `status: draft` / `status: In Review` 的产物，**不得**写入或修改 `status: Approved`。每个阶段完成时，Agent 必须列出待人工审核的全部必需产物及验证证据；人类手动审核并将各产物改为 `Approved` 后，才可运行该阶段的 `validate` 并开始下一阶段。
 
 每阶段的交接闭环：`Agent 起草产物 → Agent 列出待审产物与验证证据 → 人类手动设为 Approved → validate --stage <当前阶段> 通过 → 开始下一阶段`。
@@ -402,20 +404,20 @@ python .workflow/workflow.py sync --directory "E:\path\to\target-project"
 5. 触发 normalize-requirement → 生成 v1.0-requirement.md
 6. 人工审核 → status: Approved
 7. 进入 02-design / 03-planning / 04-implementation / 05-review-release
-8. RC 完成 → 自动生成 `workspace/README.md`，写入 v1.0 功能并更新版本标记；生成 v1.0-iteration-changelog.md；v1.0 保持活动状态，直至 v1.1 创建成功后归档
+8. RC 完成 → 自动生成实例根 `README.md`，写入 v1.0 功能并更新版本标记；生成 v1.0-iteration-changelog.md；v1.0 保持活动状态，直至 v1.1 创建成功后归档
 ```
 
 #### 2.2 启动 v1.1+ 增量迭代
 
 ```
 1. 用户提供原始需求；`route-requirement` 从 manifest.yaml（缺失时目录发现）解析目标版本
-2. 确认上一版本已通过 05-review-release 且已自动生成 `workspace/README.md`；创建目标版本骨架后，CLI 自动归档上一版本；将原始材料原样保存到 `iteration/raw-requirement/`，并以 `route-requirement` 返回的目标版本归一化
+2. 确认上一版本已通过 05-review-release 且已自动生成实例根 `README.md`；创建目标版本骨架后，CLI 自动归档上一版本；将原始材料原样保存到 `iteration/raw-requirement/`，并以 `route-requirement` 返回的目标版本归一化
 3. 触发 normalize-requirement → 读项目基线、原始需求、上一版 requirement 与 changelog
 4. 输出对应版本 requirement.md（含 change_set: added / modified / deprecated）
 5. 人工审核 → status: Approved
 6. 触发 iterate-implementation skill（按 TASK 列表实施）
 7. 每个 TASK 完成 → python .workflow/workflow.py task-finished --result succeeded
-8. RC 完成 → 自动生成 `workspace/README.md`，写入本版本功能并更新版本标记；生成本版本 changelog 并保持活动状态；下一个版本创建成功时归档本版本
+8. RC 完成 → 自动生成实例根 `README.md`，写入本版本功能并更新版本标记；生成本版本 changelog 并保持活动状态；下一个版本创建成功时归档本版本
 ```
 
 #### 2.3 实施单个 TASK

@@ -679,9 +679,9 @@ def project_scaffold_readmes() -> dict[str, str]:
         ),
         "workspace/README.md": (
             "# Workspace\n\n"
-            "本目录承载实例项目的业务代码、测试、配置和当前系统功能说明。\n\n"
-            "首次初始化时，本文件作为目录说明生成；05-review-release 通过后，工作流会根据当前版本需求"
-            "更新本文件，并写入 `<!-- workflow:workspace-readme-version: v{major}.{minor} -->` 版本标记。\n"
+            "本目录承载实例项目的业务代码、测试和配置。\n\n"
+            "本文件只说明 workspace 的目录职责、代码组织和运行约定；当前版本的用户可见功能说明"
+            "由实例项目根目录 `README.md` 维护，并在 05-review-release 通过后由工作流更新。\n"
         ),
     }
 
@@ -734,13 +734,13 @@ def init_version(iteration: str | None = None) -> int:
         (root / stage).mkdir(parents=True)
     if predecessor:
         workspace_errors: list[str] = []
-        check_workspace_readme_freshness(predecessor, workspace_errors)
+        check_instance_readme_freshness(predecessor, workspace_errors)
         if workspace_errors:
             # Roll back only the newly created empty successor skeleton. The
             # predecessor has not been moved yet, so archive state is intact.
             shutil.rmtree(root)
             raise ValueError(
-                "workspace README refresh required before archiving "
+                "instance README refresh required before archiving "
                 f"{predecessor}: " + "; ".join(workspace_errors)
             )
         archive_iteration(predecessor, target)
@@ -1026,7 +1026,7 @@ def check_readme_freshness(errors: list[str]) -> None:
 
     The root README documents the shared workflow framework, not the active
     product iteration. Product-version freshness is checked separately by
-    ``check_workspace_readme_freshness`` against ``workspace/README.md``.
+    ``check_instance_readme_freshness`` against the instance root ``README.md``.
     Triggered only on the final 05-review-release stage. Does not modify files.
     """
     readme = FRAMEWORK_ROOT / ".aw" / "README.md"
@@ -1061,25 +1061,25 @@ def check_readme_freshness(errors: list[str]) -> None:
             )
 
 
-def check_workspace_readme_freshness(iteration: str, errors: list[str]) -> None:
-    """Require the generated workspace system-function manual to include ``iteration``."""
+def check_instance_readme_freshness(iteration: str, errors: list[str]) -> None:
+    """Require the generated instance README to include ``iteration``."""
     iteration = canonical_iteration(iteration)
-    readme = ROOT / "workspace" / "README.md"
+    readme = ROOT / "README.md"
     if not readme.exists():
-        errors.append("workspace/README.md missing; required before version archive")
+        errors.append("README.md missing; required before version archive")
         return
     text = readme.read_text(encoding="utf-8")
     marker = f"<!-- workflow:workspace-readme-version: {iteration} -->"
     if marker not in text:
         errors.append(
-            f"workspace/README.md is not refreshed for {iteration}; "
+            f"README.md is not refreshed for {iteration}; "
             f"add marker '{marker}' after merging the version functionality"
         )
     if "## 当前系统功能说明" not in text:
-        errors.append("workspace/README.md missing required heading: ## 当前系统功能说明")
+        errors.append("README.md missing required heading: ## 当前系统功能说明")
 
 
-def generate_workspace_readme(iteration: str) -> None:
+def generate_instance_readme(iteration: str) -> None:
     """Generate the instance functionality manual from the approved requirement."""
     requested_iteration = iteration
     iteration = canonical_iteration(iteration)
@@ -1087,14 +1087,14 @@ def generate_workspace_readme(iteration: str) -> None:
     if not requirement.exists() and requested_iteration != iteration:
         requirement = ROOT / f"iteration/{requested_iteration}/01-product/{requested_iteration}-requirement.md"
     if not requirement.exists():
-        raise ValueError(f"workspace README source missing: {requirement.relative_to(ROOT)}")
+        raise ValueError(f"instance README source missing: {requirement.relative_to(ROOT)}")
     _, body = parse_frontmatter(requirement.read_text(encoding="utf-8"))
     content = (
         f"<!-- workflow:workspace-readme-version: {iteration} -->\n\n"
         "## 当前系统功能说明\n\n"
         f"{body.strip()}\n"
     )
-    write_text_atomic(ROOT / "workspace" / "README.md", content)
+    write_text_atomic(ROOT / "README.md", content)
 
 
 def validation_report(iteration: str, stage: str | None, artifacts: list[Artifact] | None = None) -> tuple[list[Artifact], list[str], list[str]]:
@@ -1162,8 +1162,8 @@ def validate(iteration: str, stage: str | None, *, record_state: bool = True) ->
     target = stage or "all"
     if not errors and target == "05-review-release":
         try:
-            generate_workspace_readme(iteration)
-            print(f"workspace README generated: workspace/README.md ({iteration})")
+            generate_instance_readme(iteration)
+            print(f"instance README generated: README.md ({iteration})")
         except (OSError, ValueError) as error:
             errors.append(str(error))
     if record_state:
