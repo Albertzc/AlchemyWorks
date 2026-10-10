@@ -108,16 +108,16 @@ prototype_rationale: <required when prototype_required is false>
 - **BR-001**：<规则描述>
 - **BR-002**：<规则描述>
 
-## 9. 非功能需求
+## 8. 非功能需求
 
 - **NFR-001 <类别>**：<描述>
 - **NFR-002 <类别>**：<描述>
 
-## 10. 原型决策与生成要求
+## 9. 原型决策与生成要求
 
 > `prototype_required` 与本节必须一致。Baseline 的 `05-core-user-flow-prototype.html` 为必需交互基线；本版本仅在新增页面、复杂/跨页面流程、影响业务结果的交互、体验重点、多端适配或体验分歧等情况下设为 `true`。设为 `false` 时，frontmatter 的 `prototype_baseline` 和 `prototype_rationale` 必须说明复用的交互基线和理由。
 
-### 10.1 原型决策
+### 9.1 原型决策
 
 | 项目 | 内容 |
 |---|---|
@@ -125,16 +125,16 @@ prototype_rationale: <required when prototype_required is false>
 | 决策理由 | |
 | 复用的交互基线（如适用） | `baseline/05-core-user-flow-prototype.html` / 已有页面或组件 |
 
-### 10.2 页面清单（`prototype_required: true` 时必填）
+### 9.2 页面清单（`prototype_required: true` 时必填）
 
 | 页面 ID | 页面名称 | URL/路由 | 主要功能 | 关联 FS |
 |---|---|---|---|---|
 | | | | | |
 
-### 10.3 必须演示的交互（`prototype_required: true` 时必填）
-### 10.4 模拟数据要求（`prototype_required: true` 时必填）
+### 9.3 必须演示的交互（`prototype_required: true` 时必填）
+### 9.4 模拟数据要求（`prototype_required: true` 时必填）
 
-## 11. 验收标准（Given / When / Then）
+## 10. 验收标准（Given / When / Then）
 
 ### AC-001 <场景>
 
@@ -145,7 +145,7 @@ prototype_rationale: <required when prototype_required is false>
 ### AC-002 <场景>
 <!-- ... -->
 
-## 12. 需求追踪约定
+## 11. 需求追踪约定
 
 | 本文档对象 | 下游对象示例 |
 |---|---|
@@ -153,14 +153,14 @@ prototype_rationale: <required when prototype_required is false>
 | BR-005 | FS-025、Prototype 状态：逾期标识 |
 | AC-003 | Validate Case：任务状态更新 |
 
-## 13. 假设与待确认问题
+## 12. 假设与待确认问题
 
 - [待确认] ...
 - [推断] ...
 - [未提供] ...
 - [冲突] ...
 
-## 14. 变更记录
+## 13. 变更记录
 
 | 版本 | 日期 | 修改人 | 变更说明 |
 |---|---|---|---|

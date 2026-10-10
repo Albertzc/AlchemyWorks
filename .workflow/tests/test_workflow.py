@@ -414,17 +414,26 @@ class WorkflowTests(unittest.TestCase):
                 (final_dir / "v1-review-release.md").write_text(
                     "---\nstatus: Approved\n---\n# review release\n", encoding="utf-8"
                 )
-                (root / "README.md").write_text("# Workflow\n", encoding="utf-8")
+                # The instance root README is no longer touched by validate
+                # after the §17 refresh-contract change; reserve it before
+                # the next run so we can verify it stays untouched.
+                root_readme = root / "README.md"
+                root_readme.write_text("# Workflow\n", encoding="utf-8")
                 buf2 = io.StringIO()
                 with contextlib.redirect_stdout(buf2):
                     rc = workflow.validate("v1", "05-review-release")
                 self.assertEqual(rc, 0, msg=buf2.getvalue())
+                workspace_readme = root / "workspace" / "README.md"
+                self.assertTrue(workspace_readme.is_file())
+                workspace_text = workspace_readme.read_text(encoding="utf-8")
+                self.assertIn("<!-- workflow:workspace-readme-version: v1.0 -->", workspace_text)
+                self.assertIn("## 当前版本功能说明（v1.0）", workspace_text)
+                self.assertIn("# Req", workspace_text)
+                self.assertIn("AC-001", workspace_text)
+                # Instance root README is left untouched by the validate call.
                 self.assertEqual(
-                    (root / "README.md").read_text(encoding="utf-8"),
-                    workflow.instance_readme_intro(root.name, include_title=False)
-                    + "<!-- workflow:workspace-readme-version: v1.0 -->\n\n"
-                    "## 当前系统功能说明\n\n"
-                    "# Req\n## AC-001\n",
+                    root_readme.read_text(encoding="utf-8"),
+                    "# Workflow\n",
                 )
         finally:
             temp.cleanup()
@@ -657,15 +666,91 @@ class WorkflowTests(unittest.TestCase):
             temp.cleanup()
 
     def test_instance_readme_refresh_contract_requires_marker_and_heading(self):
+        """Workspace README gate must require both the iteration marker and the
+        `## 当前版本功能说明` heading.
+        """
         temp, root = self.make_repo()
         try:
-            readme = root / "README.md"
+            # The gate target moved from the instance root README to
+            # `workspace/README.md` during the §17 refresh-contract change;
+            # write the legacy document only on that path so the gate can
+            # exercise its missing-marker / missing-heading branches.
+            readme = root / "workspace" / "README.md"
+            readme.parent.mkdir(parents=True, exist_ok=True)
             readme.write_text("# Workspace\n", encoding="utf-8")
             with patch.object(workflow, "ROOT", root):
                 errors: list[str] = []
-                workflow.check_instance_readme_freshness("v1", errors)
-            self.assertTrue(any("not refreshed" in error for error in errors))
-            self.assertTrue(any("当前系统功能说明" in error for error in errors))
+                workflow.check_workspace_readme_freshness("v1", errors)
+            self.assertTrue(
+                any("workspace/README.md" in error and "not refreshed" in error for error in errors),
+                msg=f"gate did not flag missing marker; errors={errors}",
+            )
+            self.assertTrue(
+                any("当前版本功能说明" in error for error in errors),
+                msg=f"gate did not flag missing heading; errors={errors}",
+            )
+        finally:
+            temp.cleanup()
+
+    def test_workspace_readme_freshness_alias(self):
+        """The historical `check_instance_readme_freshness` name must keep working
+        because external documentation and downstream callers may still
+        reference it through the §17 refresh-contract transition.
+        """
+        self.assertIs(
+            workflow.check_instance_readme_freshness,
+            workflow.check_workspace_readme_freshness,
+        )
+        self.assertIs(
+            workflow.generate_instance_readme,
+            workflow.generate_workspace_readme,
+        )
+
+    def test_workspace_readme_refresh_targets_workspace_not_root(self):
+        """After the §17 refresh-contract change, validate --stage 05 must
+        write the current-iteration functionality description to
+        `workspace/README.md`, not the instance root `README.md`.
+        """
+        temp, root = self.make_repo()
+        try:
+            (root / "iteration" / "v1").rename(root / "iteration" / "v1.0")
+            for relative in [
+                "iteration/v1.0/01-product/v1.0-prototype.html",
+                "iteration/v1.0/02-design/v1.0-architecture-design.md",
+                "iteration/v1.0/02-design/v1.0-api-spec.md",
+                "iteration/v1.0/02-design/v1.0-database-dictionary.md",
+                "iteration/v1.0/03-planning/v1.0-task-plan-dag.md",
+                "iteration/v1.0/03-planning/v1.0-validation-plan.md",
+                "iteration/v1.0/04-implementation/v1.0-source-code.md",
+                "iteration/v1.0/04-implementation/v1.0-test-results.md",
+                "iteration/v1.0/05-review-release/v1.0-review-release.md",
+            ]:
+                self.add_approved(root, relative, "TASK-API-010\n")
+            requirement = root / "iteration" / "v1.0" / "01-product" / "v1.0-requirement.md"
+            requirement.write_text(
+                "---\nstatus: Approved\nprototype_required: true\n---\n# Workspace Req Body\n",
+                encoding="utf-8",
+            )
+            plan = root / "iteration" / "v1.0" / "03-planning" / "v1.0-task-plan-dag.md"
+            plan.write_text("---\nstatus: Approved\n---\nTASK-API-010\n", encoding="utf-8")
+            # Legacy root README must be left untouched by the workflow.
+            root_readme = root / "README.md"
+            root_readme.write_text("# Pre-existing root README\n", encoding="utf-8")
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "FRAMEWORK_ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                rc = workflow.validate("v1", "05-review-release")
+            self.assertEqual(rc, 0, msg="validate --stage 05-review-release should pass for a complete chain")
+            workspace_readme = root / "workspace" / "README.md"
+            self.assertTrue(workspace_readme.is_file(), msg="workspace/README.md was not written by validate")
+            workspace_text = workspace_readme.read_text(encoding="utf-8")
+            self.assertIn("<!-- workflow:workspace-readme-version: v1.0 -->", workspace_text)
+            self.assertIn("## 当前版本功能说明（v1.0）", workspace_text)
+            self.assertIn("# Workspace Req Body", workspace_text)
+            # The instance root README must be untouched by the validate call.
+            self.assertEqual(
+                root_readme.read_text(encoding="utf-8"),
+                "# Pre-existing root README\n",
+                msg="instance root README.md must not be modified by validate --stage 05",
+            )
         finally:
             temp.cleanup()
 
@@ -1050,13 +1135,7 @@ class WorkflowTests(unittest.TestCase):
             )
             plan = root / "iteration" / "v1.0" / "03-planning" / "v1.0-task-plan-dag.md"
             plan.write_text("---\nstatus: Approved\n---\nTASK-API-010\n", encoding="utf-8")
-            (root / "README.md").write_text("# v1.0\n", encoding="utf-8")
-            (root / "README.md").write_text(
-                "<!-- workflow:workspace-readme-version: v1.0 -->\n\n"
-                "## 当前系统功能说明\n\n"
-                "Merged v1.0 functionality.\n",
-                encoding="utf-8",
-            )
+            (root / "README.md").write_text("# Pre-existing root README\n", encoding="utf-8")
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
                 self.assertEqual(workflow.init_version(), 0)
             self.assertTrue((root / "iteration" / "v1.1" / "01-product").is_dir())
@@ -1091,20 +1170,28 @@ class WorkflowTests(unittest.TestCase):
             )
             plan = root / "iteration" / "v1.0" / "03-planning" / "v1.0-task-plan-dag.md"
             plan.write_text("---\nstatus: Approved\n---\nTASK-API-010\n", encoding="utf-8")
-            (root / "README.md").write_text("# v1.0\n", encoding="utf-8")
-            (root / "README.md").write_text("# Workspace\n", encoding="utf-8")
+            # After the §17 refresh-contract change, init_version must
+            # populate `workspace/README.md`, not the instance root README.
+            root_readme = root / "README.md"
+            root_readme.write_text("# Pre-existing root README\n", encoding="utf-8")
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "FRAMEWORK_ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
                 self.assertEqual(workflow.init_version(), 0)
             self.assertFalse((root / "iteration" / "v1.0").exists())
             self.assertTrue((root / "iteration" / "v1.1").is_dir())
             archived = root / "iteration" / "archive" / "v1.0"
             self.assertTrue(archived.is_dir())
+            workspace_readme = root / "workspace" / "README.md"
+            self.assertTrue(workspace_readme.is_file())
+            workspace_text = workspace_readme.read_text(encoding="utf-8")
+            self.assertIn("<!-- workflow:workspace-readme-version: v1.0 -->", workspace_text)
+            self.assertIn("## 当前版本功能说明（v1.0）", workspace_text)
+            self.assertIn("# Req", workspace_text)
+            self.assertIn("AC-001", workspace_text)
+            # The instance root README must remain untouched by init_version,
+            # because the workflow only rewrites it through the framework sync.
             self.assertEqual(
-                (root / "README.md").read_text(encoding="utf-8"),
-                workflow.instance_readme_intro(root.name, include_title=False)
-                + "<!-- workflow:workspace-readme-version: v1.0 -->\n\n"
-                "## 当前系统功能说明\n\n"
-                "# Req\nAC-001\n",
+                root_readme.read_text(encoding="utf-8"),
+                "# Pre-existing root README\n",
             )
         finally:
             temp.cleanup()

@@ -21,14 +21,14 @@
 | 路径 | 类型 | 用途 |
 |---|---|---|
 | `AGENTS.md` | 治理规则 | 定义协作、审批、版本、变更与安全约束。 |
-| `README.md` | 工作流框架原理与实例项目使用说明 | 分别说明框架的目录、阶段、治理机制，以及实例项目的初始化、同步、开发和验证方式；实例初始化和版本发布生成的根 README 必须保留 `.aw/` 工作流入口和本地 CLI 示例。 |
+| `README.md` | 工作流框架原理与实例项目使用说明 | 分别说明框架的目录、阶段、治理机制，以及实例项目的初始化、同步、开发和验证方式；实例初始化时生成的根 README 必须保留 `.aw/` 工作流入口和本地 CLI 示例，并作为项目级入口由实例项目自治维护。 |
 | `.gitignore` | 版本控制规则 | 源仓库正常跟踪工作流源文件；同步脚本只向实例项目幂等追加仅忽略 `.aw/` 的区块，不覆盖实例已有规则，也不排除 `workspace/workflow/` 下的实例状态。 |
 
 ## 3. 必要的工作流执行与校验目录
 
 | 路径 | 必需内容 | 用途 |
 |---|---|---|
-| `.aw/.workflow/`（源仓库为 `.workflow/`） | `workflow.py`、`README.md` | 工作流 CLI（含 baseline 核心流程原型与迭代按需原型门禁、文档变更后的 `refresh` 同步命令、05-review-release 通过后的实例根 `README.md` 自动生成功能说明、版本归档校验、已归档版本 Context Pack 缓存清理）及其操作说明。实例中的该目录不包含回归测试。 |
+| `.aw/.workflow/`（源仓库为 `.workflow/`） | `workflow.py`、`README.md` | 工作流 CLI（含 baseline 核心流程原型与迭代按需原型门禁、文档变更后的 `refresh` 同步命令、05-review-release 通过后自动维护实例 `workspace/README.md` 当前版本功能说明、版本归档校验、已归档版本 Context Pack 缓存清理）及其操作说明。实例中的该目录不包含回归测试。 |
 | `.aw/.workflow/scripts/`（源仓库为 `.workflow/scripts/`） | `stage_status.py`、`id_registry.py`、`query_id.py`、`check_links.py`、`diff_versions.py` | 供 Agent 和维护者调用的状态、ID、链接与版本比较工具。初始化和同步包装脚本只保留在源仓库。 |
 | `.aw/.workflow/dashboard/` | `template.html` | 工作流仪表盘源模板；仪表盘页面按需生成。 |
 | `.workflow/tests/`（仅源仓库） | `test_workflow.py` | 工作流 CLI 的维护回归测试；实例初始化时不复制。 |
@@ -62,7 +62,7 @@
 |---|---|---|
 | `baseline/` | `README.md`、`raw-requirement/README.md` | 项目首次立项时的基线、必需核心流程原型和原始需求入口。 |
 | `iteration/` | 实例初始化创建 | 版本化交付物及后续原始需求的入口。 |
-| `workspace/` | `README.md` | 实例项目真实业务代码、测试、配置和 workspace 工作原理说明；当前版本功能说明由实例根 `README.md` 承载。 |
+| `workspace/` | `README.md` | 实例项目真实业务代码、测试、配置和 workspace 工作原理说明；`README.md` 由工作流在每个版本通过 `05-review-release` 阶段后自动维护，承载当前已批准版本的功能说明与 `<!-- workflow:workspace-readme-version: v{major}.{minor} -->` 标记。 |
 
 ## 7. 明确不属于工作流必要项的内容
 
@@ -87,4 +87,4 @@
 2. 本清单未将项目输入、版本产物、业务代码或可再生状态误列为工作流必要项。
 3. 同步脚本追加的忽略区块只排除 `.aw/`；`templates/`、`baseline/`、`iteration/`、`workspace/` 和 `workspace/workflow/` 保持可提交。
 4. 工作流测试通过：`python .workflow/tests/test_workflow.py`。
-5. 新实例根 README 和 05-review-release 生成的根 README 均明确指向 `.aw/.workflow/workflow.py`；同步实例中的 workflow-governance Skill 使用 `.aw/.workflow/` 命令。
+5. 新实例根 README 仍指向 `.aw/.workflow/workflow.py`；05-review-release 通过后由工作流维护的 `workspace/README.md` 同样给出 `.aw/` 工作流入口与本地 CLI 示例；同步实例中的 workflow-governance Skill 使用 `.aw/.workflow/` 命令。
