@@ -24,6 +24,15 @@ Create or update `iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-
 
 For a hold decision, state the owner and condition needed to resume. Do not hide failed checks or turn an unresolved risk into an approval.
 
+## Companion Artifact: Release Log
+
+This stage also produces `iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-release-log.md` via the `release-log` skill. The two artifacts have distinct contracts:
+
+- `v{major}.{minor}-review-release.md`: requires `status: Approved`; this skill owns it.
+- `v{major}.{minor}-release-log.md`: existence-only gate (frontmatter `status` does **not** block the validate check); the `release-log` skill owns it.
+
+Draft the release log after the review-release artifact reaches Approved. Use `workflow-governance` to run `validate --stage 05-review-release` once both files exist; the gate confirms presence of the release log without requiring its `status` to be `Approved`.
+
 ## Review Checks
 
 Before handoff, verify that:

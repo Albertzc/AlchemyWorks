@@ -101,11 +101,11 @@ iteration/v{N}/
 - archived_at: YYYY-MM-DD
 - superseded_by: v{next_major}.{next_minor}
 - rc_artifact: iteration/v{N}/05-review-release/v{N}-review-release.md
-- changelog:    iteration/v{major}.{minor}/01-product/v{major}.{minor}-iteration-changelog.md  (引用)
+- release_log: iteration/v{N}/05-review-release/v{N}-release-log.md  (引用)
 - note: 此目录只读，不得修改。
 ```
 
-5. 不删除被归档版本中的 iteration changelog；归档目录是只读快照。
+5. 不删除被归档版本中的 release log；归档目录是只读快照。
 
 #### Workspace README refresh
 
@@ -137,5 +137,5 @@ CLI 只校验文件、标记和标题，不自动臆造业务功能。05-review-
 | 错误 | 修正 |
 |---|---|
 | 直接 `mkdir iteration/v1.1/` 而不调本 skill | 走 manage-iteration，确保引用、归档链完整 |
-| 把上一迭代 archive 后忘记写 changelog | 提示用户：`v{major}.{minor}-iteration-changelog.md` 必须存在 |
+| 把上一迭代 archive 后忘记写 release log | 提示用户：`v{major}.{minor}-release-log.md` 必须存在（05-review-release 通过前已要求存在,归档前无需额外写） |
 | 手动修改 `iteration/archive/v{N}/` 下的文件 | 阻止；如需更正，开新迭代 |

@@ -82,6 +82,7 @@ WORKFLOW_SYNC_ITEMS = (
     (".agents/skills/planning-validation", ".aw/.agents/skills/planning-validation"),
     (".agents/skills/iterate-implementation", ".aw/.agents/skills/iterate-implementation"),
     (".agents/skills/review-release", ".aw/.agents/skills/review-release"),
+    (".agents/skills/release-log", ".aw/.agents/skills/release-log"),
     (".agents/skills/workflow-governance", ".aw/.agents/skills/workflow-governance"),
 )
 WORKFLOW_IGNORE_START = "# BEGIN ALCHEMYWORKS WORKFLOW (managed)"
@@ -869,6 +870,7 @@ def stage_outputs(iteration: str, stage: str) -> list[str]:
         ],
         "05-review-release": [
             f"iteration/{iteration}/05-review-release/{iteration}-review-release.md",
+            f"iteration/{iteration}/05-review-release/{iteration}-release-log.md",
         ],
     }
     if stage not in outputs:
@@ -1178,6 +1180,13 @@ def validation_report(iteration: str, stage: str | None, artifacts: list[Artifac
             if required in checked_paths:
                 continue
             checked_paths.add(required)
+            # Release log only needs to exist; the frontmatter `status`
+            # field is intentionally NOT gated by Approved. See
+            # `.agents/skills/release-log/SKILL.md` for the contract.
+            if required.endswith(f"{iteration}-release-log.md"):
+                if not (ROOT / required).exists():
+                    errors.append(f"missing release log for {current}: {required}")
+                continue
             item = by_path.get(required)
             if not item:
                 errors.append(f"missing input for {current}: {required}")

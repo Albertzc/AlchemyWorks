@@ -138,7 +138,6 @@ baseline/
 iteration/v{major}.{minor}/01-product/
         v{major}.{minor}-requirement.md            # 需求 + 功能规格（合并）
         v{major}.{minor}-prototype.html            # 仅 `prototype_required: true` 时的可交互 UI 原型
-        v{major}.{minor}-iteration-changelog.md     # 仅 RC 后产出（封档说明）
         ↓ validate 01-product
 iteration/v{major}.{minor}/02-design/
         v{major}.{minor}-architecture-design.md
@@ -154,7 +153,8 @@ iteration/v{major}.{minor}/04-implementation/
         v{major}.{minor}-test-results.md
         ↓ validate 04-implementation
 iteration/v{major}.{minor}/05-review-release/
-        v{major}.{minor}-review-release.md           # 评审、合并、发布决定与 release notes
+        v{major}.{minor}-review-release.md           # 评审、合并、发布决定与 release notes（需 Approved）
+        v{major}.{minor}-release-log.md             # RC 后封档说明（仅需存在，无需 Approved）
         ↓ validate 05-review-release
         ↓ 先自动生成实例根 README.md，再创建下一版本
 iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
@@ -185,6 +185,7 @@ iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 | `planning-validation` | 03 阶段任务与验证规划 | TASK DAG + AC/测试覆盖 |
 | `iterate-implementation` | 04 阶段 TASK 实施 | 源码 + 测试 + ISSUE |
 | `review-release` | 05 阶段评审与发布准备 | 评审证据 + 风险/回滚 + 发布建议 |
+| `release-log` | 05 阶段封档产物起草 | `v{N}-release-log.md`（仅需存在,无需 `Approved`） |
 | `manage-iteration` | 创建 / 归档版本 | `iteration/v{N}/` + `archive/v{N}/` |
 | `workflow-governance` | 任意阶段 | 唯一 CLI 操作入口：校验 + 索引 + 追溯 + Context Pack |
 
@@ -209,6 +210,7 @@ iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 | **product** | `product.md` | 需求 + 功能规格（合并）| `v{N}-requirement.md`（FS 段落作为 FR 子项内嵌） |
 | **design** | `design.md` | 架构 + API + DB（合并）| `v{N}-architecture-design.md` + `api-spec.md` + `database-dictionary.md` |
 | **implementation** | `implementation.md` | 任务 DAG + 验证 + 源码 + 测试 + ISSUE（合并）| `v{N}-task-plan-dag.md` + `validation-plan.md` + `source-code.md` + `test-results.md` |
+| **release-log** | `release-log.md` | RC 封档说明（8 节）| `v{N}-release-log.md`（仅需存在,无需 `Approved`） |
 
 辅助文件：`Prototype.html`（UI 原型基线）+ `prototype-design-system.md`（视觉规范）+ `design-tokens.json`（设计令牌）。
 
@@ -234,14 +236,14 @@ flowchart TD
     S2["02-design<br/>architecture-design.md<br/>api-spec.md<br/>database-dictionary.md"]
     S3["03-planning<br/>task-plan-dag.md<br/>validation-plan.md"]
     S4["04-implementation<br/>source-code.md (ISSUE 列表)<br/>test-results.md<br/>每 TASK: context → 实施 → task-finished"]
-    S5["05-review-release<br/>review-release.md<br/>评审 / 合并 / 发布"]
-    Arch([创建下一版本后封档上一版<br/>archive/vN/ + iteration-changelog.md])
+    S5["05-review-release<br/>review-release.md（需 Approved）<br/>release-log.md（仅需存在）<br/>评审 / 合并 / 发布 / 封档"]
+    Arch([创建下一版本后封档上一版<br/>archive/vN/ + release-log.md])
 
     S1 -- 人工审核 → Approved<br/>validate 01 --> S2
     S2 -- 人工审核 → Approved<br/>validate 02 --> S3
     S3 -- 人工审核 → Approved<br/>validate 03 --> S4
     S4 -- 人工审核 → Approved<br/>validate 04 --> S5
-    S5 -- 人工审核 → Approved<br/>生成 changelog、保持活动 --> Arch
+    S5 -- 人工审核 → Approved<br/>release-log 起草 → 存在性闸 --> Arch
 
     subgraph X[横切动作 - 不构成线性阶段]
         X1["index → manifest.yaml<br/>+ traceability.json<br/>"]
@@ -366,7 +368,7 @@ python .workflow/scripts/check_links.py --iteration v1.0
 | 02-design | `architecture-design.md`、`api-spec.md`、`database-dictionary.md` |
 | 03-planning | `task-plan-dag.md`、`validation-plan.md` |
 | 04-implementation | `source-code.md`（含 ISSUE 列表）、`test-results.md` |
-| 05-review-release | `review-release.md`（评审、合并、发布决定、release notes） |
+| 05-review-release | `review-release.md`（评审、合并、发布决定、release notes，需 `Approved`）;`release-log.md`（封档说明，**仅需存在**） |
 
 ---
 
@@ -415,7 +417,7 @@ python .workflow/workflow.py sync --directory "E:\path\to\target-project"
 5. 触发 normalize-requirement → 生成 v1.0-requirement.md
 6. 人工审核 → status: Approved
 7. 进入 02-design / 03-planning / 04-implementation / 05-review-release
-8. RC 完成 → 自动生成实例根 `README.md`，写入 v1.0 功能并更新版本标记；生成 v1.0-iteration-changelog.md；v1.0 保持活动状态，直至 v1.1 创建成功后归档
+8. RC 完成 → 自动生成实例根 `README.md`，写入 v1.0 功能并更新版本标记；release-log skill 起草 v1.0-release-log.md（仅需文件存在，无需 `Approved`）;v1.0 保持活动状态,直至 v1.1 创建成功后归档
 ```
 
 #### 2.2 启动 v1.1+ 增量迭代
@@ -423,7 +425,7 @@ python .workflow/workflow.py sync --directory "E:\path\to\target-project"
 ```
 1. 用户提供原始需求；`route-requirement` 从 manifest.yaml（缺失时目录发现）解析目标版本
 2. 确认上一版本已通过 05-review-release 且已自动生成实例根 `README.md`；创建目标版本骨架后，CLI 自动归档上一版本；将原始材料原样保存到 `iteration/raw-requirement/`，并以 `route-requirement` 返回的目标版本归一化
-3. 触发 normalize-requirement → 读项目基线、原始需求、上一版 requirement 与 changelog
+3. 触发 normalize-requirement → 读项目基线、原始需求、上一版 requirement 与 release-log
 4. 输出对应版本 requirement.md（含 change_set: added / modified / deprecated）
 5. 人工审核 → status: Approved
 6. 触发 iterate-implementation skill（按 TASK 列表实施）

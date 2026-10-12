@@ -422,7 +422,18 @@ class WorkflowTests(unittest.TestCase):
                 buf2 = io.StringIO()
                 with contextlib.redirect_stdout(buf2):
                     rc = workflow.validate("v1", "05-review-release")
-                self.assertEqual(rc, 0, msg=buf2.getvalue())
+                # release-log file is missing: gate must still block.
+                self.assertEqual(rc, 1, msg=buf2.getvalue())
+                self.assertIn("v1-release-log.md", buf2.getvalue())
+                # Adding the release log with `status: draft` (NOT Approved)
+                # must unblock the gate per the existence-only carve-out.
+                (final_dir / "v1-release-log.md").write_text(
+                    "---\nstatus: draft\n---\n# release log\n", encoding="utf-8"
+                )
+                buf3 = io.StringIO()
+                with contextlib.redirect_stdout(buf3):
+                    rc = workflow.validate("v1", "05-review-release")
+                self.assertEqual(rc, 0, msg=buf3.getvalue())
                 workspace_readme = root / "workspace" / "README.md"
                 self.assertTrue(workspace_readme.is_file())
                 workspace_text = workspace_readme.read_text(encoding="utf-8")
@@ -437,6 +448,46 @@ class WorkflowTests(unittest.TestCase):
                 )
         finally:
             temp.cleanup()
+
+    def test_release_log_does_not_require_approved_status(self):
+        """`v{N}-release-log.md` is gated by existence only; `status: draft`
+        / `In Review` / `Approved` are all accepted (see
+        `.agents/skills/release-log/SKILL.md` contract)."""
+        temp, root = self.make_repo()
+        try:
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                self.add_full_chain_after_fixture(root)
+                final_dir = root / "iteration" / "v1" / "05-review-release"
+                final_dir.mkdir(parents=True, exist_ok=True)
+                (final_dir / "v1-review-release.md").write_text(
+                    "---\nstatus: Approved\n---\n# review release\n", encoding="utf-8"
+                )
+                # Each of the three statuses must unblock the gate when the
+                # file exists, regardless of frontmatter value.
+                for status in ("draft", "In Review", "Approved"):
+                    (final_dir / "v1-release-log.md").write_text(
+                        f"---\nstatus: {status}\n---\n# release log {status}\n",
+                        encoding="utf-8",
+                    )
+                    import io, contextlib
+                    buf = io.StringIO()
+                    with contextlib.redirect_stdout(buf):
+                        rc = workflow.validate("v1", "05-review-release")
+                    self.assertEqual(
+                        rc, 0,
+                        msg=f"release-log status={status} should not block; output={buf.getvalue()}",
+                    )
+        finally:
+            temp.cleanup()
+
+    def test_release_log_path_is_listed_in_stage_outputs(self):
+        """`stage_outputs('05-review-release')` must include the release-log
+        path so it appears in dashboards and required_inputs lookups."""
+        outputs = workflow.stage_outputs("v1.0", "05-review-release")
+        self.assertIn(
+            "iteration/v1.0/05-review-release/v1.0-release-log.md", outputs,
+            msg="release-log missing from stage_outputs('05-review-release')",
+        )
 
     def test_sync_preserves_instance_files_and_ignores_workflow_files(self):
         """Sync must leave instance-owned files intact and hide workflow copies from Git."""

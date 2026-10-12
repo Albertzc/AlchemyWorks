@@ -197,7 +197,7 @@ Test Results          (iteration/v{N}/04-implementation/v{N}-test-results.md)
     ↓
 Review & Release      (iteration/v{N}/05-review-release/v{N}-review-release.md)   # 评审、合并、发布决定与 release notes
     ↓
-Iteration Changelog   (iteration/v{N}/01-product/v{N}-iteration-changelog.md)    # 封档说明，RC 完成后产出
+Release Log           (iteration/v{N}/05-review-release/v{N}-release-log.md)    # 封档说明,RC 完成后产出（仅需存在,无需 Approved）
 ```
 
 Update documentation when implementation changes:
@@ -420,8 +420,8 @@ Iterations use a two-segment identifier **`v{major}.{minor}`** (e.g. `v1.0`, `v1
   - Active versions live under `iteration/v{major}.{minor}/`.
   - All versioned artifacts use the `v{major}.{minor}-` filename prefix.
   - Cross-version references in frontmatter must point to a real existing iteration (e.g. `base_version: v1.0`).
-- **RC-complete** is reached only when `iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-review-release.md` has `status: Approved`.
-- Upon RC completion of `v{major}.{minor}`, create its iteration changelog and keep the version active as the baseline for the next iteration.
+- **RC-complete** is reached only when `iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-review-release.md` has `status: Approved` and `iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-release-log.md` exists (existence-only gate; frontmatter `status` does not block the gate, see `.agents/skills/release-log/SKILL.md`).
+- Upon RC completion of `v{major}.{minor}`, draft its release log via the `release-log` skill and keep the version active as the baseline for the next iteration.
 - After `05-review-release` passes, the workflow automatically regenerates the instance's `workspace/README.md` from the approved current-version requirement under `## 当前版本功能说明（v{major}.{minor}）` and updates `<!-- workflow:workspace-readme-version: v{major}.{minor} -->` so the workspace guide always reflects the latest approved iteration's functionality description. The instance root `README.md` is owned by the framework sync (`init-instance` / `sync`) and is not rewritten during product development.
 - When the next consecutive version is successfully created, archive that completed predecessor to `iteration/archive/v{major}.{minor}/`. The predecessor must first pass the `05-review-release` gate and the instance root README refresh check; the first version (`v1.0`) has no predecessor to archive.
 - Never skip a version number — `v1.1` cannot jump to `v1.3`.

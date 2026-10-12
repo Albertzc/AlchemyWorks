@@ -12,6 +12,7 @@
 | 产品阶段（需求 + 功能规格）| `product.md` | `product-requirement.md` + `feature-specification.md` | `01-product/` |
 | 设计阶段（架构 + API + DB）| `design.md` | `architecture-design.md` + `api-spec.md` + `database-dictionary.md` | `02-design/` |
 | 实施阶段（任务 DAG + 验证 + 源码 + 测试 + Issue）| `implementation.md` | `task-plan-dag.md` + `validation-plan.md` + `source-code.md` + `test-results.md` + `issue-fixes.md` | `03-planning/` + `04-implementation/` |
+| 封档说明（release-log）| `release-log.md` | `iteration-changelog.md`（旧名,已迁移至 `05-review-release/`）| `05-review-release/`（**仅需存在,无需 `Approved`**）|
 | HTML 原型骨架 | `Prototype.html` | 原型 HTML 结构与交互基线 | `01-product/` |
 | 原型设计系统 | `prototype-design-system.md` | 原型视觉与组件规范 | `01-product/` |
 | 设计令牌 | `design-tokens.json` | 设计令牌机器可读值 | `01-product/` |

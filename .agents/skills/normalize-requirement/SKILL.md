@@ -41,7 +41,7 @@ python .workflow/workflow.py route-requirement
 - `baseline/04-glossary.md`
 - `iteration/raw-requirement/` 中与 `route-requirement` 返回目标版本关联的全部原始需求材料
 - `iteration/{上一已批准版本}/01-product/{上一版本}-requirement.md`（用于 diff 与继承）
-- `iteration/{上一已批准版本}/01-product/{上一版本}-iteration-changelog.md`（如存在）
+- `iteration/{上一已批准版本}/05-review-release/{上一版本}-release-log.md`（如存在；记录上一版本封档范围、ISSUE 收尾与交接项）
 - `templates/product.md`（合并后的统一模板）
 
 模板是输出结构的唯一权威来源。不得自行发明另一套 Product Requirement 结构。

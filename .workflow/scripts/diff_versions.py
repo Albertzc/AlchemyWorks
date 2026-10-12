@@ -90,16 +90,22 @@ def _ids_in(iteration: str) -> dict[str, set[str]]:
 
 
 def _deprecated_in(iteration: str) -> set[str]:
-    """Read `change_set.deprecated` from a top-level 01-product artifact.
+    """Read `change_set.deprecated` from a 05-review-release artifact.
 
     Delegates to workflow.parse_change_set so the parsing logic lives
     in one place; any future consumer (e.g. a normalize-requirement
     checker) can reuse the same helper instead of duplicating regex.
+
+    Source files (single authoritative path; no backward-compat lookup
+    of the legacy `01-product/{iteration}-iteration-changelog.md`):
+
+      - `iteration/{N}/05-review-release/{N}-review-release.md`
+      - `iteration/{N}/05-review-release/{N}-release-log.md`
     """
-    base = _iteration_root(iteration) / "01-product"
+    base = _iteration_root(iteration) / "05-review-release"
     candidates = (
-        base / f"{iteration}-requirement.md",
-        base / f"{iteration}-iteration-changelog.md",
+        base / f"{iteration}-review-release.md",
+        base / f"{iteration}-release-log.md",
     )
     deprecated: set[str] = set()
     for path in candidates:

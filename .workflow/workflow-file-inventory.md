@@ -45,13 +45,14 @@
 | `.aw/.agents/skills/planning-validation/` | `SKILL.md` | 03-planning 的 TASK DAG、验收覆盖和验证计划约束。 |
 | `.aw/.agents/skills/iterate-implementation/` | `SKILL.md` | 实现阶段的代码、测试和记录约束；v1.0 保留独立 `issue-fixes.md`，v1.1+ 将 Issue 记录合并入 `source-code.md`。 |
 | `.aw/.agents/skills/review-release/` | `SKILL.md` | 05-review-release 的审查证据、风险、回滚和发布决策约束。 |
+| `.aw/.agents/skills/release-log/` | `SKILL.md` | 05-review-release 的封档产物（`v{N}-release-log.md`）；仅需存在,无需 `status: Approved` 校验。 |
 | `.aw/.agents/skills/workflow-governance/` | `SKILL.md` | 工作流 CLI 的唯一操作入口：索引、状态、校验、追溯、Context Pack 和任务结论。 |
 
 ## 5. 必要的跨项目模板目录
 
 | 路径 | 必需内容 | 用途 |
 |---|---|---|
-| `templates/` | `README.md`、`product.md`、`design.md`、`implementation.md` | 初始化时复制到实例根目录，作为可由实例项目维护的默认模板。 |
+| `templates/` | `README.md`、`product.md`、`design.md`、`implementation.md`、`release-log.md` | 初始化时复制到实例根目录，作为可由实例项目维护的默认模板。 |
 | `templates/` | `Prototype.html`、`prototype-design-system.md`、`design-tokens.json` | 原型基线、视觉规范与机器可读设计令牌；原型审核使用 `status` 作为唯一结论字段。 |
 
 ## 6. 必要的初始化脚手架目录
