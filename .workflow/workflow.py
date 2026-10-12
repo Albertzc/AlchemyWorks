@@ -685,7 +685,8 @@ def project_scaffold_readmes() -> dict[str, str]:
             "# Workspace\n\n"
             "本目录承载实例项目的真实业务代码、测试与配置。\n\n"
             "本文件由 AlchemyWorks 工作流在每次版本通过 05-review-release 阶段后自动维护，"
-            "用以承载当前已批准版本的功能说明与 `<!-- workflow:workspace-readme-version: v{major}.{minor} -->` 标记。"
+            "内容来源于当次迭代的 `iteration/{v{N}}/05-review-release/{v{N}}-release-log.md`（§2.1-§2.4 交付清单、§3 ISSUE 收尾、§7 已知限制与假设），"
+            "并刷新 `<!-- workflow:workspace-readme-version: v{major}.{minor} -->` 标记。"
             "首个版本 RC 通过前，本文件保留此占位说明；同步脚本（`sync`）不会覆写已存在的此文件，"
             "等待首次 `validate --stage 05-review-release` 通过后由工作流接管。\n"
         ),
@@ -1104,34 +1105,159 @@ def check_workspace_readme_freshness(iteration: str, errors: list[str]) -> None:
 check_instance_readme_freshness = check_workspace_readme_freshness
 
 
+def _parse_md_table_after_heading(text: str, heading_prefix: str) -> list[list[str]]:
+    """Parse the first markdown table that appears after ``heading_prefix``.
+
+    Returns the data rows (header row + separator skipped) as lists of cell
+    strings. Returns ``[]`` if the heading is missing or no table follows.
+    """
+    lines = text.splitlines()
+    start_idx = None
+    for idx, line in enumerate(lines):
+        if line.lstrip().startswith(heading_prefix):
+            start_idx = idx
+            break
+    if start_idx is None:
+        return []
+    rows: list[list[str]] = []
+    saw_header = False
+    for line in lines[start_idx + 1:]:
+        if line.startswith("#") and line.lstrip().startswith("#"):
+            break
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            saw_header = False
+            continue
+        # Skip separator rows like |---|---|---|
+        if set(stripped.replace("|", "").strip()) <= set("-: "):
+            continue
+        cells = [c.strip() for c in stripped.split("|")[1:-1]]
+        if not saw_header:
+            # First non-separator row is the header; skip it.
+            saw_header = True
+            continue
+        rows.append(cells)
+    return rows
+
+
+def _extract_release_log_entries(release_log_path: Path) -> dict[str, list[str]]:
+    """Pull bullet strings for each release-log section consumed by the workspace README.
+
+    The release-log template (see ``templates/release-log.md``) holds the
+    per-version delivery list in §2.1-§2.4, the closed-issues table in §3, and
+    known limits / assumptions in §7. The README consumes only a flat bullet
+    view of those tables. Subsections absent from the release-log render as
+    empty lists and the caller drops the corresponding README section.
+    """
+    empty = {"frs": [], "optimizations": [], "brs": [], "acs": [], "fixes": [], "limits": []}
+    if not release_log_path.exists():
+        return empty
+    text = release_log_path.read_text(encoding="utf-8")
+
+    def id_title(rows: list[list[str]]) -> list[str]:
+        out: list[str] = []
+        for row in rows:
+            if len(row) < 2 or not row[0]:
+                continue
+            out.append(f"{row[0]} {row[1]}")
+        return out
+
+    def fixed_issues(rows: list[list[str]]) -> list[str]:
+        out: list[str] = []
+        for row in rows:
+            if len(row) < 3 or not row[0]:
+                continue
+            final_state = row[2]
+            if "本版本已修复" in final_state:
+                out.append(f"{row[0]} {row[1]}")
+        return out
+
+    def limits(rows: list[list[str]]) -> list[str]:
+        out: list[str] = []
+        for row in rows:
+            if len(row) < 2 or not row[1]:
+                continue
+            out.append(f"{row[0]}：{row[1]}" if row[0] else row[1])
+        return out
+
+    return {
+        "frs": id_title(_parse_md_table_after_heading(text, "### 2.1 新增功能")),
+        "optimizations": id_title(_parse_md_table_after_heading(text, "### 2.2 体验优化")),
+        "brs": id_title(_parse_md_table_after_heading(text, "### 2.3 业务规则")),
+        "acs": id_title(_parse_md_table_after_heading(text, "### 2.4 验收标准")),
+        "fixes": fixed_issues(_parse_md_table_after_heading(text, "## 3. ISSUE 收尾")),
+        "limits": limits(_parse_md_table_after_heading(text, "## 7. 已知限制与假设")),
+    }
+
+
 def generate_workspace_readme(iteration: str) -> None:
-    """Refresh ``workspace/README.md`` from the approved current-version requirement.
+    """Refresh ``workspace/README.md`` from the current iteration's release log.
 
     ``workspace/README.md`` is the canonical, workflow-managed destination for
     the current iteration's user-facing functionality description during product
     development. The instance root ``README.md`` is owned by the framework sync
     and remains untouched during ``validate --stage 05-review-release``.
+
+    Content is sourced from
+    ``iteration/{v{N}}/05-review-release/{v{N}}-release-log.md``: §2.1-§2.4
+    (delivery list), §3 (closed-issue list), and §7 (limits/assumptions).
+    Sections absent in the release-log are omitted from the README. Manual
+    edits to the README are overwritten on the next RC.
     """
     requested_iteration = iteration
     iteration = canonical_iteration(iteration)
-    requirement = ROOT / f"iteration/{iteration}/01-product/{iteration}-requirement.md"
-    if not requirement.exists() and requested_iteration != iteration:
-        requirement = ROOT / f"iteration/{requested_iteration}/01-product/{requested_iteration}-requirement.md"
-    if not requirement.exists():
-        raise ValueError(f"workspace README source missing: {requirement.relative_to(ROOT)}")
-    _, body = parse_frontmatter(requirement.read_text(encoding="utf-8"))
+    release_log = ROOT / f"iteration/{iteration}/05-review-release/{iteration}-release-log.md"
+    if not release_log.exists() and requested_iteration != iteration:
+        release_log = ROOT / f"iteration/{requested_iteration}/05-review-release/{requested_iteration}-release-log.md"
+    if not release_log.exists():
+        raise ValueError(f"workspace README source missing: {release_log.relative_to(ROOT)}")
+    entries = _extract_release_log_entries(release_log)
+
+    sections: list[str] = []
+    if entries["frs"]:
+        sections.append("### 新增功能\n\n" + "\n".join(f"- {line}" for line in entries["frs"]))
+    if entries["optimizations"]:
+        sections.append("### 体验优化\n\n" + "\n".join(f"- {line}" for line in entries["optimizations"]))
+    if entries["brs"]:
+        sections.append("### 业务规则\n\n" + "\n".join(f"- {line}" for line in entries["brs"]))
+    if entries["acs"]:
+        sections.append("### 验收标准\n\n" + "\n".join(f"- {line}" for line in entries["acs"]))
+    if entries["fixes"]:
+        sections.append("### 修复项\n\n" + "\n".join(f"- {line}" for line in entries["fixes"]))
+
+    body_parts: list[str] = []
+    if sections:
+        body_parts.append("\n\n".join(sections))
+    if entries["limits"]:
+        body_parts.append("## 已知限制与假设\n\n" + "\n".join(f"- {line}" for line in entries["limits"]))
+
+    body_text = ("\n\n" + "\n\n".join(body_parts) + "\n") if body_parts else ""
+
+    nav_lines = [
+        "## 文档导航",
+        "",
+        "- 工作流入口：根目录 `README.md`",
+        f"- 当前 RC 评审：`iteration/{iteration}/05-review-release/{iteration}-review-release.md`",
+        f"- 当前封档说明：`iteration/{iteration}/05-review-release/{iteration}-release-log.md`",
+        f"- 完整需求：`iteration/{iteration}/01-product/{iteration}-requirement.md`",
+        "- 历史归档：`iteration/archive/`",
+        "",
+    ]
+    nav = "\n".join(nav_lines)
+
     intro = (
         "# Workspace\n\n"
         "本目录承载实例项目的真实业务代码、测试与配置。"
         "本文件由 AlchemyWorks 工作流在每次版本通过 05-review-release 阶段后自动维护，"
-        "用以承载当前已批准版本的功能说明。\n\n"
+        "内容来源于当次迭代的 release-log。\n\n"
     )
-    content = (
-        intro +
+    banner = (
         f"<!-- workflow:workspace-readme-version: {iteration} -->\n\n"
-        f"## 当前版本功能说明（{iteration}）\n\n"
-        f"{body.strip()}\n"
+        f"## 当前版本功能说明（{iteration}）\n"
     )
+
+    content = intro + banner + body_text + "\n" + nav + "\n---\n\n" \
+        + "_本文件由 AlchemyWorks 工作流在 05-review-release 通过后从 `release-log.md` 全量更新。手动编辑将被覆盖。_\n"
     write_text_atomic(ROOT / "workspace" / "README.md", content)
 
 

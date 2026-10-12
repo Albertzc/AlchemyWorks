@@ -122,7 +122,7 @@ class WorkflowTests(unittest.TestCase):
             "iteration/v1/03-planning/v1-validation-plan.md",
             "iteration/v1/04-implementation/v1-source-code.md",
             "iteration/v1/04-implementation/v1-test-results.md",
-            "iteration/v1/04-implementation/v1-issue-fixes.md",
+            "iteration/v1/05-review-release/v1-release-log.md",
         ]:
             self.add_approved(root, relative)
 
@@ -428,7 +428,33 @@ class WorkflowTests(unittest.TestCase):
                 # Adding the release log with `status: draft` (NOT Approved)
                 # must unblock the gate per the existence-only carve-out.
                 (final_dir / "v1-release-log.md").write_text(
-                    "---\nstatus: draft\n---\n# release log\n", encoding="utf-8"
+                    "---\nstatus: draft\n---\n"
+                    "# release log\n\n"
+                    "## 2. 功能交付清单\n\n"
+                    "### 2.1 新增功能(FR-XXX / YYY)\n\n"
+                    "| ID | 标题 | TASK | 验收 |\n"
+                    "|---|---|---|---|\n"
+                    "| FR-100 | 推送优化 | TASK-API-010 | AC-100 ✅ |\n"
+                    "| FR-101 | 校验补全 | TASK-IV-020 | AC-101 ✅ |\n"
+                    "\n### 2.3 业务规则(BR-XXX~YYY)\n\n"
+                    "| ID | 标题 | 说明 |\n"
+                    "|---|---|---|\n"
+                    "| BR-016 | 术语统一 | 全站「管道」→「数据管道」 |\n"
+                    "\n### 2.4 验收标准(AC-XXX~YYY)\n\n"
+                    "| AC | 描述 | 集成测试 | 结果 |\n"
+                    "|---|---|---|---|\n"
+                    "| AC-100 | 推送正确 | `tests/push.py` | ✅ |\n"
+                    "\n## 3. ISSUE 收尾\n\n"
+                    "| ISSUE | 类别 | 最终状态 |\n"
+                    "|---|---|---|\n"
+                    "| ISSUE-V1.0-01 | UI | ✅ 本版本已修复：拖拽校验 |\n"
+                    "| ISSUE-V1.0-02 | 后端 | ⏳ 交接至 v1.1：性能调优 |\n"
+                    "\n## 7. 已知限制与假设\n\n"
+                    "| 类型 | 内容 |\n"
+                    "|---|---|\n"
+                    "| 限制 | 单实例最多 100 并发 |\n"
+                    "| 假设 | SQLite 本地开发 |\n",
+                    encoding="utf-8",
                 )
                 buf3 = io.StringIO()
                 with contextlib.redirect_stdout(buf3):
@@ -439,8 +465,16 @@ class WorkflowTests(unittest.TestCase):
                 workspace_text = workspace_readme.read_text(encoding="utf-8")
                 self.assertIn("<!-- workflow:workspace-readme-version: v1.0 -->", workspace_text)
                 self.assertIn("## 当前版本功能说明（v1.0）", workspace_text)
-                self.assertIn("# Req", workspace_text)
-                self.assertIn("AC-001", workspace_text)
+                # Source sections come from release-log, not from requirement.md body.
+                self.assertIn("FR-100 推送优化", workspace_text)
+                self.assertIn("FR-101 校验补全", workspace_text)
+                self.assertIn("BR-016 术语统一", workspace_text)
+                self.assertIn("AC-100 推送正确", workspace_text)
+                self.assertIn("ISSUE-V1.0-01 UI", workspace_text)
+                # Handed-over (not fixed) issues must NOT appear in the README.
+                self.assertNotIn("ISSUE-V1.0-02", workspace_text)
+                self.assertIn("## 已知限制与假设", workspace_text)
+                self.assertIn("单实例最多 100 并发", workspace_text)
                 # Instance root README is left untouched by the validate call.
                 self.assertEqual(
                     root_readme.read_text(encoding="utf-8"),
@@ -759,8 +793,9 @@ class WorkflowTests(unittest.TestCase):
 
     def test_workspace_readme_refresh_targets_workspace_not_root(self):
         """After the §17 refresh-contract change, validate --stage 05 must
-        write the current-iteration functionality description to
-        `workspace/README.md`, not the instance root `README.md`.
+        write the current-iteration functionality description (sourced from
+        release-log.md) into `workspace/README.md`, not the instance root
+        `README.md`.
         """
         temp, root = self.make_repo()
         try:
@@ -775,6 +810,7 @@ class WorkflowTests(unittest.TestCase):
                 "iteration/v1.0/04-implementation/v1.0-source-code.md",
                 "iteration/v1.0/04-implementation/v1.0-test-results.md",
                 "iteration/v1.0/05-review-release/v1.0-review-release.md",
+                "iteration/v1.0/05-review-release/v1.0-release-log.md",
             ]:
                 self.add_approved(root, relative, "TASK-API-010\n")
             requirement = root / "iteration" / "v1.0" / "01-product" / "v1.0-requirement.md"
@@ -784,6 +820,15 @@ class WorkflowTests(unittest.TestCase):
             )
             plan = root / "iteration" / "v1.0" / "03-planning" / "v1.0-task-plan-dag.md"
             plan.write_text("---\nstatus: Approved\n---\nTASK-API-010\n", encoding="utf-8")
+            release_log = root / "iteration" / "v1.0" / "05-review-release" / "v1.0-release-log.md"
+            release_log.write_text(
+                "---\nstatus: draft\n---\n"
+                "## 2. 功能交付清单\n\n"
+                "### 2.1 新增功能(FR-XXX / YYY)\n\n"
+                "| ID | 标题 | TASK | 验收 |\n|---|---|---|---|\n"
+                "| FR-100 | 推送优化 | TASK-API-010 | AC-100 ✅ |\n",
+                encoding="utf-8",
+            )
             # Legacy root README must be left untouched by the workflow.
             root_readme = root / "README.md"
             root_readme.write_text("# Pre-existing root README\n", encoding="utf-8")
@@ -795,13 +840,137 @@ class WorkflowTests(unittest.TestCase):
             workspace_text = workspace_readme.read_text(encoding="utf-8")
             self.assertIn("<!-- workflow:workspace-readme-version: v1.0 -->", workspace_text)
             self.assertIn("## 当前版本功能说明（v1.0）", workspace_text)
-            self.assertIn("# Workspace Req Body", workspace_text)
+            # Content comes from release-log §2.1, not from requirement body.
+            self.assertIn("FR-100 推送优化", workspace_text)
+            self.assertNotIn("# Workspace Req Body", workspace_text)
             # The instance root README must be untouched by the validate call.
             self.assertEqual(
                 root_readme.read_text(encoding="utf-8"),
                 "# Pre-existing root README\n",
                 msg="instance root README.md must not be modified by validate --stage 05",
             )
+        finally:
+            temp.cleanup()
+
+    def test_workspace_readme_extracts_release_log_sections(self):
+        """Happy path: each release-log subsection present in §2.1-§2.4, §3, §7
+        renders into the corresponding workspace/README.md section.
+        """
+        temp, root = self.make_repo()
+        try:
+            release_log = root / "iteration" / "v1.0" / "05-review-release" / "v1.0-release-log.md"
+            release_log.parent.mkdir(parents=True, exist_ok=True)
+            release_log.write_text(
+                "---\nstatus: draft\n---\n"
+                "## 2. 功能交付清单\n\n"
+                "### 2.1 新增功能(FR-XXX / YYY)\n\n"
+                "| ID | 标题 | TASK | 验收 |\n|---|---|---|---|\n"
+                "| FR-200 | 调度改进 | TASK-API-200 | AC-200 ✅ |\n"
+                "\n### 2.2 体验优化(FR-XXX~YYY)\n\n"
+                "| ID | 标题 | TASK | 验收 |\n|---|---|---|---|\n"
+                "| FR-201 | 主题切换 | TASK-UI-201 | AC-201 ✅ |\n"
+                "\n### 2.3 业务规则(BR-XXX~YYY)\n\n"
+                "| ID | 标题 | 说明 |\n|---|---|---|\n"
+                "| BR-050 | 限速口径 | 单租户 25 rps |\n"
+                "\n### 2.4 验收标准(AC-XXX~YYY)\n\n"
+                "| AC | 描述 | 集成测试 | 结果 |\n|---|---|---|---|\n"
+                "| AC-200 | 调度正确 | `tests/sched.py` | ✅ |\n"
+                "\n## 3. ISSUE 收尾\n\n"
+                "| ISSUE | 类别 | 最终状态 |\n|---|---|---|\n"
+                "| ISSUE-V1.0-10 | 前端 | ✅ 本版本已修复：暗色模式 |\n"
+                "\n## 7. 已知限制与假设\n\n"
+                "| 类型 | 内容 |\n|---|---|\n"
+                "| 假设 | 仅在 Ubuntu 22.04 验证 |\n",
+                encoding="utf-8",
+            )
+            with patch.object(workflow, "ROOT", root):
+                workflow.generate_workspace_readme("v1.0")
+            text = (root / "workspace" / "README.md").read_text(encoding="utf-8")
+            # Heading + marker present.
+            self.assertIn("<!-- workflow:workspace-readme-version: v1.0 -->", text)
+            self.assertIn("## 当前版本功能说明（v1.0）", text)
+            # Each extracted row appears.
+            self.assertIn("### 新增功能", text)
+            self.assertIn("FR-200 调度改进", text)
+            self.assertIn("### 体验优化", text)
+            self.assertIn("FR-201 主题切换", text)
+            self.assertIn("### 业务规则", text)
+            self.assertIn("BR-050 限速口径", text)
+            self.assertIn("### 验收标准", text)
+            self.assertIn("AC-200 调度正确", text)
+            self.assertIn("### 修复项", text)
+            self.assertIn("ISSUE-V1.0-10 前端", text)
+            self.assertIn("## 已知限制与假设", text)
+            self.assertIn("假设：仅在 Ubuntu 22.04 验证", text)
+            # Doc navigation is rendered.
+            self.assertIn("## 文档导航", text)
+            self.assertIn("iteration/v1.0/05-review-release/v1.0-release-log.md", text)
+        finally:
+            temp.cleanup()
+
+    def test_workspace_readme_omits_missing_release_log_sections(self):
+        """Subsections absent in release-log render as no section in workspace/README.md."""
+        temp, root = self.make_repo()
+        try:
+            release_log = root / "iteration" / "v1.0" / "05-review-release" / "v1.0-release-log.md"
+            release_log.parent.mkdir(parents=True, exist_ok=True)
+            # Only §2.1 present; everything else omitted.
+            release_log.write_text(
+                "---\nstatus: draft\n---\n"
+                "## 2. 功能交付清单\n\n"
+                "### 2.1 新增功能(FR-XXX / YYY)\n\n"
+                "| ID | 标题 | TASK | 验收 |\n|---|---|---|---|\n"
+                "| FR-300 | 限流开关 | TASK-API-300 | AC-300 ✅ |\n",
+                encoding="utf-8",
+            )
+            with patch.object(workflow, "ROOT", root):
+                workflow.generate_workspace_readme("v1.0")
+            text = (root / "workspace" / "README.md").read_text(encoding="utf-8")
+            self.assertIn("### 新增功能", text)
+            self.assertIn("FR-300 限流开关", text)
+            # Subsections not present must NOT produce headings.
+            self.assertNotIn("### 体验优化", text)
+            self.assertNotIn("### 业务规则", text)
+            self.assertNotIn("### 验收标准", text)
+            self.assertNotIn("### 修复项", text)
+            self.assertNotIn("## 已知限制与假设", text)
+        finally:
+            temp.cleanup()
+
+    def test_workspace_readme_omits_fix_section_when_all_issues_handed_over(self):
+        """§3 only renders a 修复项 heading if at least one entry has been
+        closed this version. All-handover runs produce no 修复项 section.
+        """
+        temp, root = self.make_repo()
+        try:
+            release_log = root / "iteration" / "v1.0" / "05-review-release" / "v1.0-release-log.md"
+            release_log.parent.mkdir(parents=True, exist_ok=True)
+            release_log.write_text(
+                "---\nstatus: draft\n---\n"
+                "## 3. ISSUE 收尾\n\n"
+                "| ISSUE | 类别 | 最终状态 |\n|---|---|---|\n"
+                "| ISSUE-V1.0-99 | 后端 | ⏳ 交接至 v1.1：性能调优 |\n",
+                encoding="utf-8",
+            )
+            with patch.object(workflow, "ROOT", root):
+                workflow.generate_workspace_readme("v1.0")
+            text = (root / "workspace" / "README.md").read_text(encoding="utf-8")
+            self.assertNotIn("### 修复项", text)
+            self.assertNotIn("ISSUE-V1.0-99", text)
+        finally:
+            temp.cleanup()
+
+    def test_workspace_readme_raises_when_release_log_missing(self):
+        """If release-log.md is absent, generate_workspace_readme must raise
+        rather than silently producing a half-populated README.
+        """
+        temp, root = self.make_repo()
+        try:
+            (root / "iteration" / "v1.0" / "05-review-release").mkdir(parents=True)
+            with patch.object(workflow, "ROOT", root):
+                with self.assertRaises(ValueError) as ctx:
+                    workflow.generate_workspace_readme("v1.0")
+            self.assertIn("release-log", str(ctx.exception))
         finally:
             temp.cleanup()
 
@@ -1175,8 +1344,8 @@ class WorkflowTests(unittest.TestCase):
                 "iteration/v1.0/03-planning/v1.0-validation-plan.md",
                 "iteration/v1.0/04-implementation/v1.0-source-code.md",
                 "iteration/v1.0/04-implementation/v1.0-test-results.md",
-                "iteration/v1.0/04-implementation/v1.0-issue-fixes.md",
                 "iteration/v1.0/05-review-release/v1.0-review-release.md",
+                "iteration/v1.0/05-review-release/v1.0-release-log.md",
             ]:
                 self.add_approved(root, relative, "TASK-API-010\n")
             requirement = root / "iteration" / "v1.0" / "01-product" / "v1.0-requirement.md"
@@ -1210,8 +1379,8 @@ class WorkflowTests(unittest.TestCase):
                 "iteration/v1.0/03-planning/v1.0-validation-plan.md",
                 "iteration/v1.0/04-implementation/v1.0-source-code.md",
                 "iteration/v1.0/04-implementation/v1.0-test-results.md",
-                "iteration/v1.0/04-implementation/v1.0-issue-fixes.md",
                 "iteration/v1.0/05-review-release/v1.0-review-release.md",
+                "iteration/v1.0/05-review-release/v1.0-release-log.md",
             ]:
                 self.add_approved(root, relative, "TASK-API-010\n")
             requirement = root / "iteration" / "v1.0" / "01-product" / "v1.0-requirement.md"
@@ -1221,6 +1390,15 @@ class WorkflowTests(unittest.TestCase):
             )
             plan = root / "iteration" / "v1.0" / "03-planning" / "v1.0-task-plan-dag.md"
             plan.write_text("---\nstatus: Approved\n---\nTASK-API-010\n", encoding="utf-8")
+            release_log = root / "iteration" / "v1.0" / "05-review-release" / "v1.0-release-log.md"
+            release_log.write_text(
+                "---\nstatus: draft\n---\n"
+                "## 2. 功能交付清单\n\n"
+                "### 2.1 新增功能(FR-XXX / YYY)\n\n"
+                "| ID | 标题 | TASK | 验收 |\n|---|---|---|---|\n"
+                "| FR-400 | 初始化推送 | TASK-API-400 | AC-400 ✅ |\n",
+                encoding="utf-8",
+            )
             # After the §17 refresh-contract change, init_version must
             # populate `workspace/README.md`, not the instance root README.
             root_readme = root / "README.md"
@@ -1236,8 +1414,9 @@ class WorkflowTests(unittest.TestCase):
             workspace_text = workspace_readme.read_text(encoding="utf-8")
             self.assertIn("<!-- workflow:workspace-readme-version: v1.0 -->", workspace_text)
             self.assertIn("## 当前版本功能说明（v1.0）", workspace_text)
-            self.assertIn("# Req", workspace_text)
-            self.assertIn("AC-001", workspace_text)
+            # Content sourced from release-log §2.1, not requirement body.
+            self.assertIn("FR-400 初始化推送", workspace_text)
+            self.assertNotIn("# Req", workspace_text)
             # The instance root README must remain untouched by init_version,
             # because the workflow only rewrites it through the framework sync.
             self.assertEqual(
