@@ -1845,5 +1845,145 @@ class ScriptProjectRootTests(unittest.TestCase):
         self.assertEqual(payload["to"], "v1.1")
 
 
+class WorkflowDirResolutionTests(unittest.TestCase):
+    """Round 1 round-3 fix: the four hardcoded `.workflow/` strings in
+    workflow.py must derive from WORKFLOW_DIR.relative_to(ROOT), so the
+    synced `.aw/.workflow/` layout produces matching strings instead of
+    silently mis-referencing paths that don't exist on disk."""
+
+    def _synced_workspace(self) -> Path:
+        """Build a minimal synced-layout workspace: ROOT/<.aw/.workflow>
+        plus an iteration skeleton so validate/state paths resolve."""
+        scratch = _ScratchDir("synced-wf")
+        self.addCleanup(scratch.cleanup)
+        root = scratch.path
+        aw_dir = root / ".aw" / ".workflow"
+        aw_dir.mkdir(parents=True)
+        # Mirror a tiny workflow surface so write_current_state has a project
+        # gate to report on.
+        for relative in ("baseline", "iteration", "workspace"):
+            (root / relative).mkdir()
+        return root
+
+    def test_cleanup_context_packs_resolves_cache_key_under_synced_workflow(self):
+        """`cleanup_context_packs` builds its cache-key prefix from
+        `WORKFLOW_DIR.relative_to(ROOT)`, so a synced `.aw/.workflow/`
+        workspace produces `".aw/.workflow/context-packs/v1.0-"`, not
+        `".workflow/context-packs/v1.0-"`."""
+        ext = self._synced_workspace()
+        # cleanup_context_packs requires an archived iteration. Move our
+        # baseline skeleton under archive/<v1.0>/ to satisfy that guard.
+        archive = ext / "iteration" / "archive" / "v1.0"
+        (archive / "baseline").mkdir(parents=True)
+        # Seed the cache with the path the synced layout actually generates
+        # so we can assert cleanup locates and removes the entry.
+        cache_path = ext / ".aw" / ".workflow" / "cache" / "context-packs.json"
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        seed_key = ".aw/.workflow/context-packs/v1.0-TASK-EX-001.md"
+        cache_path.write_text(json.dumps({seed_key: "deadbeef"}), encoding="utf-8")
+        # Pre-create one matching pack so cleanup finds it too.
+        packs = ext / ".aw" / ".workflow" / "context-packs"
+        packs.mkdir(parents=True, exist_ok=True)
+        (packs / "v1.0-TASK-EX-001.md").write_text("# stub", encoding="utf-8")
+        with patch.object(workflow, "ROOT", ext), patch.object(
+            workflow, "WORKFLOW_DIR", ext / ".aw" / ".workflow"
+        ):
+            result = workflow.cleanup_context_packs("v1.0", execute=True)
+        self.assertEqual(result, 0)
+        after = json.loads(cache_path.read_text(encoding="utf-8"))
+        self.assertNotIn(seed_key, after, msg="cleanup must match the synced-layout cache-key prefix")
+
+    def test_write_current_state_uses_workflow_dir_relative_path(self):
+        """`write_current_state` must report `task_runs` under
+        `sources` using the synced-layout relative path, not the hardcoded
+        `.workflow/` literal."""
+        ext = self._synced_workspace()
+        # Populate baseline as Approved so state() does not bail on
+        # missing baseline artifacts.
+        for name in [
+            "01-product-vision.md",
+            "02-product-charter.md",
+            "03-tech-stack-decision.md",
+            "04-glossary.md",
+        ]:
+            (ext / "baseline" / name).write_text(
+                "---\nstatus: Approved\n---\n# stub\n", encoding="utf-8"
+            )
+        (ext / "baseline" / "05-core-user-flow-prototype.html").write_text(
+            "<!--\nstatus: Approved\nreviewer: tester\nreviewed_at: 2026-09-10T12:00:00+08:00\n"
+            "review_notes: fixture.\n-->\n<html></html>\n",
+            encoding="utf-8",
+        )
+        v1_dir = ext / "iteration" / "v1.0" / "01-product"
+        v1_dir.mkdir(parents=True)
+        (v1_dir / "v1.0-requirement.md").write_text(
+            "---\nstatus: Approved\nprototype_required: false\n---\n# r\n",
+            encoding="utf-8",
+        )
+        with patch.object(workflow, "ROOT", ext), patch.object(
+            workflow, "WORKFLOW_DIR", ext / ".aw" / ".workflow"
+        ):
+            state = workflow.write_current_state("v1.0", workflow.load_artifacts("v1.0"))
+        self.assertEqual(state["sources"]["task_runs"], ".aw/.workflow/task-runs/")
+
+    def test_task_finished_record_uses_workflow_dir_relative_path(self):
+        """`task_finished` writes a record whose `context_pack` field
+        mirrors the synced-layout path so the dashboard can locate it."""
+        ext = self._synced_workspace()
+        # Author a minimal task plan + API spec + requirement so
+        # find_task / load_artifacts succeed under the synced layout.
+        plan = ext / "iteration" / "v1.0" / "03-planning" / "v1.0-task-plan-dag.md"
+        plan.parent.mkdir(parents=True)
+        plan.write_text(
+            "---\nstatus: Approved\n---\n# Plan\n## TASK-R3-001\nGoal\n",
+            encoding="utf-8",
+        )
+        for name in [
+            "01-product-vision.md",
+            "02-product-charter.md",
+            "03-tech-stack-decision.md",
+            "04-glossary.md",
+        ]:
+            (ext / "baseline" / name).write_text(
+                "---\nstatus: Approved\n---\n# stub\n", encoding="utf-8"
+            )
+        (ext / "baseline" / "05-core-user-flow-prototype.html").write_text(
+            "<!--\nstatus: Approved\nreviewer: tester\nreviewed_at: 2026-09-10T12:00:00+08:00\n"
+            "review_notes: fixture.\n-->\n<html></html>\n",
+            encoding="utf-8",
+        )
+        v1p = ext / "iteration" / "v1.0" / "01-product"
+        v1p.mkdir(parents=True)
+        (v1p / "v1.0-requirement.md").write_text(
+            "---\nstatus: Approved\nprototype_required: false\n---\n# r\n",
+            encoding="utf-8",
+        )
+        v1d = ext / "iteration" / "v1.0" / "02-design"
+        v1d.mkdir(parents=True)
+        (v1d / "v1.0-api-spec.md").write_text(
+            "---\nstatus: Approved\n---\n# API\n", encoding="utf-8"
+        )
+        # Pre-create a context pack + a basic iteration directory so the
+        # context() / task_finished() round-trip does not hit the
+        # "context pack missing" guard.
+        packs_dir = ext / ".aw" / ".workflow" / "context-packs"
+        packs_dir.mkdir(parents=True, exist_ok=True)
+        (packs_dir / "v1.0-TASK-R3-001.md").write_text(
+            "# Context Pack: TASK-R3-001\n", encoding="utf-8"
+        )
+        with patch.object(workflow, "ROOT", ext), patch.object(
+            workflow, "WORKFLOW_DIR", ext / ".aw" / ".workflow"
+        ):
+            workflow.task_finished("v1.0", "TASK-R3-001", "succeeded")
+        record_path = ext / ".aw" / ".workflow" / "task-runs" / "v1.0-TASK-R3-001.json"
+        self.assertTrue(record_path.exists(), msg="task record must land in the synced workflow dir")
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            record["context_pack"],
+            ".aw/.workflow/context-packs/v1.0-TASK-R3-001.md",
+            msg="context_pack field must mirror the synced-layout path",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1678,7 +1678,7 @@ def cleanup_context_packs(iteration: str, *, execute: bool = False) -> int:
     packs = sorted(packs_dir.glob(f"{resolved}-*.md")) if packs_dir.exists() else []
     cache_path = WORKFLOW_DIR / "cache" / "context-packs.json"
     cache = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.exists() else {}
-    prefix = f".workflow/context-packs/{resolved}-"
+    prefix = f"{WORKFLOW_DIR.relative_to(ROOT).as_posix()}/context-packs/{resolved}-"
     cache_keys = sorted(key for key in cache if key.startswith(prefix))
 
     mode = "execute" if execute else "dry-run"
@@ -1822,7 +1822,7 @@ def write_current_state(
         "sources": {
             "manifest": "workspace/workflow/manifest.yaml",
             "traceability": "workspace/workflow/traceability.json",
-            "task_runs": ".workflow/task-runs/",
+            "task_runs": f"{WORKFLOW_DIR.relative_to(ROOT).as_posix()}/task-runs/",
         },
     }
     write_json_atomic(state_path, state)
@@ -1937,7 +1937,7 @@ def resume_data(iteration: str | None = None) -> dict:
         "next_action": current["next_action"],
         "blocking_artifacts": current.get("blocking_artifacts", []),
         "recommended_reads": list(dict.fromkeys(reads)),
-        "gate_command": f"python .workflow/workflow.py validate --iteration {resolved} --stage {current['name']}",
+        "gate_command": f"{sys.executable} {WORKFLOW_DIR.relative_to(ROOT).as_posix()}/workflow.py validate --iteration {resolved} --stage {current['name']}",
         "source_fingerprint": data["source_fingerprint"],
         "generated_at": data["generated_at"],
     }
@@ -2189,7 +2189,7 @@ def task_finished(iteration: str, task_id: str, result: str, *, refresh_index: b
         "task_id": task_id,
         "result": result,
         "recorded_at": now(),
-        "context_pack": f".workflow/context-packs/{iteration}-{task_id}.md",
+        "context_pack": f"{WORKFLOW_DIR.relative_to(ROOT).as_posix()}/context-packs/{iteration}-{task_id}.md",
         "context_pack_present": True,
         "project_gate_status": "passed" if gate_code(iteration) == 0 else "blocked",
     }
