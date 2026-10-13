@@ -64,6 +64,10 @@ BASELINE_FILES = [
 WORKFLOW_SYNC_ITEMS = (
     ("AGENTS.md", ".aw/AGENTS.md"),
     ("README.md", ".aw/README.md"),
+    # The framework owns the instance root `README.md`. `init-instance` and
+    # `sync` overwrite it from the framework source so it stays a pure
+    # workflow-usage document, never an example-project functional summary.
+    ("README.md", "README.md"),
     (".workflow/README.md", ".aw/.workflow/README.md"),
     (".workflow/workflow.py", ".aw/.workflow/workflow.py"),
     (".workflow/workflow-file-inventory.md", ".aw/.workflow/workflow-file-inventory.md"),
@@ -90,6 +94,9 @@ WORKFLOW_IGNORE_END = "# END ALCHEMYWORKS WORKFLOW (managed)"
 WORKFLOW_IGNORE_LINES = (
     WORKFLOW_IGNORE_START,
     ".aw/",
+    # The instance root `README.md` is framework-owned and sync-overwritten;
+    # add it to the managed ignore block so the instance Git never commits it.
+    "README.md",
     WORKFLOW_IGNORE_END,
 )
 # These are workflow definitions and governance controls, not product
@@ -399,7 +406,8 @@ def init_instance(
         print(f"would initialize instance: {resolved_name}")
         print(f"would create target: {target}")
         print(f"would pin workflow commit: {commit}")
-        print("would create: baseline/, iteration/, workspace/, README.md, AGENTS.md, templates/")
+        print("would create: baseline/, iteration/, workspace/, AGENTS.md, templates/")
+        print("would overwrite instance root README.md from the framework source")
         print("would synchronize workflow definitions")
         return 0
 
@@ -409,10 +417,6 @@ def init_instance(
         raise ValueError(f"could not initialize Git repository: {target}")
     for relative in ("baseline/raw-requirement", "iteration/raw-requirement", "workspace"):
         (target / relative).mkdir(parents=True, exist_ok=True)
-    (target / "README.md").write_text(
-        instance_readme_intro(resolved_name),
-        encoding="utf-8",
-    )
     write_project_scaffold_readmes(target)
     sync_workflow(target, workflow_version=workflow_version)
     # The root rule file is intentionally project-editable, but starts as an
@@ -1269,7 +1273,15 @@ generate_instance_readme = generate_workspace_readme
 
 
 def instance_readme_intro(instance_name: str, *, include_title: bool = True) -> str:
-    """Return the always-visible workflow entry point for an instance README."""
+    """Return the always-visible workflow entry point for an instance README.
+
+    .. deprecated::
+        The instance root ``README.md`` is now framework-owned. ``init-instance``
+        no longer calls this helper; the framework source ``README.md`` is
+        copied verbatim into the instance root by ``sync_workflow``. The
+        function is retained for backward compatibility with any external
+        caller that still imports it.
+    """
     title = f"# {instance_name}\n\n" if include_title else ""
     return (
         title +

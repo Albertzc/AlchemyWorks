@@ -14,6 +14,8 @@ python .aw/.workflow/workflow.py index --iteration v1.0
 
 完整协作规则见 `AGENTS.md`；工作流运行时文件位于 `.aw/.workflow/`。本仓库自身是框架源仓库，源仓库内部命令仍使用 `.workflow/`；从源仓库操作外部实例时使用 `--project-root`。
 
+> **本 README 的所有权**：实例项目的根 `README.md` 由框架拥有：`init-instance` / `sync` 会把当前文件整段写入实例根 `README.md`，并通过实例受管 `.gitignore` 区块排除它。实例项目的功能说明应放在 `workspace/README.md`（每次 05-review-release 通过后由工作流从 `release-log.md` 重新生成），不要写在本文件。
+
 ---
 
 ## 第一部分：工作流框架的工作原理

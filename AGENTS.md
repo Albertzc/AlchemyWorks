@@ -127,6 +127,38 @@ The final report should summarize:
 - Which tests and checks were run.
 - Any remaining risks, assumptions, or follow-up work.
 
+### Documentation Language
+
+Framework documents fall into two layers, each with a single working language. The split is intentional and is not changed instance-by-instance.
+
+**Governance & Execution Layer (English):**
+
+- `AGENTS.md` (this file, including §1–§17).
+- `.workflow/` — CLI, scripts, README, inventory, tests.
+- `.agents/skills/` — `SKILL.md` frontmatter and bodies.
+- Stable identifiers: `FR-XXX`, `FS-XXX`, `BR-XXX`, `NFR-XXX`, `AC-XXX`, `TASK-XXX-XXX`, `API-XXX-XXX`, `TBL-XXX-XXX`, `ISSUE-XXX`.
+- CLI flags, Python sources, JSON files, and HTML templates.
+
+Rationale: governance text and runtime behavior must be auditable by any agent or operator regardless of locale. English matches the stable-ID convention and the existing CLI vocabulary.
+
+**Template, Entry, and Product Layer (Chinese):**
+
+- `README.md` at the framework root — entry guide for instance projects (intentionally Chinese; no English mirror is published).
+- `templates/*.md` — product, design, implementation, release-log, prototype design system.
+- Every artifact produced under `iteration/v{major}.{minor}/` by following the templates, including `requirement.md`, `architecture-design.md`, `api-spec.md`, `database-dictionary.md`, `task-plan-dag.md`, `validation-plan.md`, `source-code.md`, `test-results.md`, `review-release.md`, `release-log.md`, and HTML prototypes.
+
+Rationale: templates and the artifacts they produce are read by instance teams during requirement, design, implementation, and release review. Keeping them in Chinese maximizes readability for Chinese-first teams without forcing translation overhead.
+
+**Override and Synchronization Contract:**
+
+- Instance projects may document their own product-layer language preference in `baseline/04-glossary.md`. The framework does not enforce a single product-layer language; the choice above is the default.
+- `templates/` is copied once by `init-instance` and is never overwritten by `sync`. A framework language change does not retroactively update already-synchronized instances; instance templates remain as previously copied.
+- The framework root `README.md` is intentionally Chinese; operators needing an English entry point may use `.workflow/README.md` plus this file's §1–§17 as a substitute.
+
+**Translation Discipline:**
+
+When the governance layer references a template-layer artifact by path or section, the reference uses the file's English-stable identifier (for example `01-product`, `requirement.md`) and the section number, never the Chinese heading text. This keeps cross-layer linking stable across language changes and avoids accidental drift when a Chinese heading is revised.
+
 ## 5. Minimal Change and Existing Patterns
 
 - Prefer the smallest complete change that satisfies the specification.
@@ -345,10 +377,12 @@ Pay attention to:
 - Use one branch or worktree per significant feature or fix when practical.
 - Keep generated artifacts separate from unrelated source changes.
 
-When this workflow is synchronized into an instance project, the instance owns its
-`README.md` and `.gitignore`. The synchronized workflow copy (`.workflow/`,
-`.agents/`, `templates/`, and the synchronized root `AGENTS.md`) may exist locally
-for execution but is ignored by the instance Git configuration. The instance commits
+When this workflow is synchronized into an instance project, the framework owns the
+instance root `README.md` — `init-instance` and `sync` overwrite it from the framework
+source, and the managed `.gitignore` block excludes it so the instance never commits it.
+The instance continues to own `.gitignore` itself. The synchronized workflow copy
+(`.workflow/`, `.agents/`, `templates/`, and the synchronized root `AGENTS.md`) may exist
+locally for execution but is ignored by the instance Git configuration. The instance commits
 its `baseline/`, `iteration/`, `workspace/`, and `workspace/workflow/` state instead.
 
 Commit messages should explain the change and its purpose. Use the project's existing convention; otherwise prefer:
@@ -428,35 +462,3 @@ Iterations use a two-segment identifier **`v{major}.{minor}`** (e.g. `v1.0`, `v1
 - **Discovery**: `discover_iteration()` returns the numerically highest `(major, minor)` pair present under `iteration/`. When no directory exists yet, it returns `v1.0`.
 - **Archived versions are read-only**; any correction must be done in a new version.
 - **The `baseline/` is not versioned**; changes go through ADR.
-
-## 18. Documentation Language
-
-Framework documents fall into two layers, each with a single working language. The split is intentional and is not changed instance-by-instance.
-
-### 18.1 Governance & Execution Layer — English
-
-- `AGENTS.md` (this file, including §1–§18).
-- `.workflow/` — CLI, scripts, README, inventory, tests.
-- `.agents/skills/` — `SKILL.md` frontmatter and bodies.
-- Stable identifiers: `FR-XXX`, `FS-XXX`, `BR-XXX`, `NFR-XXX`, `AC-XXX`, `TASK-XXX-XXX`, `API-XXX-XXX`, `TBL-XXX-XXX`, `ISSUE-XXX`.
-- CLI flags, Python sources, JSON files, and HTML templates.
-
-Rationale: governance text and runtime behavior must be auditable by any agent or operator regardless of locale. English matches the stable-ID convention and the existing CLI vocabulary.
-
-### 18.2 Template, Entry, and Product Layer — Chinese
-
-- `README.md` at the framework root — entry guide for instance projects (intentionally Chinese; no English mirror is published).
-- `templates/*.md` — product, design, implementation, release-log, prototype design system.
-- Every artifact produced under `iteration/v{major}.{minor}/` by following the templates, including `requirement.md`, `architecture-design.md`, `api-spec.md`, `database-dictionary.md`, `task-plan-dag.md`, `validation-plan.md`, `source-code.md`, `test-results.md`, `review-release.md`, `release-log.md`, and HTML prototypes.
-
-Rationale: templates and the artifacts they produce are read by instance teams during requirement, design, implementation, and release review. Keeping them in Chinese maximizes readability for Chinese-first teams without forcing translation overhead.
-
-### 18.3 Override and Synchronization Contract
-
-- Instance projects may document their own product-layer language preference in `baseline/04-glossary.md`. The framework does not enforce a single product-layer language; the choice above is the default.
-- `templates/` is copied once by `init-instance` and is never overwritten by `sync`. A framework language change does not retroactively update already-synchronized instances; instance templates remain as previously copied.
-- The framework root `README.md` is intentionally Chinese; operators needing an English entry point may use `.workflow/README.md` plus this file's §1–§17 as a substitute.
-
-### 18.4 Translation Discipline
-
-When the governance layer references a template-layer artifact by path or section, the reference uses the file's English-stable identifier (for example `01-product`, `requirement.md`) and the section number, never the Chinese heading text. This keeps cross-layer linking stable across language changes and avoids accidental drift when a Chinese heading is revised.

@@ -21,8 +21,8 @@
 | Path | Type | Purpose |
 |---|---|---|
 | `AGENTS.md` | Governance rules | Defines collaboration, approval, versioning, change, and security constraints. |
-| `README.md` | Workflow framework principles and instance-project usage guide | Describes the framework's directory layout, stages, and governance mechanisms, plus instance-project initialization, synchronization, development, and verification. The instance root README generated at initialization must keep the `.aw/` workflow entry point and local CLI examples and is owned and maintained by the instance project as its project-level entry. |
-| `.gitignore` | Version-control rules | The source repository normally tracks workflow source files; the sync script only idempotently appends a block that ignores `.aw/` into instance projects. It never overwrites existing instance rules and never excludes instance state under `workspace/workflow/`. |
+| `README.md` | Framework entry and usage guide | Held by the framework source repository; `init-instance` and `sync` overwrite the instance root `README.md` with this file's content and exclude it from the instance's Git via the managed `.gitignore` block. The instance root README does not carry example-project functional descriptions — that belongs to `workspace/README.md`. |
+| `.gitignore` | Version-control rules | The source repository normally tracks workflow source files; the sync script only idempotently appends a managed block that ignores `.aw/` and the instance root `README.md` into instance projects. It never overwrites existing instance rules and never excludes instance state under `workspace/workflow/`. |
 
 ## 3. Required Workflow Execution and Verification Directories
 
@@ -79,6 +79,7 @@ The following content is input to, produced by, or cached by a project that uses
 | `workspace/workflow/manifest.yaml`, `traceability.json`, `current-state.json` | Instance-project state and audit index | Not part of the workflow source definition; generated for the selected instance-project root and committed under that instance project's version control, not managed by `.gitignore`. |
 | `.aw/` | Synchronized framework files and local reproducible runtime state | May exist in the instance directory for local execution but is not part of the instance project's business commits; the sync script adds it to the instance `.gitignore` by default. |
 | `.aw/workflow-version.yaml` | Synchronization version metadata | Written by `init-instance` / `sync`; records the workflow ref and commit; not committed by the instance project. |
+| Instance root `README.md` | Framework-owned; sync-overwritten | Copied verbatim from the framework source `README.md` by `init-instance` and `sync`; excluded from the instance Git by the managed `.gitignore` block; never carries example-project functional descriptions. |
 
 ## 8. Consistency Checks
 
@@ -86,6 +87,7 @@ Before every workflow change is considered complete, confirm at least the follow
 
 1. Every required path touched by the change is correctly registered in this inventory.
 2. This inventory does not misclassify project input, versioned deliverables, business code, or reproducible state as required workflow items.
-3. The ignore block appended by the sync script excludes only `.aw/`; `templates/`, `baseline/`, `iteration/`, `workspace/`, and `workspace/workflow/` remain committable.
+3. The ignore block appended by the sync script excludes only `.aw/` and the instance root `README.md`; `templates/`, `baseline/`, `iteration/`, `workspace/`, and `workspace/workflow/` remain committable.
 4. The workflow tests pass: `python .workflow/tests/test_workflow.py`.
 5. New instance root READMEs continue to point at `.aw/.workflow/workflow.py`; the workflow-maintained `workspace/README.md` after `05-review-release` likewise exposes the `.aw/` workflow entry point and a local CLI example; the synchronized `workflow-governance` Skill in the instance uses the `.aw/.workflow/` command path.
+6. After `sync`, the instance root `README.md` is byte-equivalent to the framework source root `README.md`; any intentional divergence is called out in the sync commit message.

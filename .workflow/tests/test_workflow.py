@@ -524,7 +524,8 @@ class WorkflowTests(unittest.TestCase):
         )
 
     def test_sync_preserves_instance_files_and_ignores_workflow_files(self):
-        """Sync must leave instance-owned files intact and hide workflow copies from Git."""
+        """Sync must overwrite the framework-owned root README, leave other
+        instance-owned files intact, and hide workflow copies from Git."""
         with tempfile.TemporaryDirectory() as raw:
             target = Path(raw) / "instance"
             target.mkdir()
@@ -555,10 +556,17 @@ class WorkflowTests(unittest.TestCase):
                 text=True,
             )
 
+            framework_root = Path(__file__).resolve().parents[2]
+            framework_readme = (framework_root / "README.md").read_text(encoding="utf-8")
             self.assertEqual(result.returncode, 0, msg=result.stderr or result.stdout)
-            self.assertEqual((target / "README.md").read_text(encoding="utf-8"), "# Product A\n")
+            # The instance root `README.md` is framework-owned; sync must
+            # overwrite the prior committed content with the framework source.
+            self.assertEqual(
+                (target / "README.md").read_text(encoding="utf-8"), framework_readme,
+            )
             ignore_text = (target / ".gitignore").read_text(encoding="utf-8")
             self.assertIn("# BEGIN ALCHEMYWORKS WORKFLOW", ignore_text)
+            self.assertIn("README.md", ignore_text)
             self.assertTrue((target / ".aw" / ".workflow" / "workflow.py").is_file())
             self.assertFalse((target / ".aw" / ".workflow" / "scripts" / "init-instance.ps1").exists())
             self.assertTrue((target / ".aw" / ".agents" / "skills").is_dir())
@@ -582,6 +590,12 @@ class WorkflowTests(unittest.TestCase):
             ignored_instance_state = subprocess.run(
                 ["git", "-C", str(target), "check-ignore", "--quiet", "workspace/workflow/manifest.yaml"],
             )
+            # The framework-managed ignore block must list the instance root
+            # `README.md`. A previously committed `README.md` stays tracked
+            # until the instance runs `git rm --cached README.md` once, so we
+            # assert against the .gitignore text rather than `check-ignore`.
+            ignore_text = (target / ".gitignore").read_text(encoding="utf-8")
+            self.assertIn("README.md", ignore_text)
             self.assertEqual(ignored_workflow.returncode, 0)
             self.assertNotEqual(ignored_instance_state.returncode, 0)
 
@@ -614,9 +628,13 @@ class WorkflowTests(unittest.TestCase):
                 text=True,
             )
             self.assertEqual(result.returncode, 0, msg=result.stderr or result.stdout)
-            instance_readme = (target / "README.md").read_text(encoding="utf-8")
-            self.assertTrue(instance_readme.startswith("# Product A\n\n## 工作流入口\n"))
-            self.assertIn("python .aw/.workflow/workflow.py index --iteration v1.0", instance_readme)
+            framework_root = Path(__file__).resolve().parents[2]
+            framework_readme = (framework_root / "README.md").read_text(encoding="utf-8")
+            # Instance root `README.md` is framework-owned; init must copy
+            # the framework source verbatim regardless of the instance name.
+            self.assertEqual(
+                (target / "README.md").read_text(encoding="utf-8"), framework_readme,
+            )
             version = (target / ".aw" / "workflow-version.yaml").read_text(encoding="utf-8")
             self.assertIn("source_ref: HEAD", version)
             self.assertRegex(version, r"source_commit: [0-9a-f]{40}")
@@ -633,6 +651,14 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(
                 subprocess.run(
                     ["git", "-C", str(target), "check-ignore", "--quiet", ".aw/workflow-version.yaml"],
+                ).returncode,
+                0,
+            )
+            # The managed `.gitignore` block must exclude the instance root
+            # `README.md` so the framework-owned file is never tracked.
+            self.assertEqual(
+                subprocess.run(
+                    ["git", "-C", str(target), "check-ignore", "--quiet", "README.md"],
                 ).returncode,
                 0,
             )
@@ -655,9 +681,13 @@ class WorkflowTests(unittest.TestCase):
                     ["init-instance", "--name", "Product Python", "--directory", str(target)]
                 )
             self.assertEqual(result, 0)
-            instance_readme = (target / "README.md").read_text(encoding="utf-8")
-            self.assertTrue(instance_readme.startswith("# Product Python\n\n## 工作流入口\n"))
-            self.assertIn("python .aw/.workflow/workflow.py resume --json", instance_readme)
+            framework_root = Path(__file__).resolve().parents[2]
+            framework_readme = (framework_root / "README.md").read_text(encoding="utf-8")
+            # Instance root `README.md` is framework-owned; init must copy
+            # the framework source verbatim regardless of the instance name.
+            self.assertEqual(
+                (target / "README.md").read_text(encoding="utf-8"), framework_readme,
+            )
             version = (target / ".aw" / "workflow-version.yaml").read_text(encoding="utf-8")
             self.assertIn("source_ref: HEAD", version)
             self.assertTrue((target / ".aw" / ".workflow" / "workflow.py").is_file())
@@ -668,6 +698,14 @@ class WorkflowTests(unittest.TestCase):
                 (target / "AGENTS.md").read_text(encoding="utf-8"),
                 (target / ".aw" / "AGENTS.md").read_text(encoding="utf-8"),
             )
+            # The managed `.gitignore` block must exclude the instance root
+            # `README.md` so the framework-owned file is never tracked.
+            self.assertEqual(
+                subprocess.run(
+                    ["git", "-C", str(target), "check-ignore", "--quiet", "README.md"],
+                ).returncode,
+                0,
+            )
 
     def test_init_instance_defaults_name_to_target_directory(self):
         with tempfile.TemporaryDirectory() as raw:
@@ -677,8 +715,11 @@ class WorkflowTests(unittest.TestCase):
                     ["init-instance", "--directory", str(target)]
                 )
             self.assertEqual(result, 0)
-            instance_readme = (target / "README.md").read_text(encoding="utf-8")
-            self.assertTrue(instance_readme.startswith("# default-named-product\n\n## 工作流入口\n"))
+            framework_root = Path(__file__).resolve().parents[2]
+            framework_readme = (framework_root / "README.md").read_text(encoding="utf-8")
+            self.assertEqual(
+                (target / "README.md").read_text(encoding="utf-8"), framework_readme,
+            )
             version = (target / ".aw" / "workflow-version.yaml").read_text(encoding="utf-8")
             self.assertIn("source_ref: HEAD", version)
 
@@ -714,7 +755,14 @@ class WorkflowTests(unittest.TestCase):
             with patch.object(workflow, "workflow_protection_errors", return_value=[]):
                 result = workflow.main(["sync", "--directory", str(target)])
             self.assertEqual(result, 0)
-            self.assertEqual((target / "README.md").read_text(encoding="utf-8"), "# Existing Product\n")
+            framework_root = Path(__file__).resolve().parents[2]
+            framework_readme = (framework_root / "README.md").read_text(encoding="utf-8")
+            # Sync must overwrite the framework-owned instance root
+            # `README.md` even when the instance previously committed its own
+            # version.
+            self.assertEqual(
+                (target / "README.md").read_text(encoding="utf-8"), framework_readme,
+            )
             (target / "workspace" / "workflow").mkdir(parents=True)
             (target / "workspace" / "workflow" / "manifest.yaml").write_text("state\n", encoding="utf-8")
             self.assertEqual(
@@ -725,6 +773,11 @@ class WorkflowTests(unittest.TestCase):
                 subprocess.run(["git", "-C", str(target), "check-ignore", "--quiet", "workspace/workflow/manifest.yaml"]).returncode,
                 0,
             )
+            # The previously committed `README.md` stays tracked until the
+            # instance runs `git rm --cached README.md`; the new contract is
+            # that the `.gitignore` managed block now excludes it for future
+            # additions.
+            self.assertIn("README.md", (target / ".gitignore").read_text(encoding="utf-8"))
 
     def test_workflow_readme_freshness_does_not_require_instance_iteration(self):
         """The framework README must not be coupled to a product iteration."""
@@ -1603,6 +1656,115 @@ class DiffVersionsTests(unittest.TestCase):
                 self.assertEqual(payload["deprecated"], ["FR-003"])
             finally:
                 shutil.rmtree(sandbox, ignore_errors=True)
+
+    # --------------------------------------------------------------
+    # Root `README.md` ownership contract (workflow-maintenance change)
+    # --------------------------------------------------------------
+
+    def test_init_instance_root_readme_matches_framework_source(self):
+        """`init-instance` must copy the framework source `README.md`
+        verbatim into the instance root, regardless of the instance name."""
+        framework_root = Path(__file__).resolve().parents[2]
+        framework_readme = (framework_root / "README.md").read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as raw:
+            target = Path(raw) / "owned-instance"
+            with patch.object(workflow, "workflow_protection_errors", return_value=[]):
+                result = workflow.main(
+                    ["init-instance", "--name", "Owned Instance", "--directory", str(target)]
+                )
+            self.assertEqual(result, 0)
+            self.assertEqual(
+                (target / "README.md").read_text(encoding="utf-8"), framework_readme,
+            )
+
+    def test_sync_overwrites_instance_root_readme_with_framework_source(self):
+        """`sync` must overwrite the instance root `README.md` with the
+        framework source, even when the instance previously committed its
+        own version."""
+        framework_root = Path(__file__).resolve().parents[2]
+        framework_readme = (framework_root / "README.md").read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as raw:
+            target = Path(raw) / "owned-sync"
+            target.mkdir()
+            (target / "README.md").write_text("# Legacy\n", encoding="utf-8")
+            (target / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
+            subprocess.run(["git", "init", "--quiet", str(target)], check=True)
+            subprocess.run(["git", "-C", str(target), "add", "."], check=True)
+            subprocess.run(
+                [
+                        "git", "-C", str(target), "-c", "user.email=test@example.com",
+                        "-c", "user.name=Test", "commit", "--quiet", "-m", "initial",
+                    ],
+                    check=True,
+                )
+            with patch.object(workflow, "workflow_protection_errors", return_value=[]):
+                result = workflow.main(["sync", "--directory", str(target)])
+            self.assertEqual(result, 0)
+            self.assertEqual(
+                (target / "README.md").read_text(encoding="utf-8"), framework_readme,
+            )
+
+    def test_init_instance_root_readme_is_gitignored(self):
+        """After `init-instance`, the managed `.gitignore` block must
+        exclude the instance root `README.md` so it is never tracked."""
+        with tempfile.TemporaryDirectory() as raw:
+            target = Path(raw) / "ignored-instance"
+            with patch.object(workflow, "workflow_protection_errors", return_value=[]):
+                result = workflow.main(
+                    ["init-instance", "--name", "Ignored", "--directory", str(target)]
+                )
+            self.assertEqual(result, 0)
+            check = subprocess.run(
+                ["git", "-C", str(target), "check-ignore", "--quiet", "README.md"],
+            )
+            self.assertEqual(
+                check.returncode, 0,
+                msg="instance root `README.md` is not excluded by the managed `.gitignore` block",
+            )
+
+    def test_ensure_workflow_ignore_block_is_idempotent_and_includes_readme(self):
+        """`_ensure_workflow_ignore_block` must keep the instance root
+        `README.md` in the managed block and remain idempotent on repeat
+        calls."""
+        with tempfile.TemporaryDirectory() as raw:
+            target = Path(raw) / "ignore-block"
+            target.mkdir()
+            with patch.object(workflow, "workflow_protection_errors", return_value=[]):
+                workflow._ensure_workflow_ignore_block(target)
+                first = (target / ".gitignore").read_text(encoding="utf-8")
+                workflow._ensure_workflow_ignore_block(target)
+                second = (target / ".gitignore").read_text(encoding="utf-8")
+            self.assertEqual(first, second, msg="_ensure_workflow_ignore_block is not idempotent")
+            self.assertIn(
+                "README.md", first,
+                msg=".gitignore managed block must exclude the instance root `README.md`",
+            )
+            self.assertIn(".aw/", first)
+
+    def test_sync_managed_block_excludes_readme_alongside_aw(self):
+        """`sync` must produce a managed `.gitignore` block that excludes
+        both `.aw/` and the instance root `README.md`, regardless of any
+        prior content the instance committed."""
+        with tempfile.TemporaryDirectory() as raw:
+            target = Path(raw) / "sync-ignore"
+            target.mkdir()
+            (target / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
+            (target / "README.md").write_text("# Pre-existing\n", encoding="utf-8")
+            subprocess.run(["git", "init", "--quiet", str(target)], check=True)
+            subprocess.run(["git", "-C", str(target), "add", "."], check=True)
+            subprocess.run(
+                [
+                        "git", "-C", str(target), "-c", "user.email=test@example.com",
+                        "-c", "user.name=Test", "commit", "--quiet", "-m", "initial",
+                    ],
+                    check=True,
+                )
+            with patch.object(workflow, "workflow_protection_errors", return_value=[]):
+                result = workflow.main(["sync", "--directory", str(target)])
+            self.assertEqual(result, 0)
+            ignore_text = (target / ".gitignore").read_text(encoding="utf-8")
+            self.assertIn("README.md", ignore_text)
+            self.assertIn(".aw/", ignore_text)
 
 
 if __name__ == "__main__":
