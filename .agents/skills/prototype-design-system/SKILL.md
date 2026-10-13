@@ -7,105 +7,105 @@ description: Use when creating or reviewing HTML prototypes. Defines visual lang
 
 ## Purpose
 
-为 HTML Prototype 提供统一、可复用、可检查的视觉和交互规范。
+Provide a unified, reusable, reviewable visual and interaction specification for HTML prototypes.
 
-具体颜色、字体、间距、圆角数值以 `templates/design-tokens.json` 为准。
+Authoritative colors, fonts, spacing, and corner-radius values live in `templates/design-tokens.json`.
 
 ## Required References
 
-开始生成或修改原型前，**必须**读取：
+Before generating or modifying a prototype, the following MUST be read:
 
 - `templates/design-tokens.json`
-- `templates/prototype-design-system.md`（如项目确认后存在）
-- `templates/Prototype.html`（结构与交互基线）
+- `templates/prototype-design-system.md` (when the project has confirmed it exists)
+- `templates/Prototype.html` (structure and interaction baseline)
 
-路径与版本解耦 —— design system 是**模板级常量**，不属于任何版本。
+The path is decoupled from versioning — the design system is a **template-level constant** and does not belong to any version.
 
 ## Prototype Tool Routing
 
-生成或修改 `iteration/v{major}.{minor}/01-product/v{major}.{minor}-prototype.html` 前，必须先确定当前 Agent 环境的原型预览能力：
+Before generating or modifying `iteration/v{major}.{minor}/01-product/v{major}.{minor}-prototype.html`, the current Agent environment's prototype-preview capability MUST be determined:
 
-1. **Codex 环境**：使用 `visualize` 插件创建交互预览或检查原型关键交互，再生成项目内的最终 HTML 原型文件。`visualize` 预览用于探索和验证，不替代项目内的正式原型产物。
-2. **Codex 未安装 `visualize` 时**：暂停原型生成，向用户说明缺少插件，并引导用户在当前 Codex 环境安装或启用 `visualize`；未得到用户确认前不得回退为无预览生成。
-3. **其他 Agent 环境**：先搜索当前环境中与 `visualize` 能力相当的插件或工具，至少应支持交互式界面预览、状态切换检查或原型可视化检查。找到替代能力后记录名称和用途，再继续生成；找不到时暂停并请求用户提供或安装替代工具。
+1. **Codex environment**: use the `visualize` plugin to create interactive previews or inspect prototype interactions, then produce the final in-project HTML prototype. `visualize` previews support exploration and validation; they do not replace the in-project formal prototype artifact.
+2. **Codex without `visualize` installed**: pause prototype generation, tell the user that the plugin is missing, and guide them to install or enable `visualize` in the current Codex environment; do not fall back to no-preview generation until the user confirms.
+3. **Other Agent environments**: search the current environment for a plugin or tool that is equivalent to `visualize`; at minimum it must support interactive interface preview, state-switch inspection, or prototype visualization. Record the substitute name and purpose, then continue; if none can be found, pause and ask the user to provide or install a substitute.
 
-流程记录必须包含：运行环境、使用的插件/替代工具、预览或检查结果，以及无法使用时的阻断原因。不得把未实际调用的插件写成已使用。
+The process record MUST include: the runtime environment, the plugin or substitute tool used, the preview or inspection result, and the blocking reason when no tool is available. Plugins that were not actually invoked MUST NOT be reported as used.
 
 ## Design Rules
 
 ### Visual Language
 
-- 默认采用简洁、明亮、企业级 SaaS 风格。
-- 页面背景、内容面板、文字、边框和状态色必须来自设计令牌。
-- 不得在 CSS 中随意新增未定义的颜色、字号、圆角或阴影。
-- 品牌主题变化应通过修改令牌完成。
+- Adopt a clean, bright, enterprise SaaS style by default.
+- Page background, content panels, text, borders, and state colors MUST come from design tokens.
+- Do not introduce undefined colors, font sizes, corner radii, or shadows in CSS.
+- Brand-theme changes are made by editing tokens.
 
 ### Typography
 
-- 使用令牌中的字体栈。
-- 明确的标题、正文、辅助文字层级。
-- 重要信息不能只依靠颜色表达。
-- 文本过长时应定义截断、换行或展开行为。
+- Use the font stack from the tokens.
+- Establish a clear hierarchy of headings, body, and supporting text.
+- Important information MUST NOT rely on color alone.
+- Define truncation, wrapping, or expansion behavior for long text.
 
 ### Layout
 
-- 使用统一的间距单位。
-- 内容区、侧边栏、顶部导航、操作区职责清晰。
-- 支持桌面和窄屏展示。
+- Use a unified spacing unit.
+- Keep the responsibilities of the content area, sidebar, top navigation, and action area distinct.
+- Support both desktop and narrow-screen display.
 
 ### Components
 
-优先复用：
+Prefer reuse:
 
 - Button: primary / secondary / danger / disabled / loading
 - Input: default / focus / error / disabled
-- Card: 标题 / 内容 / 操作区
-- Table / List: 空状态 / 加载 / 无结果
-- Badge / Status: 语义化状态色
-- Modal / Drawer: 确认 / 取消 / 提交 / 关闭
-- Toast / Alert: 成功 / 警告 / 错误 / 信息
+- Card: title / content / action area
+- Table / List: empty / loading / no-result
+- Badge / Status: semantic status colors
+- Modal / Drawer: confirm / cancel / submit / close
+- Toast / Alert: success / warning / error / info
 
 ### Interaction States
 
-每个可操作页面至少考虑：
+Every interactive page MUST consider at least:
 
-- 初始展示
-- 加载
-- 空数据
-- 搜索无结果
-- 表单校验失败
-- 操作成功反馈
-- 操作失败反馈
-- 危险操作确认
+- initial display
+- loading
+- empty data
+- search no-result
+- form-validation failure
+- action success feedback
+- action failure feedback
+- dangerous action confirmation
 
 ## CSS Contract
 
-1. 在 `:root` 中声明设计令牌对应的 CSS Custom Properties。
-2. 组件样式优先引用 `var(--token-name)`。
-3. 避免大面积内联样式。
-4. 分组组织：页面结构 / 组件样式 / 交互状态。
-5. 保持 HTML、CSS、JS 可读，方便人工调整。
+1. Declare the design-token-mapped CSS Custom Properties under `:root`.
+2. Component styles must prefer `var(--token-name)` references.
+3. Avoid large-scale inline styles.
+4. Organize by group: page structure / component styles / interaction states.
+5. Keep HTML, CSS, and JS readable so humans can adjust them.
 
 ## Accessibility Baseline
 
-- 交互元素使用语义化 HTML。
-- 表单控件必须有可见或可关联标签。
-- 键盘焦点必须可见。
-- 颜色对比度满足常规阅读要求。
-- 图标按钮提供 `aria-label` 或可见文本。
-- 不得用颜色作为唯一的成功/失败/状态表达方式。
+- Interactive elements must use semantic HTML.
+- Form controls must have visible or programmatically-associated labels.
+- Keyboard focus must be visible.
+- Color contrast must satisfy ordinary readability requirements.
+- Icon-only buttons must provide `aria-label` or visible text.
+- Color must not be the only carrier of success / failure / status.
 
 ## Review Checklist
 
-- [ ] 页面使用统一的主题令牌。
-- [ ] 没有出现未定义的随意颜色和字体。
-- [ ] 标题、正文、辅助文字层级清晰。
-- [ ] Button / Input / Card / Table 组件风格一致。
-- [ ] 已覆盖空 / 加载 / 错误 / 成功状态。
-- [ ] 关键操作在桌面和窄屏下都可理解。
-- [ ] 键盘焦点、表单标签、图标替代文本存在。
+- [ ] The page uses the unified theme tokens.
+- [ ] No undefined ad-hoc colors or fonts appear.
+- [ ] Heading, body, and supporting-text hierarchy is clear.
+- [ ] Button / Input / Card / Table components share a consistent style.
+- [ ] Empty / loading / error / success states are all covered.
+- [ ] Key actions remain understandable on desktop and narrow screens.
+- [ ] Keyboard focus, form labels, and icon fallback text are present.
 
 ## Notes
 
-- 本 Skill 是模板级规范，**不绑定到具体版本**。
-- `templates/prototype-design-system.md` 与 `templates/design-tokens.json` 是同一规范的两份表达；如项目另行提供项目级 design system，应在 baseline 的 ADR 中记录决策。
+- This skill is a template-level specification and is **not bound to any specific version**.
+- `templates/prototype-design-system.md` and `templates/design-tokens.json` are two expressions of the same specification; if a project provides its own design system, the decision MUST be recorded in a baseline ADR.

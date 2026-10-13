@@ -7,14 +7,14 @@ description: Use when starting, handing off, or reviewing any workflow stage. En
 
 ## Purpose
 
-统一管理工作流的阶段门禁。所有正式产物阶段（项目基线、01-product 至 05-review-release）均须由人工审核；当前阶段的必需产物全部为 `status: Approved` 且校验通过后，才可进入下一阶段。
+Centralize the stage-gate policy for the workflow. Every formal artifact stage (project baseline, 01-product through 05-review-release) requires human review. The next stage may start only after every required artifact of the current stage has reached `status: Approved` and its gate validation has passed.
 
 ## Stage Order
 
 ```text
-用户原始需求（非结构化输入）
-    ↓ normalize-requirement 路由与归档
-00-baseline（仅首次项目）
+Raw user requirement (unstructured input)
+    ↓ normalize-requirement routes and archives
+00-baseline (first project only)
     ↓
 01-product → 02-design → 03-planning → 04-implementation → 05-review-release
 ```
@@ -23,52 +23,53 @@ description: Use when starting, handing off, or reviewing any workflow stage. En
 
 ### 00-baseline
 
-以下项目级产物必须存在且 `status: Approved`：
+The following project-level artifacts must exist and carry `status: Approved`:
 
 1. `baseline/01-product-vision.md`
 2. `baseline/02-product-charter.md`
 3. `baseline/03-tech-stack-decision.md`
 4. `baseline/04-glossary.md`
-5. `baseline/05-core-user-flow-prototype.html`（覆盖核心角色、关键任务闭环、关键状态和权限差异的可评审交互原型；低保真即可）
+5. `baseline/05-core-user-flow-prototype.html` (a reviewable interactive prototype covering the core roles, key task closure, principal states, and permission differences; low fidelity is acceptable)
 
-### 01-product 原型决策
+### 01-product Prototype Decision
 
-每个版本的 `requirement.md` frontmatter 必须明确 `prototype_required: true` 或 `prototype_required: false`。这是人工可审阅、门禁可校验的决策记录：
+Every iteration's `requirement.md` frontmatter MUST declare `prototype_required: true` or `prototype_required: false`. This is a human-reviewable, gate-checkable decision record:
 
-- `true`：`v{major}.{minor}-prototype.html` 成为该版本 01-product 的必需且需 Approved 的产物。适用于新页面、复杂/跨页面流程、影响业务结果的交互、体验重点、多端适配或评审存在交互分歧的改动。
-- `false`：原型不作为该版本门禁产物；frontmatter 中非空的 `prototype_baseline` 与 `prototype_rationale` 是必需门禁字段，需求与功能规格也必须记录沿用的交互基线和不制作原型的理由。适用于纯后端或非 UI 改动、复用既有模式的轻量 UI 改动，以及能由规格和验收标准无歧义表达的改动。
+- `true`: `v{major}.{minor}-prototype.html` becomes a required and Approved artifact for that iteration's 01-product gate. Applies to new pages, complex or cross-page flows, interactions that affect business outcomes, experience-critical changes, multi-device adaptations, or changes where reviewers have already raised interaction disagreements.
+- `false`: the prototype is not a required artifact for that iteration's gate. The non-empty `prototype_baseline` and `prototype_rationale` frontmatter fields become required gate fields, and the requirement plus feature specification must record the inherited interaction baseline and the reason for not producing a prototype. Applies to backend-only or non-UI changes, lightweight UI changes that reuse existing patterns, and changes that can be expressed unambiguously through specification and acceptance criteria.
 
-Baseline 核心流程原型始终必需；功能迭代的页面原型按上述决策按需生成。
+The baseline core-flow prototype is always required; page prototypes for functional iterations are produced on demand according to the decision above.
 
-### HTML 原型审核记录
+### HTML Prototype Review Record
 
-每个 HTML 原型必须使用 HTML 注释形式的 frontmatter，至少包含 `status`、`reviewer`、`reviewed_at` 和 `review_notes`。生成时使用 `status: draft`；人工审核通过时由人类填写审核人、时间和结论，并设置 `status: Approved`。`validate` 会把缺少这些字段或审核记录未完成视为门禁错误。
+Every HTML prototype MUST use an HTML-comment frontmatter that includes at least `status`, `reviewer`, `reviewed_at`, and `review_notes`. Generated prototypes use `status: draft`. When a human review passes, the human fills in the reviewer, timestamp, and conclusion, and sets `status: Approved`. `validate` treats missing or incomplete review metadata as a blocking gate error.
+
 ## Raw Requirement Intake
 
-原始需求是用户提供的来源材料，格式可以是不带 frontmatter 的 Markdown、文本、邮件、会议纪要或其他可读取文件。它不属于需要 `Approved` 的阶段产物，Agent 不得改写其原文。
+Raw requirements are user-supplied source material that may arrive as Markdown without frontmatter, plain text, email, meeting notes, or any other readable file. They are not stage artifacts that require `status: Approved`; agents MUST NOT rewrite their original text.
 
-- `baseline/` 除 `README.md` 外为空时：归档到 `baseline/raw-requirement/`，并由 `normalize-requirement` 起草 baseline 文档。
-- baseline 已初始化时：运行 `python .workflow/workflow.py route-requirement`；该命令优先使用 `.workflow/manifest.yaml` 的 `iteration` 字段确定版本，并输出集中原始需求库 `iteration/raw-requirement/` 和目标版本。该目录仅保存用户输入，Agent 只读。
-- 归一化后的 baseline 或产品需求才进入人工审核与 `stage-gate`。
+- When `baseline/` is empty apart from `README.md`: archive the raw material to `baseline/raw-requirement/`, and let `normalize-requirement` draft the baseline documents.
+- When the baseline has already been initialized: run `python .workflow/workflow.py route-requirement`. That command prefers the `iteration` field of `.workflow/manifest.yaml` to determine the version, and emits the centralized raw-requirement library `iteration/raw-requirement/` together with the target version. That directory holds user input only and is read-only for agents.
+- Normalized baseline or product requirements enter human review and `stage-gate`; raw requirements never do.
 
 ## Ownership Boundary
 
-本 Skill 只定义**门禁政策**：阶段顺序、必需产物、人工审批和允许进入下一阶段的条件。它不定义或重复工作流 CLI 的运行步骤。
+This skill defines only the **gate policy**: stage order, required artifacts, human approval, and the conditions that allow the next stage to begin. It does not define or duplicate the workflow CLI operating steps.
 
-`workflow-governance` 是索引、状态恢复、Context Pack、`validate` 和任务结论命令的唯一操作入口。开始、交接或审核阶段时，先使用该 Skill 执行命令；其 `validate` 结果是本 Skill 政策是否满足的唯一可执行证据。
+`workflow-governance` is the sole operational entry point for index, state-recovery, Context Pack, `validate`, and task-finished commands. When starting, handing off, or reviewing a stage, run those commands via that skill first; its `validate` result is the only executable evidence that this skill's policy has been satisfied.
 
 ## Handoff Policy
 
-1. Agent 只创建或更新 `draft` / `In Review` 产物，并列出审核所需的路径与证据。
-2. 人工审核后手动把本阶段全部必需产物设为 `Approved`。
-3. 仅当 `workflow-governance` 执行的对应阶段校验返回 0 时，才可开始下一阶段；非零结果是硬性停止条件。
+1. Agents create or update `draft` / `In Review` artifacts only, and list every required artifact path plus verification evidence for human review.
+2. After human review, the human manually sets every required artifact of the current stage to `status: Approved`.
+3. The next stage may start only when the corresponding stage validation run via `workflow-governance` returns zero; a non-zero result is a hard stop.
 
 ## Failure Handling
 
-- 不得跳过任一阶段、审核或门禁。
-- 不得由 Agent 写入或修改 `status: Approved`。
-- 原始需求缺失、无法读取，或归一化产物未保留其可追溯来源时，停止并要求补正。
+- Do not skip any stage, review, or gate.
+- Do not let agents write or change `status: Approved`.
+- Stop and request correction when raw requirements are missing, unreadable, or when a normalized artifact has lost its traceable source.
 
 ## Output
 
-报告应列出：当前阶段、所有必需产物、每个产物的状态、校验命令与结果，以及下一步是否允许开始。
+The report must list: the current stage, every required artifact, the status of each, the validation command and its result, and whether the next stage is permitted to start.
