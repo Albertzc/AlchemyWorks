@@ -29,7 +29,7 @@
 | Path | Required contents | Purpose |
 |---|---|---|
 | `.aw/.workflow/` (source repo: `.workflow/`) | `workflow.py`, `README.md` | Workflow CLI (including baseline core-flow prototype and per-iteration prototype gates, the `refresh` command run after document changes, automatic maintenance of the instance `workspace/README.md` current-version functionality section from the release log after `05-review-release` passes, version-archive validation, and Context Pack cache cleanup for archived versions) and its operating documentation. The instance copy of this directory does not include regression tests. |
-| `.aw/.workflow/scripts/` (source repo: `.workflow/scripts/`) | `stage_status.py`, `id_registry.py`, `query_id.py`, `check_links.py`, `diff_versions.py` | State, ID, link, and version-comparison utilities callable by agents and maintainers. The init/sync wrapper scripts live only in the source repository. |
+| `.aw/.workflow/scripts/` (source repo: `.workflow/scripts/`) | `stage_status.py`, `id_registry.py`, `query_id.py`, `check_links.py`, `diff_versions.py` | State, ID, link, and version-comparison utilities callable by agents and maintainers. |
 | `.aw/.workflow/dashboard/` | `template.html` | Workflow dashboard source template; dashboard pages are generated on demand. |
 | `.workflow/tests/` (source repo only) | `test_workflow.py` | Regression tests for the workflow CLI; not copied into instance projects at initialization. |
 

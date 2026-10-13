@@ -84,7 +84,7 @@ python .workflow/workflow.py init-instance --name "Product A" --directory "E:\pa
 python .workflow/workflow.py sync --directory "E:\path\to\target-project"
 ```
 
-Use `--dry-run` to preview either operation and `--allow-dirty` only after reviewing intentional target overlap. The `.ps1` files below remain Windows compatibility wrappers only.
+Use `--dry-run` to preview either operation and `--allow-dirty` only after reviewing intentional target overlap.
 
 The Python CLI is the single implementation for instance initialization and synchronization. The instance name is optional; when omitted, the final directory name is used:
 
@@ -95,8 +95,8 @@ python .workflow/workflow.py init-instance --directory "E:\path\to\product-a"
 
 Use `--dry-run` to preview the initialization. The command creates the instance Git repository, instance `README.md`, `AGENTS.md`, root `templates/`, `baseline/`, `iteration/`, `workspace/`, and ignored `.aw/workflow-version.yaml`, then synchronizes the workflow definition. Pass `--workflow-version '<tag|branch|commit>'` to initialize from a specific workflow ref.
 
-Run `.\.workflow\scripts\sync-workflow.ps1 -TargetRoot '<target-project-root>'` from this repository to copy the workflow definition to a target Git working tree. The script copies only the items governed by `workflow-file-inventory.md`: shared rules, CLI, templates, scaffold READMEs, and Skills. It does not copy `baseline/` deliverables, `iteration/` deliverables, `workspace/` business code, or generated workflow state.
+Run `python .workflow/workflow.py sync --directory '<target-project-root>'` from this repository to copy the workflow definition to a target Git working tree. The command copies only the items governed by `workflow-file-inventory.md`: shared rules, CLI, templates, scaffold READMEs, and Skills. It does not copy `baseline/` deliverables, `iteration/` deliverables, `workspace/` business code, or generated workflow state.
 
-The script permits unrelated target changes, but rejects uncommitted changes that overlap a synchronized workflow path. Existing instance templates are preserved; use the Python CLI with `--workflow-version '<tag|branch|commit>'` when changing the source ref. After reviewing an intentional overlap, use `-AllowDirtyTarget`; use PowerShell's `-WhatIf` to preview the copy. The target `.gitignore` receives an idempotent managed block for `.aw/`; `workspace/workflow/` and `templates/` remain visible to Git. Invoke the framework CLI with `--project-root '<target-project-root>'` to write state to the target instance, or run `.aw/.workflow/workflow.py` locally after synchronization.
+The command permits unrelated target changes, but rejects uncommitted changes that overlap a synchronized workflow path. Existing instance templates are preserved; pass `--workflow-version '<tag|branch|commit>'` when changing the source ref. After reviewing an intentional overlap, use `--allow-dirty`; use `--dry-run` to preview the copy. The target `.gitignore` receives an idempotent managed block for `.aw/`; `workspace/workflow/` and `templates/` remain visible to Git. Invoke the framework CLI with `--project-root '<target-project-root>'` to write state to the target instance, or run `.aw/.workflow/workflow.py` locally after synchronization.
 
 Every completed TASK must use `context` first, then `task-finished`. The latter validates that the task exists in the current task plan, requires the Context Pack, writes the latest conclusion plus an immutable history record, refreshes the recovery checkpoint, and prints a concise result. `index`, `validate`, `context`, and `task-finished` all refresh the checkpoint. It is a cache only: artifact frontmatter and gate results remain authoritative. Use `--refresh-index` or `--refresh-dashboard` when those generated views must also be refreshed.

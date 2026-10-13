@@ -387,25 +387,25 @@ python .workflow/workflow.py init-instance --name "Product A" --directory "E:\pa
 python .workflow/workflow.py sync --directory "E:\path\to\target-project"
 ```
 
-使用 `--dry-run` 预览操作，只有确认目标项目存在有意修改时才使用 `--allow-dirty`。下方 PowerShell 脚本仅作为 Windows 兼容包装器。
+使用 `--dry-run` 预览操作，只有确认目标项目存在有意修改时才使用 `--allow-dirty`。
 
 从本仓库根目录执行以下命令，可以按实例名称和目录创建新的实例项目：
 
-```powershell
-.\.workflow\scripts\init-instance.ps1 -InstanceName 'Product A' -TargetRoot 'E:\path\to\product-a'
-# 省略 -InstanceName 时使用目标目录名称
-.\.workflow\scripts\init-instance.ps1 -TargetRoot 'E:\path\to\product-a'
+```text
+python .workflow/workflow.py init-instance --name "Product A" --directory "E:\path\to\product-a"
+# 省略 --name 时使用目标目录名称
+python .workflow/workflow.py init-instance --directory "E:\path\to\product-a"
 ```
 
-初始化命令会创建实例 Git 仓库、实例 `README.md`、`AGENTS.md`、`templates/`、`baseline/`、`iteration/` 和 `workspace/`，然后同步工作流定义。可使用 `--workflow-version <tag|branch|commit>` 指定工作流版本；预览使用 PowerShell 的 `-WhatIf`。
+初始化命令会创建实例 Git 仓库、实例 `README.md`、`AGENTS.md`、`templates/`、`baseline/`、`iteration/` 和 `workspace/`，然后同步工作流定义。可使用 `--workflow-version <tag|branch|commit>` 指定工作流版本；预览使用 `--dry-run`。
 
 已有实例项目则使用以下命令同步工作流源定义：
 
-```powershell
-.\workflow\scripts\sync-workflow.ps1 -TargetRoot 'E:\path\to\target-project'
+```text
+python .workflow/workflow.py sync --directory "E:\path\to\target-project"
 ```
 
-该脚本仅同步 `workflow-file-inventory.md` 规定的共享规则、CLI 和 Skills 到实例 `.aw/`，并向根目录 `templates/` 补充缺失的默认模板；不会覆盖实例项目的 `README.md`、根 `AGENTS.md`、`templates/` 或 `.gitignore`，也不会复制项目的 `baseline/`、`iteration/`、`workspace/` 内容或运行状态。同步后会在实例 `.gitignore` 中幂等维护仅包含 `.aw/` 的工作流忽略区块，`workspace/workflow/` 和 `templates/` 状态仍可提交。目标项目可以有不相关的修改；只有同步路径发生重叠时默认拒绝执行，确认需要覆盖时才使用 `-AllowDirtyTarget`，预览可使用 `-WhatIf`。
+该命令仅同步 `workflow-file-inventory.md` 规定的共享规则、CLI 和 Skills 到实例 `.aw/`，并向根目录 `templates/` 补充缺失的默认模板；不会覆盖实例项目的 `README.md`、根 `AGENTS.md`、`templates/` 或 `.gitignore`，也不会复制项目的 `baseline/`、`iteration/`、`workspace/` 内容或运行状态。同步后会在实例 `.gitignore` 中幂等维护仅包含 `.aw/` 的工作流忽略区块，`workspace/workflow/` 和 `templates/` 状态仍可提交。目标项目可以有不相关的修改；只有同步路径发生重叠时默认拒绝执行，确认需要覆盖时才使用 `--allow-dirty`，预览可使用 `--dry-run`。
 
 ### 2. 常用工作流
 

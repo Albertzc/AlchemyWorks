@@ -549,11 +549,10 @@ class WorkflowTests(unittest.TestCase):
                 check=True,
             )
 
-            script = Path(__file__).resolve().parents[1] / "scripts" / "sync-workflow.ps1"
-            result = subprocess.run(
-                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script), "-TargetRoot", str(target)],
-                capture_output=True,
-                text=True,
+            with patch.object(workflow, "workflow_protection_errors", return_value=[]):
+                sync_returncode = workflow.main(["sync", "--directory", str(target)])
+            result = subprocess.CompletedProcess(
+                args=["sync"], returncode=sync_returncode, stdout="", stderr="",
             )
 
             framework_root = Path(__file__).resolve().parents[2]
@@ -569,6 +568,10 @@ class WorkflowTests(unittest.TestCase):
             self.assertIn("README.md", ignore_text)
             self.assertTrue((target / ".aw" / ".workflow" / "workflow.py").is_file())
             self.assertFalse((target / ".aw" / ".workflow" / "scripts" / "init-instance.ps1").exists())
+            synced_ps1 = sorted(
+                p.name for p in (target / ".aw" / ".workflow" / "scripts").iterdir() if p.suffix == ".ps1"
+            )
+            self.assertEqual(synced_ps1, [], msg=f"sync must not carry PowerShell wrappers into the instance: {synced_ps1}")
             self.assertTrue((target / ".aw" / ".agents" / "skills").is_dir())
             self.assertTrue((target / "templates").is_dir())
             self.assertEqual((target / "templates" / "custom.md").read_text(encoding="utf-8"), "custom\n")
@@ -598,70 +601,6 @@ class WorkflowTests(unittest.TestCase):
             self.assertIn("README.md", ignore_text)
             self.assertEqual(ignored_workflow.returncode, 0)
             self.assertNotEqual(ignored_instance_state.returncode, 0)
-
-    def test_init_instance_dry_run_does_not_create_target(self):
-        with tempfile.TemporaryDirectory() as raw:
-            target = Path(raw) / "new-instance"
-            script = Path(__file__).resolve().parents[1] / "scripts" / "init-instance.ps1"
-            result = subprocess.run(
-                [
-                    "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script),
-                    "-TargetRoot", str(target), "-WhatIf",
-                ],
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(result.returncode, 0, msg=result.stderr or result.stdout)
-            self.assertFalse(target.exists())
-            self.assertIn("would initialize instance", result.stdout)
-
-    def test_init_instance_creates_readme_lock_and_synced_workflow(self):
-        with tempfile.TemporaryDirectory() as raw:
-            target = Path(raw) / "new-instance"
-            script = Path(__file__).resolve().parents[1] / "scripts" / "init-instance.ps1"
-            result = subprocess.run(
-                [
-                    "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script),
-                    "-InstanceName", "Product A", "-TargetRoot", str(target),
-                ],
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(result.returncode, 0, msg=result.stderr or result.stdout)
-            framework_root = Path(__file__).resolve().parents[2]
-            framework_readme = (framework_root / "README.md").read_text(encoding="utf-8")
-            # Instance root `README.md` is framework-owned; init must copy
-            # the framework source verbatim regardless of the instance name.
-            self.assertEqual(
-                (target / "README.md").read_text(encoding="utf-8"), framework_readme,
-            )
-            version = (target / ".aw" / "workflow-version.yaml").read_text(encoding="utf-8")
-            self.assertIn("source_ref: HEAD", version)
-            self.assertRegex(version, r"source_commit: [0-9a-f]{40}")
-            self.assertTrue((target / ".aw" / ".workflow" / "workflow.py").is_file())
-            self.assertTrue((target / ".aw" / "README.md").is_file())
-            self.assertTrue((target / ".aw" / "AGENTS.md").is_file())
-            self.assertEqual(
-                (target / "AGENTS.md").read_text(encoding="utf-8"),
-                (target / ".aw" / "AGENTS.md").read_text(encoding="utf-8"),
-            )
-            self.assertTrue((target / "baseline" / "raw-requirement").is_dir())
-            self.assertTrue((target / "iteration" / "raw-requirement").is_dir())
-            self.assertTrue((target / "workspace").is_dir())
-            self.assertEqual(
-                subprocess.run(
-                    ["git", "-C", str(target), "check-ignore", "--quiet", ".aw/workflow-version.yaml"],
-                ).returncode,
-                0,
-            )
-            # The managed `.gitignore` block must exclude the instance root
-            # `README.md` so the framework-owned file is never tracked.
-            self.assertEqual(
-                subprocess.run(
-                    ["git", "-C", str(target), "check-ignore", "--quiet", "README.md"],
-                ).returncode,
-                0,
-            )
 
     def test_python_init_instance_dry_run_does_not_create_target(self):
         with tempfile.TemporaryDirectory() as raw:
