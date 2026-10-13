@@ -1,91 +1,91 @@
-# 工作流必要文件与目录清单
+# Workflow Required Files and Directories
 
-> 本文件是 Alchemy Works 工作流自身的权威目录清单。它描述的是工作流的定义、执行能力和初始化脚手架；不描述某一项目或某一迭代产生的交付物。
+> This file is the authoritative directory inventory of the AlchemyWorks workflow itself. It describes the workflow's definitions, execution capabilities, and initialization scaffold. It does not describe deliverables produced by a specific project or iteration.
 
-## 1. 维护规则
+## 1. Maintenance Rules
 
-- 修改、新增、移动或删除下表列出的工作流文件或目录时，必须在同一变更中更新本清单。
-- 修改工作流行为时，除更新本清单外，还必须同步更新受影响的说明、Skill、模板、测试或 `.gitignore` 规则。
-- 新条目必须先明确其用途、是否为必要项，以及是否属于可再生运行状态；可再生状态不得加入本清单的“必要项”。
-- 代码评审和工作流自检应将“实现变更与本清单一致”作为检查项。
+- When any workflow file or directory listed in the tables below is modified, added, moved, or deleted, this inventory MUST be updated in the same change.
+- When workflow behavior changes, this inventory must be updated together with any affected documentation, Skills, templates, tests, or `.gitignore` rules.
+- A new entry must first clarify its purpose, whether it is required, and whether it is reproducible runtime state. Reproducible state MUST NOT be added to the "required" entries of this inventory.
+- Code review and workflow self-checks must treat "implementation change matches this inventory" as a review item.
 
-## 1.1 核心骨架保护
+### 1.1 Core Scaffold Protection
 
-- 上表登记的工作流定义、Skill、模板、治理规则、脚本和测试，在产品开发期间视为只读核心骨架。
-- `baseline/`、`iteration/` 和 `workspace/` 下的项目产物不属于核心骨架；`workspace/workflow/` 下的 manifest、traceability、current-state 属于实例项目的可再生项目状态，应由实例项目 Git 管理；实例同步后的 `.aw/` 是本地工作流副本，默认整体忽略。
-- `python .workflow/workflow.py verify-workflow` 检查核心骨架是否有未提交修改；产品工作流 CLI 在发现修改时阻断。
-- 核心骨架只能通过独立的 workflow-maintenance 变更修改；该变更必须同步更新本清单、说明、测试和同步脚本，并在提交后恢复产品工作流。
+- The workflow definitions, Skills, templates, governance rules, scripts, and tests registered in the tables below are treated as a read-only core scaffold during product development.
+- Project deliverables under `baseline/`, `iteration/`, and `workspace/` are not part of the core scaffold. The `manifest.yaml`, `traceability.json`, and `current-state.json` files under `workspace/workflow/` are reproducible instance-project state and must be managed by the instance project's Git. The synchronized `.aw/` directory is a local workflow copy that is ignored by default.
+- `python .workflow/workflow.py verify-workflow` checks whether the core scaffold has uncommitted modifications; product workflow CLI commands block when such modifications are detected.
+- The core scaffold may only be modified through a dedicated workflow-maintenance change. That change must update this inventory, the affected documentation, tests, and sync scripts in the same change, and must be committed cleanly before product workflow commands resume.
 
-## 2. 必要的顶层治理文件
+## 2. Required Top-Level Governance Files
 
-| 路径 | 类型 | 用途 |
+| Path | Type | Purpose |
 |---|---|---|
-| `AGENTS.md` | 治理规则 | 定义协作、审批、版本、变更与安全约束。 |
-| `README.md` | 工作流框架原理与实例项目使用说明 | 分别说明框架的目录、阶段、治理机制，以及实例项目的初始化、同步、开发和验证方式；实例初始化时生成的根 README 必须保留 `.aw/` 工作流入口和本地 CLI 示例，并作为项目级入口由实例项目自治维护。 |
-| `.gitignore` | 版本控制规则 | 源仓库正常跟踪工作流源文件；同步脚本只向实例项目幂等追加仅忽略 `.aw/` 的区块，不覆盖实例已有规则，也不排除 `workspace/workflow/` 下的实例状态。 |
+| `AGENTS.md` | Governance rules | Defines collaboration, approval, versioning, change, and security constraints. |
+| `README.md` | Workflow framework principles and instance-project usage guide | Describes the framework's directory layout, stages, and governance mechanisms, plus instance-project initialization, synchronization, development, and verification. The instance root README generated at initialization must keep the `.aw/` workflow entry point and local CLI examples and is owned and maintained by the instance project as its project-level entry. |
+| `.gitignore` | Version-control rules | The source repository normally tracks workflow source files; the sync script only idempotently appends a block that ignores `.aw/` into instance projects. It never overwrites existing instance rules and never excludes instance state under `workspace/workflow/`. |
 
-## 3. 必要的工作流执行与校验目录
+## 3. Required Workflow Execution and Verification Directories
 
-| 路径 | 必需内容 | 用途 |
+| Path | Required contents | Purpose |
 |---|---|---|
-| `.aw/.workflow/`（源仓库为 `.workflow/`） | `workflow.py`、`README.md` | 工作流 CLI（含 baseline 核心流程原型与迭代按需原型门禁、文档变更后的 `refresh` 同步命令、05-review-release 通过后从 release-log 自动维护实例 `workspace/README.md` 当前版本功能说明、版本归档校验、已归档版本 Context Pack 缓存清理）及其操作说明。实例中的该目录不包含回归测试。 |
-| `.aw/.workflow/scripts/`（源仓库为 `.workflow/scripts/`） | `stage_status.py`、`id_registry.py`、`query_id.py`、`check_links.py`、`diff_versions.py` | 供 Agent 和维护者调用的状态、ID、链接与版本比较工具。初始化和同步包装脚本只保留在源仓库。 |
-| `.aw/.workflow/dashboard/` | `template.html` | 工作流仪表盘源模板；仪表盘页面按需生成。 |
-| `.workflow/tests/`（仅源仓库） | `test_workflow.py` | 工作流 CLI 的维护回归测试；实例初始化时不复制。 |
+| `.aw/.workflow/` (source repo: `.workflow/`) | `workflow.py`, `README.md` | Workflow CLI (including baseline core-flow prototype and per-iteration prototype gates, the `refresh` command run after document changes, automatic maintenance of the instance `workspace/README.md` current-version functionality section from the release log after `05-review-release` passes, version-archive validation, and Context Pack cache cleanup for archived versions) and its operating documentation. The instance copy of this directory does not include regression tests. |
+| `.aw/.workflow/scripts/` (source repo: `.workflow/scripts/`) | `stage_status.py`, `id_registry.py`, `query_id.py`, `check_links.py`, `diff_versions.py` | State, ID, link, and version-comparison utilities callable by agents and maintainers. The init/sync wrapper scripts live only in the source repository. |
+| `.aw/.workflow/dashboard/` | `template.html` | Workflow dashboard source template; dashboard pages are generated on demand. |
+| `.workflow/tests/` (source repo only) | `test_workflow.py` | Regression tests for the workflow CLI; not copied into instance projects at initialization. |
 
-## 4. 必要的 Agent 能力目录
+## 4. Required Agent Capability Directories
 
-| 路径 | 必需内容 | 用途 |
+| Path | Required contents | Purpose |
 |---|---|---|
-| `.aw/.agents/skills/stage-gate/`（源仓库为 `.agents/skills/stage-gate/`） | `SKILL.md` | 阶段开始、交接与审核的门禁政策：阶段顺序、必需产物和人工审批条件。 |
-| `.aw/.agents/skills/normalize-requirement/` | `SKILL.md` | 原始需求路由和规范化规则。 |
-| `.aw/.agents/skills/manage-iteration/` | `SKILL.md` | 创建、发现和归档迭代的规则；下一版本创建成功后归档已 RC 完成的上一版本。 |
-| `.aw/.agents/skills/prototype-design-system/` | `SKILL.md`、`references/` | 原型视觉、交互和设计令牌约束。 |
-| `.aw/.agents/skills/design-specification/` | `SKILL.md` | 02-design 的架构、API、数据库字典产物与一致性检查。 |
-| `.aw/.agents/skills/planning-validation/` | `SKILL.md` | 03-planning 的 TASK DAG、验收覆盖和验证计划约束。 |
-| `.aw/.agents/skills/iterate-implementation/` | `SKILL.md` | 实现阶段的代码、测试和记录约束；v1.0 保留独立 `issue-fixes.md`，v1.1+ 将 Issue 记录合并入 `source-code.md`。 |
-| `.aw/.agents/skills/review-release/` | `SKILL.md` | 05-review-release 的审查证据、风险、回滚和发布决策约束。 |
-| `.aw/.agents/skills/release-log/` | `SKILL.md` | 05-review-release 的封档产物（`v{N}-release-log.md`）；仅需存在,无需 `status: Approved` 校验。 |
-| `.aw/.agents/skills/workflow-governance/` | `SKILL.md` | 工作流 CLI 的唯一操作入口：索引、状态、校验、追溯、Context Pack 和任务结论。 |
+| `.aw/.agents/skills/stage-gate/` (source repo: `.agents/skills/stage-gate/`) | `SKILL.md` | Stage-start, handoff, and review gate policy: stage order, required artifacts, and human-approval conditions. |
+| `.aw/.agents/skills/normalize-requirement/` | `SKILL.md` | Raw-requirement routing and normalization rules. |
+| `.aw/.agents/skills/manage-iteration/` | `SKILL.md` | Rules for creating, discovering, and archiving iterations; archives an RC-complete previous version after the next version is created successfully. |
+| `.aw/.agents/skills/prototype-design-system/` | `SKILL.md`, `references/` | Prototype visual, interaction, and design-token constraints. |
+| `.aw/.agents/skills/design-specification/` | `SKILL.md` | 02-design architecture, API, and database-dictionary artifact and consistency-check rules. |
+| `.aw/.agents/skills/planning-validation/` | `SKILL.md` | 03-planning TASK DAG, acceptance-coverage, and validation-plan constraints. |
+| `.aw/.agents/skills/iterate-implementation/` | `SKILL.md` | Implementation-stage code, tests, and record constraints; v1.0 keeps a standalone `issue-fixes.md`, v1.1+ merges ISSUE records into `source-code.md`. |
+| `.aw/.agents/skills/review-release/` | `SKILL.md` | 05-review-release review evidence, risks, rollback, and release-decision constraints. |
+| `.aw/.agents/skills/release-log/` | `SKILL.md` | 05-review-release closing artifact (`v{N}-release-log.md`); existence-only contract, no `status: Approved` check. |
+| `.aw/.agents/skills/workflow-governance/` | `SKILL.md` | Sole operational entry point for the workflow CLI: index, state, validate, traceability, Context Pack, and task-finished commands. |
 
-## 5. 必要的跨项目模板目录
+## 5. Required Cross-Project Template Directory
 
-| 路径 | 必需内容 | 用途 |
+| Path | Required contents | Purpose |
 |---|---|---|
-| `templates/` | `README.md`、`product.md`、`design.md`、`implementation.md`、`release-log.md` | 初始化时复制到实例根目录，作为可由实例项目维护的默认模板。 |
-| `templates/` | `Prototype.html`、`prototype-design-system.md`、`design-tokens.json` | 原型基线、视觉规范与机器可读设计令牌；原型审核使用 `status` 作为唯一结论字段。 |
+| `templates/` | `README.md`, `product.md`, `design.md`, `implementation.md`, `release-log.md` | Copied into instance project roots at initialization as the default templates maintainable by the instance project. |
+| `templates/` | `Prototype.html`, `prototype-design-system.md`, `design-tokens.json` | Prototype baseline, visual specification, and machine-readable design tokens; prototype review uses `status` as the only review-conclusion field. |
 
-## 6. 必要的初始化脚手架目录
+## 6. Required Initialization Scaffold Directories
 
-这些目录属于实例项目，不是 AlchemyWorks 源仓库的工作流产物。`init-instance` 创建目录和说明文件；`sync` 不同步这些目录。
+These directories belong to instance projects, not to the AlchemyWorks source repository. `init-instance` creates the directories and their README files; `sync` does not synchronize these directories.
 
-| 路径 | 必需内容 | 用途 |
+| Path | Required contents | Purpose |
 |---|---|---|
-| `baseline/` | `README.md`、`raw-requirement/README.md` | 项目首次立项时的基线、必需核心流程原型和原始需求入口。 |
-| `iteration/` | 实例初始化创建 | 版本化交付物及后续原始需求的入口。 |
-| `workspace/` | `README.md` | 实例项目真实业务代码、测试、配置和 workspace 工作原理说明；`README.md` 由工作流在每个版本通过 `05-review-release` 阶段后自动维护，内容从 `iteration/{v{N}}/05-review-release/{v{N}}-release-log.md` §2.1-§2.4、§3 与 §7 抽取，并刷新 `<!-- workflow:workspace-readme-version: v{major}.{minor} -->` 标记。 |
+| `baseline/` | `README.md`, `raw-requirement/README.md` | Baseline, required core-flow prototype, and raw-requirement intake for first-time project setup. |
+| `iteration/` | created at instance initialization | Entry point for versioned deliverables and later raw requirements. |
+| `workspace/` | `README.md` | Real business code, tests, and configuration for the instance project, plus a README describing the workspace's operating conventions. The `README.md` is auto-maintained by the workflow after each version passes the `05-review-release` gate; its content is extracted from `iteration/{v{N}}/05-review-release/{v{N}}-release-log.md` §2.1–§2.4, §3, and §7, and the `<!-- workflow:workspace-readme-version: v{major}.{minor} -->` marker is refreshed. |
 
-## 7. 明确不属于工作流必要项的内容
+## 7. Explicitly Out of Scope for Required Workflow Items
 
-以下内容由项目使用工作流后输入、产生或缓存，不能被误认为工作流定义的一部分：
+The following content is input to, produced by, or cached by a project that uses the workflow. It must not be mistaken for part of the workflow definition.
 
-| 路径模式 | 分类 | 处理原则 |
+| Path pattern | Classification | Handling rule |
 |---|---|---|
-| `baseline/` 下除说明和原始需求入口外的内容 | 项目基线产物 | 由具体项目维护。 |
-| `baseline/raw-requirement/` 下除 `README.md` 外的文件 | 用户原始输入 | 原样保留，不由 Agent 修改。 |
-| `iteration/raw-requirement/` 下除 `README.md` 外的文件 | 用户原始输入 | 原样保留，不由 Agent 修改。 |
-| `iteration/v{major}.{minor}/`、`iteration/archive/` | 版本化交付物 | 属于具体项目和版本，遵循阶段审批与归档规则。 |
-| `workspace/` 下的内容 | 业务实现与实例文档 | 属于被工作流驱动的产品代码、测试、配置和项目自行维护的功能说明。 |
-| `workspace/workflow/manifest.yaml`、`traceability.json`、`current-state.json` | 实例项目状态与审计索引 | 不属于工作流源定义；由选定的实例项目根目录生成，属于实例项目版本控制内容，不受 `.gitignore` 管理。 |
-| `.aw/` | 同步后的框架文件与本地可再生运行状态 | 可以存在于实例目录供本地运行，但不属于实例项目业务提交；同步脚本默认将其加入实例 `.gitignore`。 |
-| `.aw/workflow-version.yaml` | 同步版本元数据 | 由 `init-instance` / `sync` 写入，记录工作流 ref 和 commit；实例项目不提交。 |
+| Content under `baseline/` other than the README and the raw-requirement intake | Project baseline deliverables | Maintained by the specific project. |
+| Files under `baseline/raw-requirement/` other than `README.md` | User-supplied raw input | Preserved verbatim; not modified by agents. |
+| Files under `iteration/raw-requirement/` other than `README.md` | User-supplied raw input | Preserved verbatim; not modified by agents. |
+| `iteration/v{major}.{minor}/`, `iteration/archive/` | Versioned deliverables | Belong to the specific project and version; follow stage-approval and archive rules. |
+| Content under `workspace/` | Business implementation and instance documentation | Belongs to the product code, tests, configuration, and project-owned functional description driven by the workflow. |
+| `workspace/workflow/manifest.yaml`, `traceability.json`, `current-state.json` | Instance-project state and audit index | Not part of the workflow source definition; generated for the selected instance-project root and committed under that instance project's version control, not managed by `.gitignore`. |
+| `.aw/` | Synchronized framework files and local reproducible runtime state | May exist in the instance directory for local execution but is not part of the instance project's business commits; the sync script adds it to the instance `.gitignore` by default. |
+| `.aw/workflow-version.yaml` | Synchronization version metadata | Written by `init-instance` / `sync`; records the workflow ref and commit; not committed by the instance project. |
 
-## 8. 一致性检查
+## 8. Consistency Checks
 
-每次工作流变更完成前，至少确认：
+Before every workflow change is considered complete, confirm at least the following:
 
-1. 变更涉及的必要路径已在本清单中正确登记。
-2. 本清单未将项目输入、版本产物、业务代码或可再生状态误列为工作流必要项。
-3. 同步脚本追加的忽略区块只排除 `.aw/`；`templates/`、`baseline/`、`iteration/`、`workspace/` 和 `workspace/workflow/` 保持可提交。
-4. 工作流测试通过：`python .workflow/tests/test_workflow.py`。
-5. 新实例根 README 仍指向 `.aw/.workflow/workflow.py`；05-review-release 通过后由工作流维护的 `workspace/README.md` 同样给出 `.aw/` 工作流入口与本地 CLI 示例；同步实例中的 workflow-governance Skill 使用 `.aw/.workflow/` 命令。
+1. Every required path touched by the change is correctly registered in this inventory.
+2. This inventory does not misclassify project input, versioned deliverables, business code, or reproducible state as required workflow items.
+3. The ignore block appended by the sync script excludes only `.aw/`; `templates/`, `baseline/`, `iteration/`, `workspace/`, and `workspace/workflow/` remain committable.
+4. The workflow tests pass: `python .workflow/tests/test_workflow.py`.
+5. New instance root READMEs continue to point at `.aw/.workflow/workflow.py`; the workflow-maintained `workspace/README.md` after `05-review-release` likewise exposes the `.aw/` workflow entry point and a local CLI example; the synchronized `workflow-governance` Skill in the instance uses the `.aw/.workflow/` command path.
