@@ -7,118 +7,120 @@ description: Use whenever a user provides an unstructured requirement. Routes it
 
 ## Purpose
 
-将用户提供、格式可能不统一的原始需求，先路由并归档，再归一化为 baseline 草稿或 `iteration/v{major}.{minor}/01-product/v{major}.{minor}-requirement.md` 草稿。
+Take a user-supplied raw requirement, which may arrive in inconsistent formats, route and archive it first, then normalize it into either the baseline draft or `iteration/v{major}.{minor}/01-product/v{major}.{minor}-requirement.md` draft.
 
 ## Route First
 
-开始归一化前，运行：
+Before normalizing, run:
 
 ```powershell
 python .workflow/workflow.py route-requirement
 ```
 
-该命令按以下规则输出原始需求的归档位置：
+The command emits the archive location for the raw requirement according to these rules:
 
-1. `baseline/` 除 `README.md` 外为空：返回 `mode: baseline` 与 `baseline/raw-requirement/`。这是首次项目的 baseline 需求处理；保留用户原文，并根据其明确事实起草 4 份 baseline 文档和 1 份核心流程原型，全部保持 `status: draft`。
-2. baseline 已初始化：返回 `mode: iteration`。优先使用 `.workflow/manifest.yaml` 的 `iteration` 字段；若 manifest 不存在或没有有效版本号，再使用目录发现结果。将用户原始材料原样保存到输出的 `iteration/raw-requirement/`；命令返回的 `iteration` 是该输入对应的目标版本。
+1. When `baseline/` is empty apart from `README.md`: return `mode: baseline` and `baseline/raw-requirement/`. This is the baseline-requirement path for a first-time project; preserve the user's original wording, and draft the four baseline documents and one core-flow prototype from explicit facts in the original material, all kept as `status: draft`.
+2. When the baseline has already been initialized: return `mode: iteration`. Prefer the `iteration` field of `.workflow/manifest.yaml`; if the manifest does not exist or has no valid version, fall back to directory discovery. Store the user's original material verbatim into the emitted `iteration/raw-requirement/`; the `iteration` value returned by the command is the target version for this input.
 
-原始材料不是门禁产物，不要求 frontmatter 或 `status: Approved`。`iteration/raw-requirement/` 中的材料归用户所有且只读：Agent 不得修改、重命名或删除原始文件。归一化产物必须在 frontmatter 或“来源追溯”章节记录原始文件路径与 `route-requirement` 返回的目标版本；归一化产物才进入人工审核。
+Raw material is not a gate artifact and does not require frontmatter or `status: Approved`. Material under `iteration/raw-requirement/` is user-owned and read-only: agents MUST NOT modify, rename, or delete the raw files. The normalized artifact MUST record the raw file path and the target version returned by `route-requirement` in its frontmatter or "Source Traceability" section; only the normalized artifact enters human review.
 
 ## Pre-flight
 
-| 版本 | 必须先调用 |
+| Version | Required prior call |
 |---|---|
-| baseline 路由 | 归档原始需求，起草 `baseline/` 的 4 个文档和核心流程原型；人工审核后运行 `validate --stage 00-baseline`。 |
-| `v1.0`（首次项目） | `00-baseline` 通过后调用 manage-iteration 创建骨架，归档同一原始需求的迭代快照，再归一化为产品需求。 |
-| `v{major}.{minor}`（已初始化项目） | 使用 `route-requirement` 解析的版本；如目录不存在，先调用 manage-iteration 创建骨架。 |
+| baseline route | Archive raw requirement; draft the four `baseline/` documents and the core-flow prototype; after human review run `validate --stage 00-baseline`. |
+| `v1.0` (first project) | After `00-baseline` passes, call `manage-iteration` to create the skeleton, archive the iteration snapshot of the same raw requirement, then normalize into the product requirement. |
+| `v{major}.{minor}` (initialized project) | Use the version resolved by `route-requirement`; if the directory does not exist, call `manage-iteration` to create the skeleton first. |
 
 ## Required References
 
-在 iteration 路由下，开始转换前，**必须**读取：
+Under the iteration route, the following MUST be read before conversion:
 
 - `baseline/01-product-vision.md`
 - `baseline/02-product-charter.md`
 - `baseline/04-glossary.md`
-- `iteration/raw-requirement/` 中与 `route-requirement` 返回目标版本关联的全部原始需求材料
-- `iteration/{上一已批准版本}/01-product/{上一版本}-requirement.md`（用于 diff 与继承）
-- `iteration/{上一已批准版本}/05-review-release/{上一版本}-release-log.md`（如存在；记录上一版本封档范围、ISSUE 收尾与交接项）
-- `templates/product.md`（合并后的统一模板）
+- All raw requirement material in `iteration/raw-requirement/` that maps to the target version returned by `route-requirement`.
+- `iteration/{previous approved version}/01-product/{previous version}-requirement.md` (for diff and inheritance).
+- `iteration/{previous approved version}/05-review-release/{previous version}-release-log.md` (when present; records the predecessor's closing scope, ISSUE closure, and hand-off items).
+- `templates/product.md` (the merged unified template).
 
-模板是输出结构的唯一权威来源。不得自行发明另一套 Product Requirement 结构。
+The template is the sole authoritative source of output structure. Do not invent a separate Product Requirement structure.
 
 ## Input
 
-原始材料来自用户，可为直接描述、Markdown、纯文本、邮件、会议纪要或其他可读取文件。先完整阅读全部材料，再开始归一化；不得仅依据文件名、摘要或聊天记忆推断需求。
+Raw material comes from the user and may be a direct description, Markdown, plain text, email, meeting notes, or any other readable file. Read every piece of material in full before normalizing; do not infer the requirement from filename, summary, or chat memory alone.
 
-baseline 路由只从原始材料提取明确事实来起草 baseline 文档；技术选型或其他缺失信息必须保留为 `draft` 中的待确认项，不能擅自补全。iteration 路由使用已批准 baseline 与该迭代原始材料生成产品需求草稿。
+Under the baseline route, draft the baseline documents from explicit facts in the raw material only; any missing tech-stack or other details MUST remain `draft` "to be confirmed" items and may not be filled in by the agent. Under the iteration route, generate the product-requirement draft from the approved baseline plus the iteration's raw material.
 
 ## Conversion Rules
 
-### 1. 先提取事实，再组织结构
+### 1. Extract Facts First, Then Organize Structure
 
-把输入中的内容区分为：
+Classify the input into:
 
-- **明确事实**：原文直接表达的目标、用户、功能或约束。
-- **合理推断**：根据上下文推导出的内容。
-- **缺失信息**：无法从输入确定的内容。
-- **冲突信息**：输入中互相矛盾的内容。
+- **Explicit fact**: goals, users, features, or constraints directly expressed in the original text.
+- **Reasonable inference**: content derived from context.
+- **Missing information**: content that cannot be determined from the input.
+- **Conflicting information**: descriptions in the input that contradict each other.
 
-只允许把明确事实直接写入需求正文。推断、缺失和冲突必须在正文中标记，并汇总到"假设与待确认问题"。
+Only explicit facts may be written into the requirement body verbatim. Inferences, missing items, and conflicts MUST be marked in the body and aggregated into "Assumptions and Open Questions".
 
-推荐标记：
+Recommended markers:
 
-- `[待确认]`：需要产品负责人确认。
-- `[推断]`：由上下文推断，尚未被用户明确确认。
-- `[未提供]`：输入中没有相关信息。
-- `[冲突]`：存在互相矛盾的描述。
+- `[待确认]`: needs Product Owner confirmation. (Convention kept in original form for cross-team consistency — see the stable marker list below.)
+- `[推断]`: inferred from context; not yet confirmed by the user.
+- `[未提供]`: no relevant information in the input.
+- `[冲突]`: contradictory descriptions exist.
 
-不得为了让文档看起来完整而虚构用户、指标、权限、技术方案、数据模型或业务规则。
+Do not fabricate users, metrics, permissions, technical solutions, data models, or business rules just to make the document look complete.
 
-### 2. 以产品语言表达
+> Note: the four markers above are deliberately retained in their Chinese form because downstream `stage-gate` checks and template tooling match them as stable tokens. Translation Discipline (AGENTS.md §4.3) permits this exception because they are string-literal anchors, not narrative headings.
 
-将口语、抱怨和零散想法转换为产品需求语言。**复用 baseline/glossary 的术语**。
+### 2. Express in Product Language
 
-不要把技术实现写成产品需求。例如：
+Translate colloquial speech, complaints, and scattered ideas into product-requirement language. **Reuse the terminology from `baseline/glossary`**.
 
-- 不将"需要一个 REST API"写成 FR，除非用户明确提出 API 作为产品能力。
-- 不擅自生成数据库表、字段、缓存、消息队列或框架选型。
+Do not write technical implementation into the product requirement. For example:
 
-### 3. 需求编号
+- Do not write "a REST API is needed" as an FR unless the user explicitly proposed an API as a product capability.
+- Do not invent database tables, fields, caches, message queues, or framework choices.
 
-为可独立验证的内容生成稳定编号：
+### 3. Requirement Numbering
 
-- 功能需求：`FR-001`、`FR-002`……
-- 业务规则：`BR-001`、`BR-002`……
-- 非功能需求：`NFR-001`、`NFR-002`……
-- 验收标准：`AC-001`、`AC-002`……
+Generate stable IDs for items that can be verified independently:
 
-一条编号只描述一个可判断的要求。如果已有文档中存在编号，优先保留原编号。**迭代场景下编号从上一版本最大编号继续递增，禁止重用已废弃编号。**
+- Functional requirements: `FR-001`, `FR-002`, …
+- Business rules: `BR-001`, `BR-002`, …
+- Non-functional requirements: `NFR-001`, `NFR-002`, …
+- Acceptance criteria: `AC-001`, `AC-002`, …
 
-### 4. 保留产品边界
+A single ID describes only one judoleable requirement. If existing documents already use IDs, prefer to keep them. **In an iteration scenario, continue numbering after the predecessor's largest ID; never reuse a deprecated ID.**
 
-必须区分：
+### 4. Preserve Product Boundaries
 
-- MVP 必须包含。
-- MVP 暂不包含。
-- 后续版本候选。
-- 非目标。
+The following MUST be distinguished:
 
-### 5. 迭代场景的额外要求（v{major}.{minor} minor ≥ 1）
+- Required for MVP.
+- Out of MVP scope for now.
+- Candidate for a later version.
+- Non-goal.
 
-在 §1-§4 之上**额外**要求：
+### 5. Iteration-Scenario Additional Requirements (v{major}.{minor}, minor ≥ 1)
 
-#### 5.1 增量识别
+On top of §1–§4, the following are **also** required:
 
-明确区分：
+#### 5.1 Increment Identification
 
-- **新增需求**：本轮新增的 FR / BR / NFR / AC。
-- **修改需求**：本轮修改的现有编号（保留编号，更新内容）。
-- **废弃需求**：本轮明确废弃的编号（在前言中标注 deprecated，不删除）。
-- **未变更需求**：不重复列写。
+Clearly distinguish:
 
-#### 5.2 跨版本追溯
+- **Added requirements**: `FR` / `BR` / `NFR` / `AC` introduced this round.
+- **Modified requirements**: existing IDs modified this round (keep the ID, update the content).
+- **Deprecated requirements**: IDs explicitly deprecated this round (annotate as deprecated in the preface; do not delete).
+- **Unchanged requirements**: do not list them again.
 
-每条新增 / 修改 / 废弃的需求必须在前言中标注：
+#### 5.2 Cross-Version Traceability
+
+Every added / modified / deprecated requirement MUST be tagged in the preface:
 
 ```yaml
 change_set:
@@ -127,25 +129,25 @@ change_set:
   deprecated: [FR-005]
 ```
 
-并在文档正文中体现。
+… and reflected in the document body.
 
-#### 5.3 不破坏上一版本
+#### 5.3 Do Not Break the Predecessor
 
-不得改动 `iteration/v{major}.{minor-1}/` 下的任何文件。如发现上一版本有错误，开新迭代以"修改"条目覆盖。
+Do not modify any file under `iteration/v{major}.{minor-1}/`. If the predecessor has an error, open a new iteration and cover it with a "modified" entry.
 
-### 6. 原型决策与所需信息
+### 6. Prototype Decision and Required Information
 
-从需求中提取页面和交互线索，完成原型触发评估，并写入"原型决策与生成要求"。每个 iteration 输出的 frontmatter 必须写入 `prototype_required: true` 或 `prototype_required: false`：新页面、复杂/跨页面流程、影响业务结果的交互、体验重点、多端适配或体验分歧时为 `true`；纯技术改动、沿用既有交互模式的轻量改动，或规格与验收标准可无歧义表达时可为 `false`。`false` 时还必须在 frontmatter 写入非空的 `prototype_baseline` 与 `prototype_rationale`。
+Extract page and interaction cues from the requirement, complete the prototype-trigger evaluation, and write the result into "Prototype Decision and Generation Requirements". The frontmatter of every iteration output MUST include `prototype_required: true` or `prototype_required: false`: `true` for new pages, complex / cross-page flows, business-result-impacting interactions, experience-critical work, multi-device adaptation, or experience disagreements; `false` for pure technical changes, lightweight changes that reuse existing interaction patterns, or changes that can be expressed unambiguously by spec and acceptance criteria. When `false`, the frontmatter MUST also carry non-empty `prototype_baseline` and `prototype_rationale`.
 
-### 7. 验收标准
+### 7. Acceptance Criteria
 
-优先把明确的业务结果转换为 `Given / When / Then`。
+Prefer converting explicit business outcomes into `Given / When / Then`.
 
 ## Output Contract
 
 ### Baseline route
 
-当 `route-requirement` 返回 `mode: baseline` 时，输出为以下 5 份 `status: draft` 产物：
+When `route-requirement` returns `mode: baseline`, the output is the following 5 `status: draft` artifacts:
 
 ```text
 baseline/01-product-vision.md
@@ -155,31 +157,31 @@ baseline/04-glossary.md
 baseline/05-core-user-flow-prototype.html
 ```
 
-必须在每份文档中标识原始需求来源。未提供的技术、指标或术语不得虚构；保留为待确认项并等待人工审核。通过 `validate --stage 00-baseline` 后，才可创建 `iteration/v1.0/`。
+Every document MUST identify the raw-requirement source. Missing technology, metrics, or terminology MUST NOT be fabricated; keep them as "to be confirmed" items and wait for human review. Only after `validate --stage 00-baseline` passes may `iteration/v1.0/` be created.
 
-核心流程原型可为低保真线框、可点击流程或结构化 HTML，必须覆盖核心角色、关键任务闭环、关键状态和权限差异；不要求高保真视觉稿。生成 HTML 原型时仍须遵循 `prototype-design-system` 的工具路由。
+The core-flow prototype may be a low-fidelity wireframe, click-through flow, or structured HTML, but MUST cover the core roles, key task closure, principal states, and permission differences; a high-fidelity visual is not required. When generating HTML prototypes, the `prototype-design-system` tool routing still applies.
 
 ### Iteration route
 
-输出文件路径：
+Output file path:
 
 ```text
 iteration/v{major}.{minor}/01-product/v{major}.{minor}-requirement.md
 ```
 
-frontmatter 必须包含：
+The frontmatter MUST include:
 
 ```yaml
 ---
 document_type: product-requirement
 version: 1.0.0
 status: draft
-product_name: <产品名称>
-base_version: <上一已批准迭代，如 v1.0>
+product_name: <product name>
+base_version: <previous approved iteration, e.g. v1.0>
 prototype_required: <true|false>
-prototype_baseline: <prototype_required 为 false 时必填>
-prototype_rationale: <prototype_required 为 false 时必填>
-change_set:                  # 仅迭代场景
+prototype_baseline: <required when prototype_required is false>
+prototype_rationale: <required when prototype_required is false>
+change_set:                  # iteration scenarios only
   added: [FR-XXX, ...]
   modified: [FR-XXX, ...]
   deprecated: [FR-XXX, ...]
@@ -191,39 +193,41 @@ last_updated: YYYY-MM-DDTHH:MM:SS±HH:MM # Codex client local time
 ---
 ```
 
-输出要求：
+Output requirements:
 
-1. 使用模板中的 YAML frontmatter 和章节顺序。
-2. 文档标题、产品名称和版本与输入保持一致；未提供时使用 `[未提供]`。
-3. 功能、业务规则、非功能需求和验收标准使用稳定编号。
-4. 所有不确定信息都显式标记。
-5. 在文档末尾保留"假设与待确认问题"。
-6. 不输出 API、数据库字典、系统架构或实现任务。
+1. Use the YAML frontmatter and section order from the template.
+2. The document title, product name, and version stay consistent with the input; when not provided, use `[未提供]` (kept as the stable placeholder).
+3. Functional requirements, business rules, non-functional requirements, and acceptance criteria use stable IDs.
+4. Every uncertain item is explicitly marked.
+5. Retain "Assumptions and Open Questions" at the end of the document.
+6. Do not output API, database dictionary, system architecture, or implementation tasks.
+
+> Note: `[未提供]` is the stable placeholder literal in the template (`templates/product.md`); it is kept verbatim to match the template parser.
 
 ## Human Review Gate
 
-转换完成后，Agent 必须保持 `status: draft` 或 `status: In Review`，列出该阶段全部待审产物及验证证据，并进行人工确认；不得将状态改为 `Approved`，也不得直接将结果作为下一阶段正式输入。人工审核通过后由人类手动将每份必需产物改为 `Approved`，再运行 `validate --stage 01-product`。确认重点：
+After conversion, the agent MUST keep `status: draft` or `status: In Review`, list every stage artifact pending review together with verification evidence, and request human confirmation; it MUST NOT change the status to `Approved`, nor directly feed the result into the next stage as a formal input. After human review passes, the human manually changes every required artifact to `status: Approved`, then runs `validate --stage 01-product`. Review focus:
 
-- 产品目标和用户角色是否准确（与 baseline 一致）。
-- MVP 范围是否过大或过小。
-- 功能需求是否完整且没有擅自扩展。
-- 关键流程和验收标准是否符合预期。
-- 标记项是否已处理。
-- （迭代）change_set 是否准确（added/modified/deprecated）。
+- Product goals and user roles are accurate (consistent with the baseline).
+- MVP scope is not over- or under-sized.
+- Functional requirements are complete and have not been silently expanded.
+- Key flows and acceptance criteria meet expectations.
+- Marked items have been resolved.
+- (Iteration) the `change_set` is accurate (added / modified / deprecated).
 
 ## Validation Checklist
 
-- [ ] 已运行 `route-requirement`，并按其返回的 mode 与目录归档原始材料。
-- [ ] baseline 路由下已起草完整 baseline，或 iteration 路由下已读取已批准 baseline。
-- [ ] 已读取 standard template 和 baseline。
-- [ ] 原始输入中的明确事实都能在输出中找到。
-- [ ] 没有把推断写成已确认事实。
-- [ ] 没有引入未经请求的技术设计。
-- [ ] 每条功能需求只表达一个可验证目标。
-- [ ] MVP 范围、非目标和待确认问题已明确。
-- [ ] 已在 frontmatter 声明 `prototype_required: true|false`；`false` 时另有非空 `prototype_baseline` 和 `prototype_rationale`。
-- [ ] `true` 时页面、关键交互和模拟数据要求足以支持原型生成。
-- [ ] 生成 HTML 原型时已从 `templates/Prototype.html` 保留审核 frontmatter：`status`、`reviewer`、`reviewed_at`、`review_notes`。
-- [ ] 输出文件名 = `v{major}.{minor}-requirement.md`。
-- [ ] （迭代）`change_set` 完整列出本轮所有变更。
-- [ ] （迭代）未修改 `iteration/v{major}.{minor-1}/` 任何文件。
+- [ ] Ran `route-requirement` and archived the raw material according to the returned mode and directory.
+- [ ] Under the baseline route, drafted the full baseline; under the iteration route, read the approved baseline.
+- [ ] Read the standard template and the baseline.
+- [ ] Every explicit fact in the raw input is findable in the output.
+- [ ] No inference has been written as a confirmed fact.
+- [ ] No unrequested technical design was introduced.
+- [ ] Each functional requirement expresses only one verifiable goal.
+- [ ] MVP scope, non-goals, and open questions are explicit.
+- [ ] The frontmatter declares `prototype_required: true|false`; when `false`, also carries non-empty `prototype_baseline` and `prototype_rationale`.
+- [ ] When `true`, the page, key interactions, and mock-data requirements are sufficient to support prototype generation.
+- [ ] When generating the HTML prototype, the review frontmatter (`status`, `reviewer`, `reviewed_at`, `review_notes`) from `templates/Prototype.html` is preserved.
+- [ ] Output filename equals `v{major}.{minor}-requirement.md`.
+- [ ] (Iteration) `change_set` lists every change in this round completely.
+- [ ] (Iteration) no file under `iteration/v{major}.{minor-1}/` has been modified.
