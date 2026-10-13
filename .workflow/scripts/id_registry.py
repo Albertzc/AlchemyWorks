@@ -21,7 +21,15 @@ from pathlib import Path
 THIS = Path(__file__).resolve()
 sys.path.insert(0, str(THIS.parents[1]))
 
-from workflow import ID_RE, canonical_iteration, discover_iteration, is_real_id, load_artifacts  # noqa: E402
+from workflow import (  # noqa: E402
+    ID_RE,
+    ROOT,
+    canonical_iteration,
+    configure_project_root,
+    discover_iteration,
+    is_real_id,
+    load_artifacts,
+)
 
 PREFIXES = ("FR", "FS", "BR", "NFR", "API", "TBL", "TASK", "AC", "ISSUE")
 
@@ -32,7 +40,7 @@ def collect(iteration: str) -> dict[str, dict]:
     for item in artifacts:
         if item.status == "missing":
             continue
-        text = (THIS.parents[2] / item.path).read_text(encoding="utf-8")
+        text = (ROOT / item.path).read_text(encoding="utf-8")
         for m in ID_RE.findall(text):
             if not is_real_id(m):
                 continue
@@ -82,10 +90,17 @@ def render_text(data: dict[str, dict], prefixes: tuple[str, ...]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--iteration", default=discover_iteration())
+    parser.add_argument("--iteration", default=None, help="target iteration (defaults to discover_iteration)")
     parser.add_argument("--prefix", choices=PREFIXES, help="filter to one prefix")
+    parser.add_argument(
+        "--project-root",
+        help="external instance project root (defaults to the framework source tree / its .aw/ tree)",
+    )
     parser.add_argument("--json", action="store_true", help="emit JSON instead of text")
     args = parser.parse_args()
+    configure_project_root(args.project_root)
+    if args.iteration is None:
+        args.iteration = discover_iteration()
     args.iteration = canonical_iteration(args.iteration)
     data = collect(args.iteration)
     prefixes = (args.prefix,) if args.prefix else PREFIXES

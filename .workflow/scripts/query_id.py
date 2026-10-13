@@ -18,9 +18,9 @@ from pathlib import Path
 THIS = Path(__file__).resolve()
 sys.path.insert(0, str(THIS.parents[1]))
 
-from workflow import canonical_iteration, discover_iteration  # noqa: E402
+from workflow import ROOT, canonical_iteration, configure_project_root, discover_iteration  # noqa: E402
 
-TRACEABILITY = THIS.parents[2] / "workspace" / "workflow" / "traceability.json"
+TRACEABILITY = ROOT / "workspace" / "workflow" / "traceability.json"
 
 
 def load_edges(iteration: str) -> dict[str, list[dict]]:
@@ -63,10 +63,17 @@ def render_text(data: dict) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--iteration", default=discover_iteration())
+    parser.add_argument("--iteration", default=None, help="target iteration (defaults to discover_iteration)")
     parser.add_argument("--id", required=True, help="stable ID to query (e.g. FR-005, TASK-API-010)")
+    parser.add_argument(
+        "--project-root",
+        help="external instance project root (defaults to the framework source tree / its .aw/ tree)",
+    )
     parser.add_argument("--json", action="store_true", help="emit JSON instead of text")
     args = parser.parse_args()
+    configure_project_root(args.project_root)
+    if args.iteration is None:
+        args.iteration = discover_iteration()
     args.iteration = canonical_iteration(args.iteration)
     data = query(args.iteration, args.id)
     if args.json:

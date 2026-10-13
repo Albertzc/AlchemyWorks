@@ -20,6 +20,7 @@ sys.path.insert(0, str(THIS.parents[1]))
 from workflow import (  # noqa: E402
     ALL_STAGES,
     canonical_iteration,
+    configure_project_root,
     discover_iteration,
     gate_code,
     load_artifacts,
@@ -91,9 +92,16 @@ def render_text(data: dict) -> str:
 def main() -> int:
     _force_utf8_stdout()
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--iteration", default=discover_iteration())
+    parser.add_argument("--iteration", default=None, help="target iteration (defaults to discover_iteration)")
+    parser.add_argument(
+        "--project-root",
+        help="external instance project root (defaults to the framework source tree / its .aw/ tree)",
+    )
     parser.add_argument("--json", action="store_true", help="emit JSON instead of text")
     args = parser.parse_args()
+    configure_project_root(args.project_root)
+    if args.iteration is None:
+        args.iteration = discover_iteration()
     args.iteration = canonical_iteration(args.iteration)
     data = collect(args.iteration)
     if args.json:

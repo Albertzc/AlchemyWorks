@@ -34,24 +34,24 @@ sys.path.insert(0, str(THIS.parents[1]))
 
 from workflow import (  # noqa: E402
     ID_RE,
+    ROOT,
     canonical_iteration,
+    configure_project_root,
     discover_iteration,
     is_real_id,
     parse_change_set,
 )
 
-REPO_ROOT = THIS.parents[2]
-
 
 def _iteration_root(iteration: str) -> Path:
-    active = REPO_ROOT / "iteration" / iteration
+    active = ROOT / "iteration" / iteration
     if active.exists():
         return active
-    return REPO_ROOT / "iteration" / "archive" / iteration
+    return ROOT / "iteration" / "archive" / iteration
 
 
 def _artifact_paths(iteration: str) -> list[Path]:
-    paths = [REPO_ROOT / relative for relative in (
+    paths = [ROOT / relative for relative in (
         "baseline/01-product-vision.md",
         "baseline/02-product-charter.md",
         "baseline/03-tech-stack-decision.md",
@@ -78,10 +78,10 @@ def _ids_in(iteration: str) -> dict[str, set[str]]:
             under_version_root = True
         except ValueError:
             under_version_root = False
-        if under_version_root and root != REPO_ROOT / "iteration" / iteration:
+        if under_version_root and root != ROOT / "iteration" / iteration:
             relative = f"iteration/{iteration}/{path.relative_to(root).as_posix()}"
         else:
-            relative = path.relative_to(REPO_ROOT).as_posix()
+            relative = path.relative_to(ROOT).as_posix()
         for identifier in ID_RE.findall(text):
             if not is_real_id(identifier):
                 continue
@@ -204,9 +204,14 @@ def main() -> int:
                         help="source iteration (e.g. v1.0)")
     parser.add_argument("--to", dest="to_iter", required=True,
                         help="target iteration (e.g. v1.1)")
+    parser.add_argument(
+        "--project-root",
+        help="external instance project root (defaults to the framework source tree / its .aw/ tree)",
+    )
     parser.add_argument("--json", action="store_true",
                         help="emit JSON instead of text")
     args = parser.parse_args()
+    configure_project_root(args.project_root)
     args.from_iter = canonical_iteration(args.from_iter)
     args.to_iter = canonical_iteration(args.to_iter)
     data = collect(args.from_iter, args.to_iter)

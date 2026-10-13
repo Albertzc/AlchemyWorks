@@ -17,10 +17,15 @@ import sys
 from pathlib import Path
 
 THIS = Path(__file__).resolve()
-REPO_ROOT = THIS.parents[2]
 sys.path.insert(0, str(THIS.parents[1]))
 
-from workflow import canonical_iteration, discover_iteration, load_artifacts  # noqa: E402
+from workflow import (  # noqa: E402
+    ROOT,
+    canonical_iteration,
+    configure_project_root,
+    discover_iteration,
+    load_artifacts,
+)
 
 # Matches [label](path) — path may include anchor #…; capture group 1 = path
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
@@ -89,7 +94,7 @@ def check(iteration: str) -> dict:
         if not item.path.endswith(".md"):
             continue
         scanned += 1
-        path = REPO_ROOT / item.path
+        path = ROOT / item.path
         if not path.exists():
             continue
         text = path.read_text(encoding="utf-8")
@@ -97,7 +102,7 @@ def check(iteration: str) -> dict:
             link_count += 1
             # Resolve relative to source file's directory
             resolved = (path.parent / target).resolve()
-            allowed_roots = [REPO_ROOT / "baseline", REPO_ROOT / "iteration"]
+            allowed_roots = [ROOT / "baseline", ROOT / "iteration"]
 
             def is_allowed(candidate: Path) -> bool:
                 return any(
@@ -150,9 +155,16 @@ def render_text(data: dict) -> str:
 def main() -> int:
     _force_utf8_stdout()
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--iteration", default=discover_iteration())
+    parser.add_argument("--iteration", default=None, help="target iteration (defaults to discover_iteration)")
+    parser.add_argument(
+        "--project-root",
+        help="external instance project root (defaults to the framework source tree / its .aw/ tree)",
+    )
     parser.add_argument("--json", action="store_true", help="emit JSON instead of text")
     args = parser.parse_args()
+    configure_project_root(args.project_root)
+    if args.iteration is None:
+        args.iteration = discover_iteration()
     args.iteration = canonical_iteration(args.iteration)
     data = check(args.iteration)
     if args.json:

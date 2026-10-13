@@ -1,5 +1,6 @@
 import atexit
 import json
+import secrets
 import shutil
 import subprocess
 import sys
@@ -21,13 +22,6 @@ import workflow
 # protected .workflow/ subtree; ignored via the root .gitignore entry
 # "temp-workflow-tests/".
 _SCRATCH_ROOT = Path(__file__).resolve().parents[2] / "temp-workflow-tests"
-_SCRATCH_COUNTER = [0]
-
-
-def _next_scratch_seq() -> int:
-    seq = _SCRATCH_COUNTER[0]
-    _SCRATCH_COUNTER[0] = seq + 1
-    return seq
 
 
 class _ScratchDir:
@@ -36,11 +30,17 @@ class _ScratchDir:
     Avoids PermissionError on DSH sandbox, where TemporaryDirectory's
     ``__exit__`` applies chmod 0o700 to a directory under the system temp
     path and the sandbox's restricted token cannot satisfy that ACL.
+
+    Each instance picks a unique path under ``temp-workflow-tests/`` via
+    ``secrets.token_hex`` so a failed cleanup in one test never collides
+    with the next test's slot — counter reuse was the previous attempt that
+    proved fragile when an earlier rmtree silently no-op'd under the
+    sandbox.
     """
 
     def __init__(self, prefix: str = "scratch"):
         _SCRATCH_ROOT.mkdir(parents=True, exist_ok=True)
-        self.path = _SCRATCH_ROOT / f"{prefix}-{_next_scratch_seq():04d}"
+        self.path = _SCRATCH_ROOT / f"{prefix}-{secrets.token_hex(4)}"
         self.path.mkdir(parents=True)
 
     @property
@@ -1754,6 +1754,95 @@ class DiffVersionsTests(unittest.TestCase):
             ignore_text = (target / ".gitignore").read_text(encoding="utf-8")
             self.assertIn("README.md", ignore_text)
             self.assertIn(".aw/", ignore_text)
+
+
+class ScriptProjectRootTests(unittest.TestCase):
+    """Each script under .workflow/scripts/ must accept ``--project-root`` and
+    operate on an external instance project (Round 1 fix: 4-script instance
+    layout root resolution). The fixtures are minimal — just an empty
+    ``iteration/`` and ``baseline/`` — so the tests exercise the new
+    argument plumbing rather than each script's full analysis."""
+
+    SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
+
+    def _external_repo(self) -> Path:
+        scratch = _ScratchDir("script-proj")
+        self.addCleanup(scratch.cleanup)
+        root = scratch.path
+        (root / "iteration").mkdir()
+        (root / "baseline").mkdir()
+        return root
+
+    def _run(self, name, *args) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(self.SCRIPTS_DIR / name), *args],
+            capture_output=True,
+            text=True,
+        )
+
+    def test_stage_status_accepts_project_root(self):
+        ext = self._external_repo()
+        result = self._run(
+            "stage_status.py", "--project-root", str(ext), "--iteration", "v1", "--json",
+        )
+        # Empty fixture ⇒ gate is blocked and the script returns 1 by design.
+        # The point of this test is that --project-root reaches main() and the
+        # script operates on the external repo (not the framework source).
+        self.assertIn(result.returncode, (0, 1), msg=result.stderr or result.stdout)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["iteration"], "v1.0")
+        self.assertEqual(payload["gate"], "blocked")
+
+    def test_id_registry_accepts_project_root(self):
+        ext = self._external_repo()
+        result = self._run(
+            "id_registry.py", "--project-root", str(ext), "--iteration", "v1", "--json",
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stderr or result.stdout)
+        payload = json.loads(result.stdout)
+        # Registry must list at least the FR prefix even on an empty project.
+        self.assertIn("FR", payload)
+
+    def test_query_id_accepts_project_root(self):
+        ext = self._external_repo()
+        result = self._run(
+            "query_id.py",
+            "--project-root", str(ext), "--iteration", "v1",
+            "--id", "FR-001", "--json",
+        )
+        # query_id returns 1 when the ID is not found in traceability; both 0
+        # and 1 are acceptable here — what matters is that --project-root
+        # does not break argument parsing.
+        self.assertIn(result.returncode, (0, 1), msg=result.stderr or result.stdout)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["id"], "FR-001")
+
+    def test_check_links_accepts_project_root(self):
+        ext = self._external_repo()
+        result = self._run(
+            "check_links.py", "--project-root", str(ext), "--iteration", "v1", "--json",
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stderr or result.stdout)
+        payload = json.loads(result.stdout)
+        # canonical_iteration("v1") normalizes to "v1.0" — the round-trip
+        # through --project-root must produce it.
+        self.assertEqual(payload["iteration"], "v1.0")
+        # BASELINE_FILES has 4 .md + 1 .html entry; the script scans each .md
+        # path for existence. On an empty external repo all are missing.
+        self.assertEqual(payload["files_scanned"], 4)
+        self.assertEqual(payload["links_total"], 0)
+        self.assertEqual(payload["errors"], [])
+
+    def test_diff_versions_accepts_project_root(self):
+        ext = self._external_repo()
+        result = self._run(
+            "diff_versions.py",
+            "--project-root", str(ext), "--from", "v1.0", "--to", "v1.1", "--json",
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stderr or result.stdout)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["from"], "v1.0")
+        self.assertEqual(payload["to"], "v1.1")
 
 
 if __name__ == "__main__":
