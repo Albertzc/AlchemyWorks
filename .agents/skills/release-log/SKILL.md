@@ -5,75 +5,75 @@ description: Create the post-RC release log at 05-review-release stage. Existenc
 
 # Release Log
 
-Use this skill when drafting the `v{major}.{minor}-release-log.md`封档说明 for a completed iteration. It records what shipped, what issues closed, the final quality-gate state, hand-off items to the next version, and known limits/assumptions.
+Use this skill when drafting the `v{major}.{minor}-release-log.md` closing memo for a completed iteration. It records what shipped, what issues closed, the final quality-gate state, hand-off items to the next version, and known limits or assumptions.
 
 ## Inputs
 
-Confirm that `05-review-release` review-release.md has been Approved. Read the approved product / design / planning artifacts through their stable-ID references, the implementation record, observed test results, the review-release decision, and the actual diff. Do not claim checks passed unless their output was observed.
+Confirm that the `05-review-release` review-release.md has been `status: Approved`. Read the approved product, design, and planning artifacts through their stable-ID references, the implementation record, observed test results, the review-release decision, and the actual diff. Do not claim checks passed unless their output was observed.
 
 Required reading before drafting:
 
-- `iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-review-release.md` — Approved
-- `iteration/v{major}.{minor}/01-product/v{major}.{minor}-requirement.md` — Approved,含 change_set
-- `iteration/v{major}.{minor}/04-implementation/v{major}.{minor}-source-code.md` — 含 ISSUE 列表
-- `iteration/v{major}.{minor}/04-implementation/v{major}.{minor}-test-results.md` — 实际测试数据
-- `iteration/v{major}.{minor}/03-planning/v{major}.{minor}-task-plan-dag.md` — TASK 列表
-- `iteration/v{major}.{minor}/03-planning/v{major}.{minor}-validation-plan.md` — AC 覆盖
-- 实际 git diff 与 CI 输出(如适用)
+- `iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-review-release.md` — Approved.
+- `iteration/v{major}.{minor}/01-product/v{major}.{minor}-requirement.md` — Approved, with `change_set`.
+- `iteration/v{major}.{minor}/04-implementation/v{major}.{minor}-source-code.md` — contains the ISSUE list.
+- `iteration/v{major}.{minor}/04-implementation/v{major}.{minor}-test-results.md` — observed test data.
+- `iteration/v{major}.{minor}/03-planning/v{major}.{minor}-task-plan-dag.md` — TASK list.
+- `iteration/v{major}.{minor}/03-planning/v{major}.{minor}-validation-plan.md` — AC coverage.
+- The actual `git diff` and CI output (when applicable).
 
 ## Required Output
 
 Create or update `iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-release-log.md` with the following 8 sections:
 
-1. **范围概览** — 业务 / 工作流 / 模块 / 数据库 / 兼容性五维度表。
-2. **功能交付清单** — 新增功能 / 体验优化 / 业务规则 / 验收标准四个子表(以 FR/BR/AC 为主键,引用 TASK)。
-3. **ISSUE 收尾** — ISSUE-ID 表 + 是否新增遗留。
-4. **关键工程变更** — 模块维度的变更 + 影响列。
-5. **质量门禁终态** — 检查 / 命令 / 结果三列表;末尾含 `preflight` 工作流一致性检查。
-6. **下一版交接项** — 优先级 + 来源表。
-7. **已知限制与假设** — 限制 / 假设分类,含 §7.1 版本关系与归档路径子段(按 AGENTS.md §17 描述归档时机)。
-8. **封档清单** — checkbox 列表,逐件核对 01-05 各阶段产物 Approved 状态,末尾一行标注本文件"仅需存在,无需 Approved"。
+1. **Scope Overview** — a five-dimension table covering business, workflow, module, database, and compatibility.
+2. **Delivery List** — four sub-tables for added features, experience refinements, business rules, and acceptance criteria (keyed by `FR` / `BR` / `AC`, referencing `TASK` IDs).
+3. **ISSUE Closure** — `ISSUE-ID` table plus whether any carry-over was added.
+4. **Key Engineering Changes** — module-level changes with an impact column.
+5. **Quality Gate Final State** — three-column table of check, command, and result; the trailing row covers the `preflight` workflow-consistency check.
+6. **Next-Version Hand-off** — table of priority and source.
+7. **Known Limits and Assumptions** — categories for limits and assumptions, including §7.1 the version-relation and archive-path subsection (archive timing per AGENTS.md §17).
+8. **Closing Checklist** — checkbox list reconciling the `status: Approved` state of every 01–05 stage artifact; the trailing row marks this file as "existence-only, no `Approved` required".
 
-frontmatter:
+Frontmatter:
 
 ```yaml
 ---
 document_type: release-log
 version: <v{major}.{minor}.0>
-status: draft                  # 本产物不参与 Approved gate;draft/In Review 均可,只要文件存在
+status: draft                  # this artifact does not participate in the Approved gate; draft / In Review are both fine as long as the file exists
 owner: Tech Lead
 last_updated: <ISO 8601>
-base_version: <上一已批准迭代>
+base_version: <previous approved iteration>
 change_set:
-  deprecated: [FR-XXX, ...]    # 仅 deprecated 子键被 diff_versions.py 读取;added/modified 见 requirement.md
+  deprecated: [FR-XXX, ...]    # only the deprecated sub-key is read by diff_versions.py; added/modified live in requirement.md
 baseline_ref:
   - baseline/03-tech-stack-decision.md
 ---
 ```
 
-模板:`templates/release-log.md`。
+Template: `templates/release-log.md`.
 
 ## Approval Contract
 
 **Release log is not gated by `status: Approved`.** The `validate --stage 05-review-release` step requires the file to exist; the frontmatter `status` value (`draft` / `In Review` / `Approved`) does not block the gate. This is implemented as a carve-out in `validation_report()` matching paths ending with `{iteration}-release-log.md`. See `.workflow/tests/test_workflow.py` for the existence-only contract tests.
 
-Implication for the agent:
+Implications for the agent:
 
-- 起草完成后保持 `status: draft`(或 `In Review`)即可,不要要求人工把 status 改为 `Approved`。
-- §8 封档清单中的"本文件"一行使用 `[x]` 而非 `[ ]`,因为文件存在即视为已交付。
-- 不再需要单独的人类审核回合;封档说明的技术准确性与 source-code/test-results 的证据一致性由 `validate --stage 05-review-release` 的其他检查 + review-release.md 的 Approved 状态保证。
+- After drafting, keep `status: draft` (or `In Review`); do not ask a human to change `status` to `Approved`.
+- In §8 Closing Checklist, the "this file" row uses `[x]` instead of `[ ]` because file existence counts as delivery.
+- A separate human-review round is no longer required. The technical accuracy of the closing memo and the evidence consistency with `source-code.md` and `test-results.md` are guaranteed by the other checks in `validate --stage 05-review-release` together with the `status: Approved` state of `review-release.md`.
 
 ## Review Checks
 
 Before handoff, verify that:
 
-- 每一行 §2 子表中的 FR/BR/AC 编号在 `requirement.md` 与 `validation-plan.md` 中存在;引用 TASK 编号在 `task-plan-dag.md` 中存在。
-- §3 ISSUE 表中的每个 ISSUE-ID 在 `source-code.md` 的 ISSUE 列表中存在,或显式标注"实施期识别"。
-- §5 质量门禁的命令与结果是实际执行的输出(每行末尾注明来源或运行时间),不要复述 review-release.md 中的二手数据。
-- §6 交接项的来源列(实施期识别 / preflight 提示 / 业务方反馈)是可追溯的;不要塞入本轮已经完成的工作。
-- §7 已知限制/假设覆盖了实施期识别的所有遗留事项,与 `source-code.md` §5 已知限制一致。
-- §7.1 版本关系段描述的归档路径与 `manage-iteration` skill 中的描述一致。
-- §8 封档清单中的每项 checkbox 与各阶段产物 frontmatter `status` 字段一致;本文件行使用 `[x]`。
+- Every `FR` / `BR` / `AC` ID in the §2 sub-tables exists in `requirement.md` and `validation-plan.md`; every referenced `TASK` ID exists in `task-plan-dag.md`.
+- Every `ISSUE-ID` in the §3 ISSUE table appears in the ISSUE list of `source-code.md`, or is explicitly tagged "identified during implementation".
+- The §5 Quality Gate commands and results are the actual output of running them (each row records the source or run time at the end); do not paraphrase the second-hand data from `review-release.md`.
+- The source column in §6 Hand-off items (identified during implementation / preflight hint / business-side feedback) is traceable; do not insert work that has already been completed in this round.
+- §7 Known Limits / Assumptions covers every carry-over identified during implementation and is consistent with the §5 Known Limits of `source-code.md`.
+- §7.1 Version-relation subsection describes an archive path that matches the description in the `manage-iteration` skill.
+- Every checkbox in §8 Closing Checklist agrees with the frontmatter `status` of the corresponding stage artifact; the "this file" row uses `[x]`.
 
 ## Workflow Hooks
 
