@@ -74,7 +74,7 @@ Recommended markers:
 
 Do not fabricate users, metrics, permissions, technical solutions, data models, or business rules just to make the document look complete.
 
-> Note: the four markers above are deliberately retained in their Chinese form because downstream `stage-gate` checks and template tooling match them as stable tokens. Translation Discipline (AGENTS.md §4.3) permits this exception because they are string-literal anchors, not narrative headings.
+> Note: the four markers above are deliberately retained in their Chinese form because downstream `stage-gate` checks and template tooling match them as stable tokens. Translation Discipline (AGENTS.md §4 Documentation Language) permits this exception because they are string-literal anchors, not narrative headings.
 
 ### 2. Express in Product Language
 

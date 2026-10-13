@@ -11,7 +11,7 @@ Use this skill when creating, revising, or reviewing the `02-design` artifacts f
 
 Before drafting, confirm that `01-product` has passed its gate. Read the approved requirement, relevant baseline decisions (especially the technology stack and glossary), and `templates/design.md`. Read only the requirement sections and stable IDs that the design must cover.
 
-Do not introduce a framework, integration, data store, or security model that contradicts the approved baseline. Record unresolved design choices as `[待确认]` rather than treating them as settled.
+Do not introduce a framework, integration, data store, or security model that contradicts the approved baseline. Record unresolved design choices as `[待确认]` rather than treating them as settled. (The `[待确认]` / `[推断]` / `[未提供]` / `[冲突]` markers are stable tokens established by the `normalize-requirement` skill; downstream tooling matches them verbatim.)
 
 ## Required Outputs
 
