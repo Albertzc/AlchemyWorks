@@ -29,3 +29,8 @@ Thumbs.db
 
 # Logs
 logs/
+
+# Project-local scratch root for workflow regression tests; replaces
+# tempfile.TemporaryDirectory() which fails on the DSH sandbox. The
+# directory is recreated on every test run and cleaned at interpreter exit.
+temp-workflow-tests/

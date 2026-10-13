@@ -1,8 +1,8 @@
+import atexit
 import json
 import shutil
 import subprocess
 import sys
-import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +13,56 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 import workflow
+
+
+# Project-local scratch root; replaces tempfile.TemporaryDirectory() which
+# fails on DSH sandbox (chmod 0o700 to system temp triggers WinError 5).
+# Lives at the repo root because the sandbox rejects mkdir under the
+# protected .workflow/ subtree; ignored via the root .gitignore entry
+# "temp-workflow-tests/".
+_SCRATCH_ROOT = Path(__file__).resolve().parents[2] / "temp-workflow-tests"
+_SCRATCH_COUNTER = [0]
+
+
+def _next_scratch_seq() -> int:
+    seq = _SCRATCH_COUNTER[0]
+    _SCRATCH_COUNTER[0] = seq + 1
+    return seq
+
+
+class _ScratchDir:
+    """Stand-in for ``tempfile.TemporaryDirectory`` scoped to the test tree.
+
+    Avoids PermissionError on DSH sandbox, where TemporaryDirectory's
+    ``__exit__`` applies chmod 0o700 to a directory under the system temp
+    path and the sandbox's restricted token cannot satisfy that ACL.
+    """
+
+    def __init__(self, prefix: str = "scratch"):
+        _SCRATCH_ROOT.mkdir(parents=True, exist_ok=True)
+        self.path = _SCRATCH_ROOT / f"{prefix}-{_next_scratch_seq():04d}"
+        self.path.mkdir(parents=True)
+
+    @property
+    def name(self) -> str:
+        return str(self.path)
+
+    def cleanup(self) -> None:
+        if self.path.exists():
+            shutil.rmtree(self.path, ignore_errors=True)
+
+    def __enter__(self):
+        return Path(self.name)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.cleanup()
+        return False
+
+
+@atexit.register
+def _cleanup_scratch_root():
+    if _SCRATCH_ROOT.exists():
+        shutil.rmtree(_SCRATCH_ROOT, ignore_errors=True)
 
 
 class WorkflowTests(unittest.TestCase):
@@ -54,7 +104,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertRegex(workflow.local_filename_timestamp(), r"\d{8}T\d{6}\.\d{6}[+-]\d{4}$")
 
     def make_repo(self, draft=False):
-        temp = tempfile.TemporaryDirectory()
+        temp = _ScratchDir("repo")
         root = Path(temp.name)
         (root / ".workflow" / "dashboard").mkdir(parents=True)
         (root / ".workflow" / "dashboard" / "template.html").write_text(
@@ -314,7 +364,7 @@ class WorkflowTests(unittest.TestCase):
             temp.cleanup()
 
     def test_resume_reports_no_active_iteration(self):
-        with tempfile.TemporaryDirectory() as raw:
+        with _ScratchDir("test") as raw:
             root = Path(raw)
             (root / "iteration" / "raw-requirement").mkdir(parents=True)
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
@@ -526,7 +576,7 @@ class WorkflowTests(unittest.TestCase):
     def test_sync_preserves_instance_files_and_ignores_workflow_files(self):
         """Sync must overwrite the framework-owned root README, leave other
         instance-owned files intact, and hide workflow copies from Git."""
-        with tempfile.TemporaryDirectory() as raw:
+        with _ScratchDir("test") as raw:
             target = Path(raw) / "instance"
             target.mkdir()
             (target / ".gitignore").write_text(
@@ -603,7 +653,7 @@ class WorkflowTests(unittest.TestCase):
             self.assertNotEqual(ignored_instance_state.returncode, 0)
 
     def test_python_init_instance_dry_run_does_not_create_target(self):
-        with tempfile.TemporaryDirectory() as raw:
+        with _ScratchDir("test") as raw:
             target = Path(raw) / "python-instance"
             with patch.object(workflow, "workflow_protection_errors", return_value=[]):
                 result = workflow.main(
@@ -613,7 +663,7 @@ class WorkflowTests(unittest.TestCase):
             self.assertFalse(target.exists())
 
     def test_python_init_instance_creates_instance_and_lock(self):
-        with tempfile.TemporaryDirectory() as raw:
+        with _ScratchDir("test") as raw:
             target = Path(raw) / "python-instance"
             with patch.object(workflow, "workflow_protection_errors", return_value=[]):
                 result = workflow.main(
@@ -647,7 +697,7 @@ class WorkflowTests(unittest.TestCase):
             )
 
     def test_init_instance_defaults_name_to_target_directory(self):
-        with tempfile.TemporaryDirectory() as raw:
+        with _ScratchDir("test") as raw:
             target = Path(raw) / "default-named-product"
             with patch.object(workflow, "workflow_protection_errors", return_value=[]):
                 result = workflow.main(
@@ -663,7 +713,7 @@ class WorkflowTests(unittest.TestCase):
             self.assertIn("source_ref: HEAD", version)
 
     def test_init_instance_accepts_workflow_ref(self):
-        with tempfile.TemporaryDirectory() as raw:
+        with _ScratchDir("test") as raw:
             target = Path(raw) / "ref-product"
             with patch.object(workflow, "workflow_protection_errors", return_value=[]):
                 result = workflow.main(
@@ -680,7 +730,7 @@ class WorkflowTests(unittest.TestCase):
             self.assertIn("source_ref: HEAD", version)
 
     def test_python_sync_preserves_instance_readme_and_tracks_state(self):
-        with tempfile.TemporaryDirectory() as raw:
+        with _ScratchDir("test") as raw:
             target = Path(raw) / "python-sync"
             target.mkdir()
             (target / "README.md").write_text("# Existing Product\n", encoding="utf-8")
@@ -1232,7 +1282,7 @@ class WorkflowTests(unittest.TestCase):
             temp.cleanup()
 
     def test_requirement_route_uses_baseline_when_only_readme_exists(self):
-        with tempfile.TemporaryDirectory() as raw:
+        with _ScratchDir("test") as raw:
             root = Path(raw)
             (root / "baseline").mkdir()
             (root / "baseline" / "README.md").write_text("# Baseline\n", encoding="utf-8")
@@ -1243,7 +1293,7 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(route["raw_requirement_dir"], "baseline/raw-requirement")
 
     def test_requirement_route_keeps_baseline_mode_when_only_raw_input_exists(self):
-        with tempfile.TemporaryDirectory() as raw:
+        with _ScratchDir("test") as raw:
             root = Path(raw)
             (root / "baseline" / "raw-requirement").mkdir(parents=True)
             (root / "baseline" / "raw-requirement" / "customer-note.txt").write_text(
@@ -1272,7 +1322,7 @@ class WorkflowTests(unittest.TestCase):
             temp.cleanup()
 
     def test_init_creates_project_intake_directories(self):
-        with tempfile.TemporaryDirectory() as raw:
+        with _ScratchDir("test") as raw:
             root = Path(raw)
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
                 self.assertEqual(workflow.init_project(), 0)
@@ -1287,7 +1337,7 @@ class WorkflowTests(unittest.TestCase):
             self.assertTrue((root / "iteration" / "raw-requirement" / "README.md").is_file())
 
     def test_init_version_requires_baseline_then_creates_skeleton(self):
-        with tempfile.TemporaryDirectory() as raw:
+        with _ScratchDir("test") as raw:
             root = Path(raw)
             (root / "baseline").mkdir()
             (root / "iteration").mkdir()
@@ -1309,7 +1359,7 @@ class WorkflowTests(unittest.TestCase):
             self.assertFalse((root / "iteration" / "v1.0" / "00-raw-requirement").exists())
 
     def test_init_version_refuses_unapproved_baseline(self):
-        with tempfile.TemporaryDirectory() as raw:
+        with _ScratchDir("test") as raw:
             root = Path(raw)
             (root / "baseline").mkdir()
             (root / "iteration").mkdir()
@@ -1548,7 +1598,7 @@ class DiffVersionsTests(unittest.TestCase):
         return sandbox, repo
 
     def test_diff_marks_deprecated(self):
-        with tempfile.TemporaryDirectory() as raw:
+        with _ScratchDir("test") as raw:
             tmp = Path(raw)
             sandbox, repo = self._make_two_iter_repo(tmp)
             try:
@@ -1577,7 +1627,7 @@ class DiffVersionsTests(unittest.TestCase):
                 shutil.rmtree(sandbox, ignore_errors=True)
 
     def test_diff_reads_archived_source_iteration(self):
-        with tempfile.TemporaryDirectory() as raw:
+        with _ScratchDir("test") as raw:
             tmp = Path(raw)
             sandbox, repo = self._make_two_iter_repo(tmp)
             try:
@@ -1605,7 +1655,7 @@ class DiffVersionsTests(unittest.TestCase):
         verbatim into the instance root, regardless of the instance name."""
         framework_root = Path(__file__).resolve().parents[2]
         framework_readme = (framework_root / "README.md").read_text(encoding="utf-8")
-        with tempfile.TemporaryDirectory() as raw:
+        with _ScratchDir("test") as raw:
             target = Path(raw) / "owned-instance"
             with patch.object(workflow, "workflow_protection_errors", return_value=[]):
                 result = workflow.main(
@@ -1622,7 +1672,7 @@ class DiffVersionsTests(unittest.TestCase):
         own version."""
         framework_root = Path(__file__).resolve().parents[2]
         framework_readme = (framework_root / "README.md").read_text(encoding="utf-8")
-        with tempfile.TemporaryDirectory() as raw:
+        with _ScratchDir("test") as raw:
             target = Path(raw) / "owned-sync"
             target.mkdir()
             (target / "README.md").write_text("# Legacy\n", encoding="utf-8")
@@ -1646,7 +1696,7 @@ class DiffVersionsTests(unittest.TestCase):
     def test_init_instance_root_readme_is_gitignored(self):
         """After `init-instance`, the managed `.gitignore` block must
         exclude the instance root `README.md` so it is never tracked."""
-        with tempfile.TemporaryDirectory() as raw:
+        with _ScratchDir("test") as raw:
             target = Path(raw) / "ignored-instance"
             with patch.object(workflow, "workflow_protection_errors", return_value=[]):
                 result = workflow.main(
@@ -1665,7 +1715,7 @@ class DiffVersionsTests(unittest.TestCase):
         """`_ensure_workflow_ignore_block` must keep the instance root
         `README.md` in the managed block and remain idempotent on repeat
         calls."""
-        with tempfile.TemporaryDirectory() as raw:
+        with _ScratchDir("test") as raw:
             target = Path(raw) / "ignore-block"
             target.mkdir()
             with patch.object(workflow, "workflow_protection_errors", return_value=[]):
@@ -1684,7 +1734,7 @@ class DiffVersionsTests(unittest.TestCase):
         """`sync` must produce a managed `.gitignore` block that excludes
         both `.aw/` and the instance root `README.md`, regardless of any
         prior content the instance committed."""
-        with tempfile.TemporaryDirectory() as raw:
+        with _ScratchDir("test") as raw:
             target = Path(raw) / "sync-ignore"
             target.mkdir()
             (target / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
