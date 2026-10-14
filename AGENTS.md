@@ -38,8 +38,6 @@ Approved Architecture Decision (current version)
         ↓
 Approved Implementation Plan (current version)
         ↓
-Approved Iteration Changelog (current version)
-        ↓
 Existing Code Conventions
         ↓
 Individual Implementation Preference
