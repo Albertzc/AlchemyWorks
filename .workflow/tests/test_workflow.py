@@ -2074,5 +2074,74 @@ class DesignTokensUniquenessTests(unittest.TestCase):
         )
 
 
+class SyncScaffoldRefreshTests(unittest.TestCase):
+    """Round 1 round-5b: `sync` must keep an instance's non-versioned
+    scaffold READMEs (`baseline/README.md`, `workspace/README.md`, …)
+    aligned with the framework source. Without this hook, a freshly
+    synced instance has no `baseline/README.md` / `workspace/README.md`
+    until the operator runs `init` manually, and the gate cannot tell
+    what the canonical placeholders should be."""
+
+    def _fresh_target(self) -> Path:
+        scratch = _ScratchDir("synced-scaffold")
+        self.addCleanup(scratch.cleanup)
+        target = scratch.path
+        # Minimal Git init so `sync_workflow` does not bail on
+        # "target is not a Git working tree".
+        subprocess.run(["git", "init", "--quiet", str(target)], check=True)
+        subprocess.run(
+            [
+                "git", "-C", str(target), "-c", "user.email=test@example.com",
+                "-c", "user.name=Test", "commit", "--quiet", "--allow-empty",
+                "-m", "initial",
+            ],
+            check=True,
+        )
+        return target
+
+    def test_sync_creates_missing_scaffold_readmes(self):
+        target = self._fresh_target()
+        with patch.object(workflow, "workflow_protection_errors", return_value=[]):
+            rc = workflow.main(["sync", "--directory", str(target)])
+        self.assertEqual(rc, 0)
+        # The five non-versioned scaffold READMEs must exist after sync.
+        for relative in (
+            "baseline/README.md",
+            "baseline/raw-requirement/README.md",
+            "iteration/README.md",
+            "iteration/raw-requirement/README.md",
+            "workspace/README.md",
+        ):
+            self.assertTrue(
+                (target / relative).is_file(),
+                msg=f"sync must write the scaffold README at {relative}",
+            )
+
+    def test_sync_preserves_user_modified_scaffold_readme(self):
+        target = self._fresh_target()
+        custom_text = "# Custom baseline notes — operator-owned\n"
+        (target / "baseline").mkdir()
+        (target / "baseline" / "README.md").write_text(custom_text, encoding="utf-8")
+        subprocess.run(["git", "-C", str(target), "add", "."], check=True)
+        subprocess.run(
+            [
+                "git", "-C", str(target), "-c", "user.email=test@example.com",
+                "-c", "user.name=Test", "commit", "--quiet",
+                "-m", "user baseline note",
+            ],
+            check=True,
+        )
+        with patch.object(workflow, "workflow_protection_errors", return_value=[]):
+            rc = workflow.main(["sync", "--directory", str(target)])
+        self.assertEqual(rc, 0)
+        # The user-edited baseline README must NOT be overwritten; the
+        # writer is `if not path.exists()`-gated.
+        self.assertEqual(
+            (target / "baseline" / "README.md").read_text(encoding="utf-8"),
+            custom_text,
+            msg="sync must not overwrite an existing scaffold README",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -383,6 +383,13 @@ def sync_workflow(
             source_commit=source_commit,
             dry_run=dry_run,
         )
+    if not dry_run:
+        # Refresh the non-versioned scaffold READMEs (`baseline/README.md`,
+        # `workspace/README.md`, etc.) so a freshly-synced instance always
+        # carries the framework's current scaffold content. The writer is
+        # `if not path.exists()`-gated internally — user edits to existing
+        # scaffold files are preserved.
+        write_project_scaffold_readmes(target)
     print(f"workflow synchronized: {source} -> {target}")
     return 0
 
