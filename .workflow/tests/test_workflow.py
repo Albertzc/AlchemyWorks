@@ -1,7 +1,9 @@
 import atexit
 import json
+import os
 import secrets
 import shutil
+import stat
 import subprocess
 import sys
 import unittest
@@ -22,6 +24,21 @@ import workflow
 # protected .workflow/ subtree; ignored via the root .gitignore entry
 # "temp-workflow-tests/".
 _SCRATCH_ROOT = Path(__file__).resolve().parents[2] / "temp-workflow-tests"
+
+
+def _remove_tree(path: Path) -> None:
+    """Remove a scratch tree, retrying Windows read-only entries."""
+    if not path.exists():
+        return
+
+    def retry(function, target, _exc_info):
+        try:
+            os.chmod(target, stat.S_IWRITE)
+        except OSError:
+            pass
+        function(target)
+
+    shutil.rmtree(path, onerror=retry)
 
 
 class _ScratchDir:
@@ -48,8 +65,7 @@ class _ScratchDir:
         return str(self.path)
 
     def cleanup(self) -> None:
-        if self.path.exists():
-            shutil.rmtree(self.path, ignore_errors=True)
+        _remove_tree(self.path)
 
     def __enter__(self):
         return Path(self.name)
@@ -61,8 +77,12 @@ class _ScratchDir:
 
 @atexit.register
 def _cleanup_scratch_root():
-    if _SCRATCH_ROOT.exists():
-        shutil.rmtree(_SCRATCH_ROOT, ignore_errors=True)
+    _remove_tree(_SCRATCH_ROOT)
+
+
+# A prior interrupted test process cannot run its atexit handler. Clean its
+# ignored project-local leftovers before allocating the next scratch tree.
+_cleanup_scratch_root()
 
 
 class WorkflowTests(unittest.TestCase):
