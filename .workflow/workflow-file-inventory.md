@@ -40,7 +40,7 @@
 | `.aw/.agents/skills/stage-gate/` (source repo: `.agents/skills/stage-gate/`) | `SKILL.md` | Stage-start, handoff, and review gate policy: stage order, required artifacts, and human-approval conditions. |
 | `.aw/.agents/skills/normalize-requirement/` | `SKILL.md` | Raw-requirement routing and normalization rules. |
 | `.aw/.agents/skills/manage-iteration/` | `SKILL.md` | Rules for creating, discovering, and archiving iterations; archives an RC-complete previous version after the next version is created successfully. |
-| `.aw/.agents/skills/prototype-design-system/` | `SKILL.md`, `references/` | Prototype visual, interaction, and design-token constraints. |
+| `.aw/.agents/skills/prototype-design-system/` | `SKILL.md` | Prototype visual, interaction, and design-token constraints. The Skill references `templates/design-tokens.json` as the authoritative source; the historical `references/design-tokens.json` duplicate was removed. |
 | `.aw/.agents/skills/design-specification/` | `SKILL.md` | 02-design architecture, API, and database-dictionary artifact and consistency-check rules. |
 | `.aw/.agents/skills/planning-validation/` | `SKILL.md` | 03-planning TASK DAG, acceptance-coverage, and validation-plan constraints. |
 | `.aw/.agents/skills/iterate-implementation/` | `SKILL.md` | Implementation-stage code, tests, and record constraints; v1.0 keeps a standalone `issue-fixes.md`, v1.1+ merges ISSUE records into `source-code.md`. |

@@ -2036,5 +2036,43 @@ class TemplateFrontmatterStatusTests(unittest.TestCase):
         )
 
 
+class DesignTokensUniquenessTests(unittest.TestCase):
+    """Round 1 round-5a: ``design-tokens.json`` is the prototype design
+    system token table. Keeping two byte-identical copies under
+    ``templates/`` and ``.agents/skills/prototype-design-system/references/``
+    is a maintenance footgun — any edit that lands in only one of them
+    silently drifts the Skill's runtime view of the tokens. The
+    authoritative copy lives at ``templates/design-tokens.json``; the
+    Skill reads it directly. The historical duplicate under
+    ``references/`` is removed; this test enforces the single-source rule
+    so a future contributor cannot reintroduce the copy."""
+
+    REPO_ROOT = Path(__file__).resolve().parents[2]
+
+    def test_design_tokens_json_only_lives_under_templates(self):
+        candidates = list(self.REPO_ROOT.rglob("design-tokens.json"))
+        rel_paths = sorted(p.relative_to(self.REPO_ROOT).as_posix() for p in candidates)
+        self.assertEqual(
+            rel_paths,
+            ["templates/design-tokens.json"],
+            msg=f"design-tokens.json must live only at templates/design-tokens.json; "
+                f"found: {rel_paths}",
+        )
+
+    def test_references_directory_under_prototype_design_system_skill_is_gone(self):
+        path = (
+            self.REPO_ROOT
+            / ".agents"
+            / "skills"
+            / "prototype-design-system"
+            / "references"
+        )
+        self.assertFalse(
+            path.exists(),
+            msg=f"Legacy duplicate dir {path.relative_to(self.REPO_ROOT)} must not be recreated; "
+                "the Skill reads templates/design-tokens.json directly.",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -9,7 +9,7 @@ last_updated: YYYY-MM-DDTHH:MM:SS±HH:MM # Codex client local time
 
 # HTML Prototype 设计系统模板
 
-> 本文档与同目录的 `Prototype.html` 共同构成 HTML 原型生成标准。`Prototype.html` 规定页面骨架、组件结构和交互基线；本文档规定视觉、版式和交互表现；`references/design-tokens.json` 提供可机器读取的具体令牌值。
+> 本文档与同目录的 `Prototype.html` 共同构成 HTML 原型生成标准。`Prototype.html` 规定页面骨架、组件结构和交互基线；本文档规定视觉、版式和交互表现；同目录的 `design-tokens.json` 提供可机器读取的具体令牌值（design-tokens 单一权威源在 `templates/design-tokens.json`，不再复制到 `.agents/skills/prototype-design-system/references/`）。
 
 ## 1. 设计目标
 
