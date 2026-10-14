@@ -1985,5 +1985,56 @@ class WorkflowDirResolutionTests(unittest.TestCase):
         )
 
 
+class TemplateFrontmatterStatusTests(unittest.TestCase):
+    """Round 1 round-4 fix: every template frontmatter under ``templates/``
+    must default to ``status: draft`` (or another non-Approved value), so a
+    user copying a template verbatim never instantiates an Approved
+    artifact without a human review. The standing rule in AGENTS.md is
+    that only humans can set ``status: Approved``; the templates must not
+    pre-empt that gate."""
+
+    REPO_TEMPLATES = Path(__file__).resolve().parents[2] / "templates"
+
+    @staticmethod
+    def _parse_frontmatter(text: str) -> str | None:
+        """Extract the first YAML frontmatter block delimited by ``---``.
+
+        Returns the inner text or ``None`` when the file does not start
+        with a frontmatter delimiter (e.g. plain prose docs like
+        ``templates/README.md`` have no frontmatter and are skipped)."""
+        lines = text.splitlines()
+        if not lines or lines[0].strip() != "---":
+            return None
+        for index in range(1, len(lines)):
+            if lines[index].strip() == "---":
+                return "\n".join(lines[1:index])
+        return None
+
+    def test_no_template_frontmatter_uses_status_approved(self):
+        """No template under ``templates/`` may carry ``status: Approved``
+        in its frontmatter. (Other usages such as the ``status: Approved``
+        *description* inside ``templates/README.md`` are documentation,
+        not frontmatter, and so are out of scope for this check.)"""
+        violations: list[str] = []
+        for path in sorted(self.REPO_TEMPLATES.iterdir()):
+            if path.suffix.lower() not in {".md", ".html"}:
+                continue
+            text = path.read_text(encoding="utf-8")
+            frontmatter = self._parse_frontmatter(text)
+            if frontmatter is None:
+                continue
+            for line in frontmatter.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("status:"):
+                    value = stripped.split(":", 1)[1].strip()
+                    if value == "Approved":
+                        violations.append(f"{path.name}: {stripped}")
+        self.assertEqual(
+            violations, [],
+            msg="Template frontmatter must not default to `status: Approved`; "
+                "only humans may set that field. Found: " + "; ".join(violations),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -134,7 +134,7 @@ last_updated: YYYY-MM-DDTHH:MM:SS±HH:MM # Codex client local time
 ---
 document_type: issue-fixes
 version: 0.4.0
-status: Approved
+status: draft
 owner: Tech Lead
 last_updated: YYYY-MM-DDTHH:MM:SS±HH:MM # Codex client local time
 ---
