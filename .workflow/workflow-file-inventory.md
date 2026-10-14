@@ -87,7 +87,7 @@ Before every workflow change is considered complete, confirm at least the follow
 
 1. Every required path touched by the change is correctly registered in this inventory.
 2. This inventory does not misclassify project input, versioned deliverables, business code, or reproducible state as required workflow items.
-3. The ignore block appended by the sync script excludes only `.aw/` and the instance root `README.md`; `templates/`, `baseline/`, `iteration/`, `workspace/`, and `workspace/workflow/` remain committable.
+3. The ignore block appended by the sync script excludes only `.aw/` and `/README.md` (the instance root); `templates/`, `baseline/`, `iteration/`, `workspace/`, and `workspace/workflow/` remain committable.
 4. The workflow tests pass: `python .workflow/tests/test_workflow.py`.
 5. New instance root READMEs continue to point at `.aw/.workflow/workflow.py`; the workflow-maintained `workspace/README.md` after `05-review-release` likewise exposes the `.aw/` workflow entry point and a local CLI example; the synchronized `workflow-governance` Skill in the instance uses the `.aw/.workflow/` command path.
 6. After `sync`, the instance root `README.md` is byte-equivalent to the framework source root `README.md`; any intentional divergence is called out in the sync commit message.

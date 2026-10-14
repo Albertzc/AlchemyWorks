@@ -102,7 +102,7 @@ WORKFLOW_IGNORE_LINES = (
     ".aw/",
     # The instance root `README.md` is framework-owned and sync-overwritten;
     # add it to the managed ignore block so the instance Git never commits it.
-    "README.md",
+    "/README.md",
     WORKFLOW_IGNORE_END,
 )
 # These are workflow definitions and governance controls, not product
@@ -251,7 +251,11 @@ def _workflow_source_snapshot(workflow_version: str | None = None):
         yield FRAMEWORK_ROOT, _workflow_ref_commit()
         return
     commit = _workflow_ref_commit(workflow_version)
-    with tempfile.TemporaryDirectory(prefix="alchemyworks-workflow-") as temp:
+    if workflow_version == "HEAD" and commit == _workflow_ref_commit():
+        yield FRAMEWORK_ROOT, commit
+        return
+    temp = tempfile.mkdtemp(prefix="alchemyworks-workflow-")
+    try:
         result = subprocess.run(
             ["git", "-C", str(FRAMEWORK_ROOT), "archive", "--format=tar", workflow_version],
             capture_output=True,
@@ -263,6 +267,8 @@ def _workflow_source_snapshot(workflow_version: str | None = None):
         with tarfile.open(fileobj=io.BytesIO(result.stdout), mode="r:") as archive:
             archive.extractall(temp)
         yield Path(temp), commit
+    finally:
+        shutil.rmtree(temp, ignore_errors=True)
 
 
 def _git_status_paths(root: Path) -> list[str]:

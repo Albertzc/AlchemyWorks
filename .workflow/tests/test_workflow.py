@@ -172,6 +172,7 @@ class WorkflowTests(unittest.TestCase):
             "iteration/v1/03-planning/v1-validation-plan.md",
             "iteration/v1/04-implementation/v1-source-code.md",
             "iteration/v1/04-implementation/v1-test-results.md",
+            "iteration/v1/04-implementation/v1-issue-fixes.md",
             "iteration/v1/05-review-release/v1-release-log.md",
         ]:
             self.add_approved(root, relative)
@@ -452,6 +453,8 @@ class WorkflowTests(unittest.TestCase):
         try:
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
                 self.add_full_chain_after_fixture(root)
+                final_dir = root / "iteration" / "v1" / "05-review-release"
+                (final_dir / "v1-release-log.md").unlink()
                 import io, contextlib
                 buf = io.StringIO()
                 with contextlib.redirect_stdout(buf):
@@ -459,7 +462,6 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual(rc, 1)
                 output = buf.getvalue()
                 self.assertIn("v1-review-release.md", output)
-                final_dir = root / "iteration" / "v1" / "05-review-release"
                 final_dir.mkdir(parents=True, exist_ok=True)
                 (final_dir / "v1-review-release.md").write_text(
                     "---\nstatus: Approved\n---\n# review release\n", encoding="utf-8"
@@ -842,6 +844,9 @@ class WorkflowTests(unittest.TestCase):
         temp, root = self.make_repo()
         try:
             (root / "iteration" / "v1").rename(root / "iteration" / "v1.0")
+            (root / "README.md").write_text(
+                "# Workflow\n", encoding="utf-8"
+            )
             for relative in [
                 "iteration/v1.0/01-product/v1.0-prototype.html",
                 "iteration/v1.0/02-design/v1.0-architecture-design.md",
@@ -851,6 +856,7 @@ class WorkflowTests(unittest.TestCase):
                 "iteration/v1.0/03-planning/v1.0-validation-plan.md",
                 "iteration/v1.0/04-implementation/v1.0-source-code.md",
                 "iteration/v1.0/04-implementation/v1.0-test-results.md",
+                "iteration/v1.0/04-implementation/v1.0-issue-fixes.md",
                 "iteration/v1.0/05-review-release/v1.0-review-release.md",
                 "iteration/v1.0/05-review-release/v1.0-release-log.md",
             ]:
@@ -875,7 +881,7 @@ class WorkflowTests(unittest.TestCase):
             root_readme = root / "README.md"
             root_readme.write_text("# Pre-existing root README\n", encoding="utf-8")
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "FRAMEWORK_ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
-                rc = workflow.validate("v1", "05-review-release")
+                rc = workflow.validate("v1.0", "05-review-release")
             self.assertEqual(rc, 0, msg="validate --stage 05-review-release should pass for a complete chain")
             workspace_readme = root / "workspace" / "README.md"
             self.assertTrue(workspace_readme.is_file(), msg="workspace/README.md was not written by validate")
@@ -1386,6 +1392,7 @@ class WorkflowTests(unittest.TestCase):
                 "iteration/v1.0/03-planning/v1.0-validation-plan.md",
                 "iteration/v1.0/04-implementation/v1.0-source-code.md",
                 "iteration/v1.0/04-implementation/v1.0-test-results.md",
+                "iteration/v1.0/04-implementation/v1.0-issue-fixes.md",
                 "iteration/v1.0/05-review-release/v1.0-review-release.md",
                 "iteration/v1.0/05-review-release/v1.0-release-log.md",
             ]:
@@ -1421,6 +1428,7 @@ class WorkflowTests(unittest.TestCase):
                 "iteration/v1.0/03-planning/v1.0-validation-plan.md",
                 "iteration/v1.0/04-implementation/v1.0-source-code.md",
                 "iteration/v1.0/04-implementation/v1.0-test-results.md",
+                "iteration/v1.0/04-implementation/v1.0-issue-fixes.md",
                 "iteration/v1.0/05-review-release/v1.0-review-release.md",
                 "iteration/v1.0/05-review-release/v1.0-release-log.md",
             ]:
@@ -1575,12 +1583,21 @@ class DiffVersionsTests(unittest.TestCase):
             "status: Approved\n"
             "product_name: demo\n"
             "product_version: v1.1\n"
+            "---\n"
+            "# v1.1\nFR-001 FR-005 TASK-API-001\n",
+            encoding="utf-8",
+        )
+        review = repo / "iteration" / "v1.1" / "05-review-release"
+        review.mkdir(parents=True)
+        (review / "v1.1-review-release.md").write_text(
+            "---\n"
+            "status: Approved\n"
             "change_set:\n"
             "  added: [FR-005]\n"
             "  modified: [TASK-API-001]\n"
             "  deprecated: [FR-003]\n"
             "---\n"
-            "# v1.1\nFR-001 FR-005 TASK-API-001\n",
+            "# Review\n",
             encoding="utf-8",
         )
 
