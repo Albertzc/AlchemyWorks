@@ -36,6 +36,12 @@ else:
     FRAMEWORK_WORKFLOW_DIR = FRAMEWORK_ROOT / ".workflow"
 ROOT = FRAMEWORK_ROOT
 WORKFLOW_DIR = FRAMEWORK_WORKFLOW_DIR
+# AlchemyWorks framework version. Distinct from the per-project iteration
+# `v{major}.{minor}` (e.g. v1.0). Bump on any framework-core change that an
+# operator would want to discover by running `workflow.py --version` or by
+# inspecting `.aw/workflow-version.yaml`. Pre-1.0 numbers indicate the
+# framework is still evolving rapidly.
+__version__ = "0.5.0"
 BASELINE_STAGE = "00-baseline"
 STAGES = [
     "01-product",
@@ -307,6 +313,7 @@ def _write_workflow_version(target: Path, *, source_ref: str, source_commit: str
     content = (
         "schema_version: 1\n"
         "framework: AlchemyWorks\n"
+        f"framework_version: {__version__}\n"
         f"source_ref: {source_ref}\n"
         f"source_commit: {source_commit}\n"
     )
@@ -2213,7 +2220,12 @@ def task_finished(iteration: str, task_id: str, result: str, *, refresh_index: b
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"AlchemyWorks workflow {__version__}",
+    )
     parser.add_argument(
         "--project-root",
         help="Instance project root whose documents and .workflow state are read and written.",

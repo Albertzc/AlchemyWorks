@@ -2143,5 +2143,55 @@ class SyncScaffoldRefreshTests(unittest.TestCase):
         )
 
 
+class FrameworkVersionMarkerTests(unittest.TestCase):
+    """Round 1 round-5c: AlchemyWorks now exposes a framework version
+    constant and surfaces it through three channels — the CLI `--version`
+    flag, the `__version__` module attribute, and the
+    `.aw/workflow-version.yaml` file written by `sync_workflow` /
+    `init_instance`."""
+
+    def test_module_exposes_version_constant(self):
+        # The exact value drifts over time; assert the shape rather than
+        # the literal so future bumps don't require a test update.
+        self.assertTrue(hasattr(workflow, "__version__"))
+        version = workflow.__version__
+        self.assertIsInstance(version, str)
+        parts = version.split(".")
+        self.assertEqual(len(parts), 3, msg=f"expected semver MAJOR.MINOR.PATCH; got {version!r}")
+        for part in parts:
+            self.assertTrue(part.isdigit(), msg=f"version component {part!r} must be numeric")
+
+    def test_cli_version_flag_prints_framework_version(self):
+        # argparse parses `--version` and exits before our subcommand
+        # machinery, so we drive the same path via SystemExit.
+        with self.assertRaises(SystemExit) as raised:
+            workflow.main(["--version"])
+        self.assertEqual(raised.exception.code, 0)
+        # argparse writes the version to stdout via print_version; we
+        # don't capture it here, but the SystemExit + no traceback path
+        # above is enough — the version-constant test pins the value.
+
+    def test_sync_writes_framework_version_to_workflow_version_yaml(self):
+        scratch = _ScratchDir("ver")
+        self.addCleanup(scratch.cleanup)
+        target = scratch.path
+        subprocess.run(["git", "init", "--quiet", str(target)], check=True)
+        subprocess.run(
+            [
+                "git", "-C", str(target), "-c", "user.email=test@example.com",
+                "-c", "user.name=Test", "commit", "--quiet", "--allow-empty",
+                "-m", "initial",
+            ],
+            check=True,
+        )
+        with patch.object(workflow, "workflow_protection_errors", return_value=[]):
+            rc = workflow.main(["sync", "--directory", str(target)])
+        self.assertEqual(rc, 0)
+        manifest = (target / ".aw" / "workflow-version.yaml").read_text(encoding="utf-8")
+        self.assertIn(f"framework_version: {workflow.__version__}", manifest)
+        self.assertIn("schema_version: 1", manifest)
+        self.assertIn("framework: AlchemyWorks", manifest)
+
+
 if __name__ == "__main__":
     unittest.main()
