@@ -45,6 +45,7 @@ The instance root `README.md` is the project-owned destination for current syste
 Generated files:
 
 - `.aw/workflow-version.yaml` — current synchronized workflow ref and commit; ignored by the instance project and refreshed by `init-instance` / `sync`.
+- `pyproject.toml` — framework-repository-only release metadata; it is not copied into instances and does not manage instance iterations.
 - `workspace/workflow/manifest.yaml` — discovered artifacts, status, line count, and content hash. This is instance-project state and is committed to Git.
 - `workspace/workflow/traceability.json` — stable IDs and evidence-backed co-occurrence edges. This is instance-project state and is committed to Git.
 - `workspace/workflow/current-state.json` — derived recovery checkpoint: current stage, blockers, next action, latest gate, and reusable Context Pack. This is instance-project state and is committed to Git.
@@ -98,6 +99,23 @@ Use `--dry-run` to preview the initialization. The command creates the instance 
 Run `python .workflow/workflow.py sync --directory '<target-project-root>'` from this repository to copy the workflow definition to a target Git working tree. The command copies only the items governed by `workflow-file-inventory.md`: shared rules, CLI, templates, scaffold READMEs, and Skills. It does not copy `baseline/` deliverables, `iteration/` deliverables, `workspace/` business code, or generated workflow state.
 
 The command permits unrelated target changes, but rejects uncommitted changes that overlap a synchronized workflow path. Existing instance templates are preserved; pass `--workflow-version '<tag|branch|commit>'` when changing the source ref. After reviewing an intentional overlap, use `--allow-dirty`; use `--dry-run` to preview the copy. The target `.gitignore` receives an idempotent managed block for `.aw/`; `workspace/workflow/` and `templates/` remain visible to Git. Invoke the framework CLI with `--project-root '<target-project-root>'` to write state to the target instance, or run `.aw/.workflow/workflow.py` locally after synchronization.
+
+## Framework repository releases
+
+The framework source repository owns its release version in
+`pyproject.toml` under `[project].version`. Repository CI validates this
+value and runs the workflow regression suite. The release workflow uses
+Conventional Commit messages to prepare a release PR, updates the version and
+release notes, and creates a `vMAJOR.MINOR.PATCH` tag when that release PR is
+merged. It never changes an instance's `iteration/` versions.
+
+The framework release tag and instance synchronization metadata are separate:
+
+```text
+AlchemyWorks framework: v0.5.1
+Instance synchronization: .aw/workflow-version.yaml
+Instance product iteration: iteration/v1.0
+```
 
 Every completed TASK must use `context` first, then `task-finished`. The latter validates that the task exists in the current task plan, requires the Context Pack, writes the latest conclusion plus an immutable history record, refreshes the recovery checkpoint, and prints a concise result. `index`, `validate`, `context`, and `task-finished` all refresh the checkpoint. It is a cache only: artifact frontmatter and gate results remain authoritative. Use `--refresh-index` or `--refresh-dashboard` when those generated views must also be refreshed.
 ### Instance document migration

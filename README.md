@@ -101,6 +101,10 @@ python .workflow/workflow.py sync --directory "E:\path\to\product-a"
 
 `init-instance` 的生成顺序是：初始化实例 Git → 创建 `baseline/`、`iteration/`、`workspace/` 和默认 `templates/` 及其目录说明 README → 将工作流 README 同步到 `.aw/README.md` → 在实例根创建一次 `AGENTS.md` 和项目功能 README → 写入 `.aw/workflow-version.yaml`，并追加只忽略 `.aw/` 的受管 `.gitignore` 区块。实例根 `README.md`、`AGENTS.md` 和 `templates/` 是实例可维护内容；`.aw/` 下文件是同步的工作流副本。05-review-release 通过后，工作流只更新根 `README.md` 的当前系统功能说明区域；`workspace/README.md` 只说明 workspace 原理。`init` 只用于当前工作流仓库内创建 intake 目录；`init-version` 只能在实例 baseline 门禁通过后创建版本骨架。
 
+### 框架版本与实例版本分离
+
+AlchemyWorks 框架本身的版本只在框架仓库的 `pyproject.toml` 中维护，采用 SemVer，并由仓库级 GitHub Actions 根据 Conventional Commits 准备发布 Tag，例如 `v0.5.1`。框架版本发布不会修改实例的 `iteration/v{major}.{minor}`。实例中的 `.aw/workflow-version.yaml` 只记录同步来源的框架 ref 和 commit，不是实例产品版本。
+
 ---
 
 ### 2. 版本号规范

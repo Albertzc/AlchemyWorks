@@ -24,6 +24,18 @@
 | `README.md` | Framework source entry and usage guide | The framework source README is synchronized into instance `.aw/README.md`. `init-instance` creates a separate project-owned root `README.md`; `sync` never overwrites or ignores it. |
 | `.gitignore` | Version-control rules | The source repository normally tracks workflow source files; the sync script only idempotently appends a managed block that ignores `.aw/` into instance projects. It never overwrites existing instance rules and never excludes instance state under `workspace/workflow/`. |
 
+## 2.1 Framework Repository Release Metadata and CI
+
+These files belong only to the AlchemyWorks framework repository. They are not
+synchronized into instance projects and do not manage instance iteration
+versions.
+
+| Path | Type | Purpose |
+|---|---|---|
+| `pyproject.toml` | Framework release metadata | Single source of truth for the framework's SemVer version. |
+| `.github/workflows/ci.yml` | Repository CI | Validates the framework version format and runs framework regression tests. |
+| `.github/workflows/release.yml` | Repository release automation | Uses repository commits to prepare framework releases, update `pyproject.toml`, create `vMAJOR.MINOR.PATCH`, and publish the release. |
+
 ## 3. Required Workflow Execution and Verification Directories
 
 | Path | Required contents | Purpose |
@@ -91,3 +103,4 @@ Before every workflow change is considered complete, confirm at least the follow
 4. The workflow tests pass and clean their project-local scratch directory: `python .workflow/tests/test_workflow.py`.
 5. New instance root READMEs continue to point at `.aw/.workflow/workflow.py`; `workspace/README.md` remains static workspace guidance; the synchronized `workflow-governance` Skill in the instance uses the `.aw/.workflow/` command path.
 6. After `sync`, `.aw/README.md` is byte-equivalent to the framework source root `README.md`; the instance root `README.md` and `AGENTS.md` remain untouched.
+7. Framework release metadata and CI are repository-only and must not be added to `WORKFLOW_SYNC_ITEMS` or used to advance `iteration/v{major}.{minor}`.

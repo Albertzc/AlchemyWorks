@@ -1,0 +1,37 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: framework-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run release validation
+        run: python .workflow/tests/test_workflow.py
+
+      - name: Create or update release PR
+        uses: googleapis/release-please-action@v4
+        with:
+          release-type: python
+          package-name: alchemyworks
+          token: ${{ secrets.GITHUB_TOKEN }}

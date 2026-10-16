@@ -395,6 +395,20 @@ test: add pipeline execution regression cases
 docs: update local development instructions
 ```
 
+### Framework release versioning
+
+The AlchemyWorks framework repository manages its own release version in
+`pyproject.toml` under `[project].version`, using SemVer `MAJOR.MINOR.PATCH`.
+Framework releases are represented by Git tags named `vMAJOR.MINOR.PATCH` and
+are automated by the repository-level GitHub Actions workflows. Conventional
+Commit messages determine the intended bump (`fix` for PATCH, `feat` for
+MINOR, and `!` or `BREAKING CHANGE` for MAJOR).
+
+This framework release process is separate from instance product iterations.
+It must not modify or advance `iteration/v{major}.{minor}` in an instance
+project. An instance's `.aw/workflow-version.yaml` records only the framework
+source ref and commit used for synchronization.
+
 ## 15. AI Agent Behavior
 
 The agent MUST:

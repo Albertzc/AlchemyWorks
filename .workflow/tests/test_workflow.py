@@ -7,6 +7,7 @@ import stat
 import subprocess
 import sys
 import unittest
+import tomllib
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
@@ -1581,6 +1582,10 @@ class DiffVersionsTests(unittest.TestCase):
             Path(__file__).resolve().parents[1] / "scripts" / "diff_versions.py",
             repo / ".workflow" / "scripts" / "diff_versions.py",
         )
+        shutil.copy(
+            Path(__file__).resolve().parents[2] / "pyproject.toml",
+            repo / "pyproject.toml",
+        )
         return sandbox, repo
 
     def test_diff_marks_deprecated(self):
@@ -2207,6 +2212,11 @@ class FrameworkVersionMarkerTests(unittest.TestCase):
         self.assertEqual(len(parts), 3, msg=f"expected semver MAJOR.MINOR.PATCH; got {version!r}")
         for part in parts:
             self.assertTrue(part.isdigit(), msg=f"version component {part!r} must be numeric")
+
+    def test_module_version_matches_pyproject(self):
+        with (workflow.FRAMEWORK_ROOT / "pyproject.toml").open("rb") as stream:
+            project = tomllib.load(stream)["project"]
+        self.assertEqual(workflow.__version__, project["version"])
 
     def test_cli_version_flag_prints_framework_version(self):
         # argparse parses `--version` and exits before our subcommand

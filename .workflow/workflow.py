@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 import tarfile
+import tomllib
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -36,12 +37,30 @@ else:
     FRAMEWORK_WORKFLOW_DIR = FRAMEWORK_ROOT / ".workflow"
 ROOT = FRAMEWORK_ROOT
 WORKFLOW_DIR = FRAMEWORK_WORKFLOW_DIR
-# AlchemyWorks framework version. Distinct from the per-project iteration
-# `v{major}.{minor}` (e.g. v1.0). Bump on any framework-core change that an
-# operator would want to discover by running `workflow.py --version` or by
-# inspecting `.aw/workflow-version.yaml`. Pre-1.0 numbers indicate the
-# framework is still evolving rapidly.
-__version__ = "0.5.1"
+
+
+def _load_framework_version() -> str:
+    """Read the framework version without making instances version owners."""
+    project_metadata = FRAMEWORK_ROOT / "pyproject.toml"
+    if project_metadata.exists():
+        with project_metadata.open("rb") as stream:
+            return tomllib.load(stream)["project"]["version"]
+
+    # Synchronized instances do not receive the framework repository's
+    # pyproject.toml. Their local copy can still report the synchronized
+    # framework version from its ignored provenance metadata.
+    version_metadata = FRAMEWORK_ROOT / ".aw" / "workflow-version.yaml"
+    if version_metadata.exists():
+        for line in version_metadata.read_text(encoding="utf-8").splitlines():
+            if line.startswith("framework_version:"):
+                return line.split(":", 1)[1].strip()
+    raise RuntimeError("framework version metadata is missing")
+
+
+# The source of truth is the framework repository's `pyproject.toml`; this
+# read-only value is surfaced by the CLI and copied into instance
+# `.aw/workflow-version.yaml` during synchronization.
+__version__ = _load_framework_version()
 BASELINE_STAGE = "00-baseline"
 STAGES = [
     "01-product",
