@@ -25,7 +25,7 @@
 
 **Files:** `pyproject.toml`, `.workflow/workflow.py`, `.workflow/tests/test_workflow.py`
 
-- [x] Add the framework project metadata and version `0.5.1`.
+- [x] Add the framework project metadata and initial version `0.1.0`.
 - [x] Make the workflow CLI read the source repository version and fall back to instance synchronization metadata without managing versions.
 - [x] Add a regression test that the CLI version matches `pyproject.toml`.
 
