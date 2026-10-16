@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
   pull-requests: write
 
 concurrency:
@@ -33,5 +34,4 @@ jobs:
         uses: googleapis/release-please-action@v4
         with:
           release-type: python
-          package-name: alchemyworks
           token: ${{ secrets.GITHUB_TOKEN }}
