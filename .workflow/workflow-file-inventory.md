@@ -21,14 +21,14 @@
 | Path | Type | Purpose |
 |---|---|---|
 | `AGENTS.md` | Governance rules | Defines collaboration, approval, versioning, change, and security constraints. |
-| `README.md` | Framework entry and usage guide | Held by the framework source repository; `init-instance` and `sync` overwrite the instance root `README.md` with this file's content and exclude it from the instance's Git via the managed `.gitignore` block. The instance root README does not carry example-project functional descriptions — that belongs to `workspace/README.md`. |
-| `.gitignore` | Version-control rules | The source repository normally tracks workflow source files; the sync script only idempotently appends a managed block that ignores `.aw/` and the instance root `README.md` into instance projects. It never overwrites existing instance rules and never excludes instance state under `workspace/workflow/`. |
+| `README.md` | Framework source entry and usage guide | The framework source README is synchronized into instance `.aw/README.md`. `init-instance` creates a separate project-owned root `README.md`; `sync` never overwrites or ignores it. |
+| `.gitignore` | Version-control rules | The source repository normally tracks workflow source files; the sync script only idempotently appends a managed block that ignores `.aw/` into instance projects. It never overwrites existing instance rules and never excludes instance state under `workspace/workflow/`. |
 
 ## 3. Required Workflow Execution and Verification Directories
 
 | Path | Required contents | Purpose |
 |---|---|---|
-| `.aw/.workflow/` (source repo: `.workflow/`) | `workflow.py`, `README.md` | Workflow CLI (including baseline core-flow prototype and per-iteration prototype gates, the `refresh` command run after document changes, automatic maintenance of the instance `workspace/README.md` current-version functionality section from the release log after `05-review-release` passes, version-archive validation, and Context Pack cache cleanup for archived versions) and its operating documentation. The instance copy of this directory does not include regression tests. |
+| `.aw/.workflow/` (source repo: `.workflow/`) | `workflow.py`, `README.md` | Workflow CLI (including baseline core-flow prototype and per-iteration prototype gates, the `refresh` command run after document changes, automatic maintenance of the instance root `README.md` current-system-functionality section from the release log after `05-review-release` passes, version-archive validation, and Context Pack cache cleanup for archived versions) and its operating documentation. The instance copy of this directory does not include regression tests. |
 | `.aw/.workflow/scripts/` (source repo: `.workflow/scripts/`) | `stage_status.py`, `id_registry.py`, `query_id.py`, `check_links.py`, `diff_versions.py` | State, ID, link, and version-comparison utilities callable by agents and maintainers. |
 | `.aw/.workflow/dashboard/` | `template.html` | Workflow dashboard source template; dashboard pages are generated on demand. |
 | `.workflow/tests/` (source repo only) | `test_workflow.py` | Regression tests for the workflow CLI; not copied into instance projects at initialization. |
@@ -63,7 +63,7 @@ These directories belong to instance projects, not to the AlchemyWorks source re
 |---|---|---|
 | `baseline/` | `README.md`, `raw-requirement/README.md` | Baseline, required core-flow prototype, and raw-requirement intake for first-time project setup. |
 | `iteration/` | created at instance initialization | Entry point for versioned deliverables and later raw requirements. |
-| `workspace/` | `README.md` | Real business code, tests, and configuration for the instance project, plus a README describing the workspace's operating conventions. The `README.md` is auto-maintained by the workflow after each version passes the `05-review-release` gate; its content is extracted from `iteration/{v{N}}/05-review-release/{v{N}}-release-log.md` §2.1–§2.4, §3, and §7, and the `<!-- workflow:workspace-readme-version: v{major}.{minor} -->` marker is refreshed. |
+| `workspace/` | `README.md` | Real business code, tests, and configuration for the instance project, plus a static README describing workspace operating conventions. System functionality is documented in the instance root `README.md`, not here. |
 
 ## 7. Explicitly Out of Scope for Required Workflow Items
 
@@ -75,11 +75,11 @@ The following content is input to, produced by, or cached by a project that uses
 | Files under `baseline/raw-requirement/` other than `README.md` | User-supplied raw input | Preserved verbatim; not modified by agents. |
 | Files under `iteration/raw-requirement/` other than `README.md` | User-supplied raw input | Preserved verbatim; not modified by agents. |
 | `iteration/v{major}.{minor}/`, `iteration/archive/` | Versioned deliverables | Belong to the specific project and version; follow stage-approval and archive rules. |
-| Content under `workspace/` | Business implementation and instance documentation | Belongs to the product code, tests, configuration, and project-owned functional description driven by the workflow. |
+| Content under `workspace/` | Business implementation and workspace documentation | Belongs to the product code, tests, configuration, and workspace operating conventions. |
 | `workspace/workflow/manifest.yaml`, `traceability.json`, `current-state.json` | Instance-project state and audit index | Not part of the workflow source definition; generated for the selected instance-project root and committed under that instance project's version control, not managed by `.gitignore`. |
 | `.aw/` | Synchronized framework files and local reproducible runtime state | May exist in the instance directory for local execution but is not part of the instance project's business commits; the sync script adds it to the instance `.gitignore` by default. |
 | `.aw/workflow-version.yaml` | Synchronization version metadata | Written by `init-instance` / `sync`; records the workflow ref and commit; not committed by the instance project. |
-| Instance root `README.md` | Framework-owned; sync-overwritten | Copied verbatim from the framework source `README.md` by `init-instance` and `sync`; excluded from the instance Git by the managed `.gitignore` block; never carries example-project functional descriptions. |
+| Instance root `README.md` | Instance-owned functionality document | Created by `init-instance`, committed by the instance project, and updated only in its marked current-system-functionality section after `05-review-release`; never overwritten by `sync`. |
 
 ## 8. Consistency Checks
 
@@ -87,7 +87,7 @@ Before every workflow change is considered complete, confirm at least the follow
 
 1. Every required path touched by the change is correctly registered in this inventory.
 2. This inventory does not misclassify project input, versioned deliverables, business code, or reproducible state as required workflow items.
-3. The ignore block appended by the sync script excludes only `.aw/` and `/README.md` (the instance root); `templates/`, `baseline/`, `iteration/`, `workspace/`, and `workspace/workflow/` remain committable.
+3. The ignore block appended by the sync script excludes only `.aw/`; `README.md`, `templates/`, `baseline/`, `iteration/`, `workspace/`, and `workspace/workflow/` remain committable.
 4. The workflow tests pass and clean their project-local scratch directory: `python .workflow/tests/test_workflow.py`.
-5. New instance root READMEs continue to point at `.aw/.workflow/workflow.py`; the workflow-maintained `workspace/README.md` after `05-review-release` likewise exposes the `.aw/` workflow entry point and a local CLI example; the synchronized `workflow-governance` Skill in the instance uses the `.aw/.workflow/` command path.
-6. After `sync`, the instance root `README.md` is byte-equivalent to the framework source root `README.md`; any intentional divergence is called out in the sync commit message.
+5. New instance root READMEs continue to point at `.aw/.workflow/workflow.py`; `workspace/README.md` remains static workspace guidance; the synchronized `workflow-governance` Skill in the instance uses the `.aw/.workflow/` command path.
+6. After `sync`, `.aw/README.md` is byte-equivalent to the framework source root `README.md`; the instance root `README.md` and `AGENTS.md` remain untouched.

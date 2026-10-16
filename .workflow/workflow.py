@@ -68,12 +68,7 @@ BASELINE_FILES = [
     "baseline/05-core-user-flow-prototype.html",
 ]
 WORKFLOW_SYNC_ITEMS = (
-    ("AGENTS.md", ".aw/AGENTS.md"),
     ("README.md", ".aw/README.md"),
-    # The framework owns the instance root `README.md`. `init-instance` and
-    # `sync` overwrite it from the framework source so it stays a pure
-    # workflow-usage document, never an example-project functional summary.
-    ("README.md", "README.md"),
     (".workflow/README.md", ".aw/.workflow/README.md"),
     (".workflow/workflow.py", ".aw/.workflow/workflow.py"),
     (".workflow/workflow-file-inventory.md", ".aw/.workflow/workflow-file-inventory.md"),
@@ -100,9 +95,6 @@ WORKFLOW_IGNORE_END = "# END ALCHEMYWORKS WORKFLOW (managed)"
 WORKFLOW_IGNORE_LINES = (
     WORKFLOW_IGNORE_START,
     ".aw/",
-    # The instance root `README.md` is framework-owned and sync-overwritten;
-    # add it to the managed ignore block so the instance Git never commits it.
-    "/README.md",
     WORKFLOW_IGNORE_END,
 )
 # These are workflow definitions and governance controls, not product
@@ -122,7 +114,6 @@ SOURCE_WORKFLOW_PROTECTED_PATHS = (
     "templates/",
 )
 INSTANCE_WORKFLOW_PROTECTED_PATHS = (
-    ".aw/AGENTS.md",
     ".aw/README.md",
     ".aw/.workflow/",
     ".aw/.agents/skills/",
@@ -426,8 +417,8 @@ def init_instance(
         print(f"would initialize instance: {resolved_name}")
         print(f"would create target: {target}")
         print(f"would pin workflow commit: {commit}")
-        print("would create: baseline/, iteration/, workspace/, AGENTS.md, templates/")
-        print("would overwrite instance root README.md from the framework source")
+        print("would create: baseline/, iteration/, workspace/, AGENTS.md, README.md, templates/")
+        print("would synchronize workflow README into .aw/README.md")
         print("would synchronize workflow definitions")
         return 0
 
@@ -439,9 +430,13 @@ def init_instance(
         (target / relative).mkdir(parents=True, exist_ok=True)
     write_project_scaffold_readmes(target)
     sync_workflow(target, workflow_version=workflow_version)
-    # The root rule file is intentionally project-editable, but starts as an
-    # exact copy of the synchronized workflow rule file.
-    shutil.copy2(target / ".aw" / "AGENTS.md", target / "AGENTS.md")
+    # Root governance and README are instance-owned after initialization.
+    with _workflow_source_snapshot(workflow_version) as (source, _):
+        shutil.copy2(source / "AGENTS.md", target / "AGENTS.md")
+    (target / "README.md").write_text(
+        instance_readme_intro(resolved_name),
+        encoding="utf-8",
+    )
     print(f"instance initialized: {resolved_name}")
     print(f"target: {target}")
     print(f"workflow version: {target / '.aw' / 'workflow-version.yaml'}")
@@ -708,11 +703,13 @@ def project_scaffold_readmes() -> dict[str, str]:
         "workspace/README.md": (
             "# Workspace\n\n"
             "本目录承载实例项目的真实业务代码、测试与配置。\n\n"
-            "本文件由 AlchemyWorks 工作流在每次版本通过 05-review-release 阶段后自动维护，"
-            "内容来源于当次迭代的 `iteration/{v{N}}/05-review-release/{v{N}}-release-log.md`（§2.1-§2.4 交付清单、§3 ISSUE 收尾、§7 已知限制与假设），"
-            "并刷新 `<!-- workflow:workspace-readme-version: v{major}.{minor} -->` 标记。"
-            "首个版本 RC 通过前，本文件保留此占位说明；同步脚本（`sync`）不会覆写已存在的此文件，"
-            "等待首次 `validate --stage 05-review-release` 通过后由工作流接管。\n"
+            "本文件仅说明 workspace 的目录职责、代码组织和本地运行约定；"
+            "实例项目的系统功能说明统一维护在项目根目录 `README.md`。\n\n"
+            "工作流副本位于 `.aw/`，从项目根目录运行：\n\n"
+            "```powershell\n"
+            "python .aw/.workflow/workflow.py resume --json\n"
+            "python .aw/.workflow/workflow.py index --iteration v1.0\n"
+            "```\n"
         ),
     }
 
@@ -1059,8 +1056,7 @@ def check_readme_freshness(errors: list[str]) -> None:
     The framework README documents the shared workflow, not the active
     product iteration. Product-version freshness is checked separately by
     ``check_workspace_readme_freshness`` against the instance's
-    ``workspace/README.md`` (the workflow-managed destination for the
-    current-iteration functionality description during product development).
+    the framework source README, not the instance root functionality README.
     Triggered only on the final 05-review-release stage. Does not modify files.
     """
     readme = FRAMEWORK_ROOT / ".aw" / "README.md"
@@ -1095,38 +1091,26 @@ def check_readme_freshness(errors: list[str]) -> None:
             )
 
 
-def check_workspace_readme_freshness(iteration: str, errors: list[str]) -> None:
-    """Require the workflow-managed ``workspace/README.md`` to include ``iteration``.
-
-    The instance root ``README.md`` is owned by the framework sync and is not
-    rewritten during `validate --stage 05-review-release`. The current version's
-    functionality description is owned by ``workspace/README.md`` instead, so
-    this gate checks that file rather than the root README.
-    """
+def check_instance_readme_freshness(iteration: str, errors: list[str]) -> None:
+    """Require the project-owned root README to contain current functionality."""
     iteration = canonical_iteration(iteration)
-    readme = ROOT / "workspace" / "README.md"
+    readme = ROOT / "README.md"
     if not readme.exists():
-        errors.append("workspace/README.md missing; required before version archive")
+        errors.append("README.md missing; required before version archive")
         return
     text = readme.read_text(encoding="utf-8")
-    marker = f"<!-- workflow:workspace-readme-version: {iteration} -->"
+    marker = f"<!-- workflow:current-system-functionality-version: {iteration} -->"
     if marker not in text:
         errors.append(
-            f"workspace/README.md is not refreshed for {iteration}; "
+            f"README.md is not refreshed for {iteration}; "
             f"add marker '{marker}' after merging the version functionality"
         )
-    if "## 当前版本功能说明" not in text:
-        errors.append(
-            f"workspace/README.md missing required heading: "
-            f"## 当前版本功能说明（{iteration}）"
-        )
+    if "## 当前系统功能说明" not in text:
+        errors.append("README.md missing required heading: ## 当前系统功能说明")
 
 
-# Backward-compatible alias. Callers and external documentation historically
-# referenced the instance root README; the gate target moved to
-# `workspace/README.md` during the §17 refresh contract change. Keep the old
-# name available until all callers and tests are migrated.
-check_instance_readme_freshness = check_workspace_readme_freshness
+# Backward-compatible alias for callers using the intermediate workspace name.
+check_workspace_readme_freshness = check_instance_readme_freshness
 
 
 def _parse_md_table_after_heading(text: str, heading_prefix: str) -> list[list[str]]:
@@ -1214,27 +1198,15 @@ def _extract_release_log_entries(release_log_path: Path) -> dict[str, list[str]]
     }
 
 
-def generate_workspace_readme(iteration: str) -> None:
-    """Refresh ``workspace/README.md`` from the current iteration's release log.
-
-    ``workspace/README.md`` is the canonical, workflow-managed destination for
-    the current iteration's user-facing functionality description during product
-    development. The instance root ``README.md`` is owned by the framework sync
-    and remains untouched during ``validate --stage 05-review-release``.
-
-    Content is sourced from
-    ``iteration/{v{N}}/05-review-release/{v{N}}-release-log.md``: §2.1-§2.4
-    (delivery list), §3 (closed-issue list), and §7 (limits/assumptions).
-    Sections absent in the release-log are omitted from the README. Manual
-    edits to the README are overwritten on the next RC.
-    """
+def generate_instance_readme(iteration: str) -> None:
+    """Refresh the marked functionality section in the project root README."""
     requested_iteration = iteration
     iteration = canonical_iteration(iteration)
     release_log = ROOT / f"iteration/{iteration}/05-review-release/{iteration}-release-log.md"
     if not release_log.exists() and requested_iteration != iteration:
         release_log = ROOT / f"iteration/{requested_iteration}/05-review-release/{requested_iteration}-release-log.md"
     if not release_log.exists():
-        raise ValueError(f"workspace README source missing: {release_log.relative_to(ROOT)}")
+        raise ValueError(f"README source missing: {release_log.relative_to(ROOT)}")
     entries = _extract_release_log_entries(release_log)
 
     sections: list[str] = []
@@ -1255,56 +1227,41 @@ def generate_workspace_readme(iteration: str) -> None:
     if entries["limits"]:
         body_parts.append("## 已知限制与假设\n\n" + "\n".join(f"- {line}" for line in entries["limits"]))
 
-    body_text = ("\n\n" + "\n\n".join(body_parts) + "\n") if body_parts else ""
-
-    nav_lines = [
-        "## 文档导航",
-        "",
-        "- 工作流入口：根目录 `README.md`",
-        f"- 当前 RC 评审：`iteration/{iteration}/05-review-release/{iteration}-review-release.md`",
-        f"- 当前封档说明：`iteration/{iteration}/05-review-release/{iteration}-release-log.md`",
-        f"- 完整需求：`iteration/{iteration}/01-product/{iteration}-requirement.md`",
-        "- 历史归档：`iteration/archive/`",
-        "",
-    ]
-    nav = "\n".join(nav_lines)
-
-    intro = (
-        "# Workspace\n\n"
-        "本目录承载实例项目的真实业务代码、测试与配置。"
-        "本文件由 AlchemyWorks 工作流在每次版本通过 05-review-release 阶段后自动维护，"
-        "内容来源于当次迭代的 release-log。\n\n"
+    body_text = "\n\n".join(body_parts) if body_parts else "本版本暂无已登记的功能交付项。"
+    generated = (
+        f"<!-- workflow:current-system-functionality-version: {iteration} -->\n\n"
+        + body_text
+        + "\n"
     )
-    banner = (
-        f"<!-- workflow:workspace-readme-version: {iteration} -->\n\n"
-        f"## 当前版本功能说明（{iteration}）\n"
-    )
+    start_marker = "<!-- workflow:current-system-functionality:start -->"
+    end_marker = "<!-- workflow:current-system-functionality:end -->"
+    readme_path = ROOT / "README.md"
+    existing = readme_path.read_text(encoding="utf-8") if readme_path.exists() else instance_readme_intro("Instance")
+    start = existing.find(start_marker)
+    end = existing.find(end_marker, start + len(start_marker)) if start >= 0 else -1
+    section = start_marker + "\n" + generated + end_marker
+    if start >= 0 and end >= 0:
+        content = existing[:start] + section + existing[end + len(end_marker):]
+    else:
+        content = existing.rstrip() + "\n\n## 当前系统功能说明\n\n" + section + "\n"
+    write_text_atomic(readme_path, content)
 
-    content = intro + banner + body_text + "\n" + nav + "\n---\n\n" \
-        + "_本文件由 AlchemyWorks 工作流在 05-review-release 通过后从 `release-log.md` 全量更新。手动编辑将被覆盖。_\n"
-    write_text_atomic(ROOT / "workspace" / "README.md", content)
 
-
-# Backward-compatible alias. Historically this refreshed the instance root
-# README; after the §17 refresh-contract change the destination is
-# `workspace/README.md`. Keep the old name available until every caller and
-# external reference has migrated.
-generate_instance_readme = generate_workspace_readme
+# Compatibility alias for callers using the old function name.
+generate_workspace_readme = generate_instance_readme
 
 
 def instance_readme_intro(instance_name: str, *, include_title: bool = True) -> str:
-    """Return the always-visible workflow entry point for an instance README.
-
-    .. deprecated::
-        The instance root ``README.md`` is now framework-owned. ``init-instance``
-        no longer calls this helper; the framework source ``README.md`` is
-        copied verbatim into the instance root by ``sync_workflow``. The
-        function is retained for backward compatibility with any external
-        caller that still imports it.
-    """
+    """Return the initial project-owned instance README scaffold."""
     title = f"# {instance_name}\n\n" if include_title else ""
     return (
         title +
+        "## 当前系统功能说明\n\n"
+        "<!-- workflow:current-system-functionality:start -->\n"
+        "首个版本发布前，系统功能说明将在 05-review-release 通过后由工作流生成。\n"
+        "<!-- workflow:current-system-functionality:end -->\n\n"
+        "## 项目开发说明\n\n"
+        "本节由实例项目维护，记录安装、启动、测试和部署约定。\n\n"
         "## 工作流入口\n\n"
         "本项目使用 AlchemyWorks 工作流。工作流副本位于 `.aw/`，不是业务代码目录。\n\n"
         "从项目根目录运行以下命令：\n\n"
@@ -1389,8 +1346,8 @@ def validate(iteration: str, stage: str | None, *, record_state: bool = True) ->
     target = stage or "all"
     if not errors and target == "05-review-release":
         try:
-            generate_workspace_readme(iteration)
-            print(f"workspace README generated: workspace/README.md ({iteration})")
+            generate_instance_readme(iteration)
+            print(f"instance README generated: README.md ({iteration})")
         except (OSError, ValueError) as error:
             errors.append(str(error))
     if record_state:

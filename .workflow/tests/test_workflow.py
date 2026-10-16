@@ -532,25 +532,24 @@ class WorkflowTests(unittest.TestCase):
                 with contextlib.redirect_stdout(buf3):
                     rc = workflow.validate("v1", "05-review-release")
                 self.assertEqual(rc, 0, msg=buf3.getvalue())
-                workspace_readme = root / "workspace" / "README.md"
-                self.assertTrue(workspace_readme.is_file())
-                workspace_text = workspace_readme.read_text(encoding="utf-8")
-                self.assertIn("<!-- workflow:workspace-readme-version: v1.0 -->", workspace_text)
-                self.assertIn("## 当前版本功能说明（v1.0）", workspace_text)
+                instance_readme = root / "README.md"
+                self.assertTrue(instance_readme.is_file())
+                instance_text = instance_readme.read_text(encoding="utf-8")
+                self.assertIn("<!-- workflow:current-system-functionality-version: v1.0 -->", instance_text)
+                self.assertIn("## 当前系统功能说明", instance_text)
                 # Source sections come from release-log, not from requirement.md body.
-                self.assertIn("FR-100 推送优化", workspace_text)
-                self.assertIn("FR-101 校验补全", workspace_text)
-                self.assertIn("BR-016 术语统一", workspace_text)
-                self.assertIn("AC-100 推送正确", workspace_text)
-                self.assertIn("ISSUE-V1.0-01 UI", workspace_text)
+                self.assertIn("FR-100 推送优化", instance_text)
+                self.assertIn("FR-101 校验补全", instance_text)
+                self.assertIn("BR-016 术语统一", instance_text)
+                self.assertIn("AC-100 推送正确", instance_text)
+                self.assertIn("ISSUE-V1.0-01 UI", instance_text)
                 # Handed-over (not fixed) issues must NOT appear in the README.
-                self.assertNotIn("ISSUE-V1.0-02", workspace_text)
-                self.assertIn("## 已知限制与假设", workspace_text)
-                self.assertIn("单实例最多 100 并发", workspace_text)
-                # Instance root README is left untouched by the validate call.
-                self.assertEqual(
+                self.assertNotIn("ISSUE-V1.0-02", instance_text)
+                self.assertIn("## 已知限制与假设", instance_text)
+                self.assertIn("单实例最多 100 并发", instance_text)
+                self.assertIn(
+                    "<!-- workflow:current-system-functionality-version: v1.0 -->",
                     root_readme.read_text(encoding="utf-8"),
-                    "# Workflow\n",
                 )
         finally:
             temp.cleanup()
@@ -596,7 +595,7 @@ class WorkflowTests(unittest.TestCase):
         )
 
     def test_sync_preserves_instance_files_and_ignores_workflow_files(self):
-        """Sync must overwrite the framework-owned root README, leave other
+        """Sync must preserve the project-owned root README, leave other
         instance-owned files intact, and hide workflow copies from Git."""
         with _ScratchDir("test") as raw:
             target = Path(raw) / "instance"
@@ -627,17 +626,11 @@ class WorkflowTests(unittest.TestCase):
                 args=["sync"], returncode=sync_returncode, stdout="", stderr="",
             )
 
-            framework_root = Path(__file__).resolve().parents[2]
-            framework_readme = (framework_root / "README.md").read_text(encoding="utf-8")
             self.assertEqual(result.returncode, 0, msg=result.stderr or result.stdout)
-            # The instance root `README.md` is framework-owned; sync must
-            # overwrite the prior committed content with the framework source.
-            self.assertEqual(
-                (target / "README.md").read_text(encoding="utf-8"), framework_readme,
-            )
+            self.assertEqual((target / "README.md").read_text(encoding="utf-8"), "# Product A\n")
             ignore_text = (target / ".gitignore").read_text(encoding="utf-8")
             self.assertIn("# BEGIN ALCHEMYWORKS WORKFLOW", ignore_text)
-            self.assertIn("README.md", ignore_text)
+            self.assertNotIn("/README.md", ignore_text)
             self.assertTrue((target / ".aw" / ".workflow" / "workflow.py").is_file())
             self.assertFalse((target / ".aw" / ".workflow" / "scripts" / "init-instance.ps1").exists())
             synced_ps1 = sorted(
@@ -665,12 +658,8 @@ class WorkflowTests(unittest.TestCase):
             ignored_instance_state = subprocess.run(
                 ["git", "-C", str(target), "check-ignore", "--quiet", "workspace/workflow/manifest.yaml"],
             )
-            # The framework-managed ignore block must list the instance root
-            # `README.md`. A previously committed `README.md` stays tracked
-            # until the instance runs `git rm --cached README.md` once, so we
-            # assert against the .gitignore text rather than `check-ignore`.
             ignore_text = (target / ".gitignore").read_text(encoding="utf-8")
-            self.assertIn("README.md", ignore_text)
+            self.assertNotIn("/README.md", ignore_text)
             self.assertEqual(ignored_workflow.returncode, 0)
             self.assertNotEqual(ignored_instance_state.returncode, 0)
 
@@ -692,30 +681,21 @@ class WorkflowTests(unittest.TestCase):
                     ["init-instance", "--name", "Product Python", "--directory", str(target)]
                 )
             self.assertEqual(result, 0)
-            framework_root = Path(__file__).resolve().parents[2]
-            framework_readme = (framework_root / "README.md").read_text(encoding="utf-8")
-            # Instance root `README.md` is framework-owned; init must copy
-            # the framework source verbatim regardless of the instance name.
-            self.assertEqual(
-                (target / "README.md").read_text(encoding="utf-8"), framework_readme,
-            )
+            self.assertIn("# Product Python", (target / "README.md").read_text(encoding="utf-8"))
             version = (target / ".aw" / "workflow-version.yaml").read_text(encoding="utf-8")
             self.assertIn("source_ref: HEAD", version)
             self.assertTrue((target / ".aw" / ".workflow" / "workflow.py").is_file())
             self.assertTrue((target / "workspace").is_dir())
             self.assertTrue((target / "baseline" / "README.md").is_file())
             self.assertTrue((target / "workspace" / "README.md").is_file())
-            self.assertEqual(
-                (target / "AGENTS.md").read_text(encoding="utf-8"),
-                (target / ".aw" / "AGENTS.md").read_text(encoding="utf-8"),
-            )
-            # The managed `.gitignore` block must exclude the instance root
-            # `README.md` so the framework-owned file is never tracked.
+            self.assertTrue((target / "AGENTS.md").is_file())
+            self.assertFalse((target / ".aw" / "AGENTS.md").exists())
+            # The project-owned root README must remain trackable.
             self.assertEqual(
                 subprocess.run(
                     ["git", "-C", str(target), "check-ignore", "--quiet", "README.md"],
                 ).returncode,
-                0,
+                1,
             )
 
     def test_init_instance_defaults_name_to_target_directory(self):
@@ -726,11 +706,7 @@ class WorkflowTests(unittest.TestCase):
                     ["init-instance", "--directory", str(target)]
                 )
             self.assertEqual(result, 0)
-            framework_root = Path(__file__).resolve().parents[2]
-            framework_readme = (framework_root / "README.md").read_text(encoding="utf-8")
-            self.assertEqual(
-                (target / "README.md").read_text(encoding="utf-8"), framework_readme,
-            )
+            self.assertIn("# default-named-product", (target / "README.md").read_text(encoding="utf-8"))
             version = (target / ".aw" / "workflow-version.yaml").read_text(encoding="utf-8")
             self.assertIn("source_ref: HEAD", version)
 
@@ -766,13 +742,10 @@ class WorkflowTests(unittest.TestCase):
             with patch.object(workflow, "workflow_protection_errors", return_value=[]):
                 result = workflow.main(["sync", "--directory", str(target)])
             self.assertEqual(result, 0)
-            framework_root = Path(__file__).resolve().parents[2]
-            framework_readme = (framework_root / "README.md").read_text(encoding="utf-8")
-            # Sync must overwrite the framework-owned instance root
-            # `README.md` even when the instance previously committed its own
-            # version.
+            self.assertEqual((target / "README.md").read_text(encoding="utf-8"), "# Existing Product\n")
             self.assertEqual(
-                (target / "README.md").read_text(encoding="utf-8"), framework_readme,
+                (target / ".aw" / "README.md").read_text(encoding="utf-8"),
+                (Path(__file__).resolve().parents[2] / "README.md").read_text(encoding="utf-8"),
             )
             (target / "workspace" / "workflow").mkdir(parents=True)
             (target / "workspace" / "workflow" / "manifest.yaml").write_text("state\n", encoding="utf-8")
@@ -784,11 +757,7 @@ class WorkflowTests(unittest.TestCase):
                 subprocess.run(["git", "-C", str(target), "check-ignore", "--quiet", "workspace/workflow/manifest.yaml"]).returncode,
                 0,
             )
-            # The previously committed `README.md` stays tracked until the
-            # instance runs `git rm --cached README.md`; the new contract is
-            # that the `.gitignore` managed block now excludes it for future
-            # additions.
-            self.assertIn("README.md", (target / ".gitignore").read_text(encoding="utf-8"))
+            self.assertNotIn("/README.md", (target / ".gitignore").read_text(encoding="utf-8"))
 
     def test_workflow_readme_freshness_does_not_require_instance_iteration(self):
         """The framework README must not be coupled to a product iteration."""
@@ -815,27 +784,20 @@ class WorkflowTests(unittest.TestCase):
             temp.cleanup()
 
     def test_instance_readme_refresh_contract_requires_marker_and_heading(self):
-        """Workspace README gate must require both the iteration marker and the
-        `## 当前版本功能说明` heading.
-        """
+        """Root README gate must require the version marker and functionality heading."""
         temp, root = self.make_repo()
         try:
-            # The gate target moved from the instance root README to
-            # `workspace/README.md` during the §17 refresh-contract change;
-            # write the legacy document only on that path so the gate can
-            # exercise its missing-marker / missing-heading branches.
-            readme = root / "workspace" / "README.md"
-            readme.parent.mkdir(parents=True, exist_ok=True)
-            readme.write_text("# Workspace\n", encoding="utf-8")
+            readme = root / "README.md"
+            readme.write_text("# Instance\n", encoding="utf-8")
             with patch.object(workflow, "ROOT", root):
                 errors: list[str] = []
                 workflow.check_workspace_readme_freshness("v1", errors)
             self.assertTrue(
-                any("workspace/README.md" in error and "not refreshed" in error for error in errors),
+                any("README.md" in error and "not refreshed" in error for error in errors),
                 msg=f"gate did not flag missing marker; errors={errors}",
             )
             self.assertTrue(
-                any("当前版本功能说明" in error for error in errors),
+                any("当前系统功能说明" in error for error in errors),
                 msg=f"gate did not flag missing heading; errors={errors}",
             )
         finally:
@@ -855,12 +817,8 @@ class WorkflowTests(unittest.TestCase):
             workflow.generate_workspace_readme,
         )
 
-    def test_workspace_readme_refresh_targets_workspace_not_root(self):
-        """After the §17 refresh-contract change, validate --stage 05 must
-        write the current-iteration functionality description (sourced from
-        release-log.md) into `workspace/README.md`, not the instance root
-        `README.md`.
-        """
+    def test_instance_readme_refresh_targets_root_not_workspace(self):
+        """05-review-release writes functionality into root README only."""
         temp, root = self.make_repo()
         try:
             (root / "iteration" / "v1").rename(root / "iteration" / "v1.0")
@@ -897,26 +855,25 @@ class WorkflowTests(unittest.TestCase):
                 "| FR-100 | 推送优化 | TASK-API-010 | AC-100 ✅ |\n",
                 encoding="utf-8",
             )
-            # Legacy root README must be left untouched by the workflow.
             root_readme = root / "README.md"
-            root_readme.write_text("# Pre-existing root README\n", encoding="utf-8")
+            root_readme.write_text(
+                "# Instance\n\n## 当前系统功能说明\n\n"
+                "<!-- workflow:current-system-functionality:start -->\n旧内容\n"
+                "<!-- workflow:current-system-functionality:end -->\n",
+                encoding="utf-8",
+            )
+            workspace_readme = root / "workspace" / "README.md"
+            workspace_readme.write_text("# Workspace\n\n静态说明\n", encoding="utf-8")
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "FRAMEWORK_ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
                 rc = workflow.validate("v1.0", "05-review-release")
             self.assertEqual(rc, 0, msg="validate --stage 05-review-release should pass for a complete chain")
-            workspace_readme = root / "workspace" / "README.md"
-            self.assertTrue(workspace_readme.is_file(), msg="workspace/README.md was not written by validate")
-            workspace_text = workspace_readme.read_text(encoding="utf-8")
-            self.assertIn("<!-- workflow:workspace-readme-version: v1.0 -->", workspace_text)
-            self.assertIn("## 当前版本功能说明（v1.0）", workspace_text)
+            root_text = root_readme.read_text(encoding="utf-8")
+            self.assertIn("<!-- workflow:current-system-functionality-version: v1.0 -->", root_text)
+            self.assertIn("## 当前系统功能说明", root_text)
             # Content comes from release-log §2.1, not from requirement body.
-            self.assertIn("FR-100 推送优化", workspace_text)
-            self.assertNotIn("# Workspace Req Body", workspace_text)
-            # The instance root README must be untouched by the validate call.
-            self.assertEqual(
-                root_readme.read_text(encoding="utf-8"),
-                "# Pre-existing root README\n",
-                msg="instance root README.md must not be modified by validate --stage 05",
-            )
+            self.assertIn("FR-100 推送优化", root_text)
+            self.assertNotIn("# Workspace Req Body", root_text)
+            self.assertEqual(workspace_readme.read_text(encoding="utf-8"), "# Workspace\n\n静态说明\n")
         finally:
             temp.cleanup()
 
@@ -953,10 +910,10 @@ class WorkflowTests(unittest.TestCase):
             )
             with patch.object(workflow, "ROOT", root):
                 workflow.generate_workspace_readme("v1.0")
-            text = (root / "workspace" / "README.md").read_text(encoding="utf-8")
+            text = (root / "README.md").read_text(encoding="utf-8")
             # Heading + marker present.
-            self.assertIn("<!-- workflow:workspace-readme-version: v1.0 -->", text)
-            self.assertIn("## 当前版本功能说明（v1.0）", text)
+            self.assertIn("<!-- workflow:current-system-functionality-version: v1.0 -->", text)
+            self.assertIn("## 当前系统功能说明", text)
             # Each extracted row appears.
             self.assertIn("### 新增功能", text)
             self.assertIn("FR-200 调度改进", text)
@@ -970,9 +927,6 @@ class WorkflowTests(unittest.TestCase):
             self.assertIn("ISSUE-V1.0-10 前端", text)
             self.assertIn("## 已知限制与假设", text)
             self.assertIn("假设：仅在 Ubuntu 22.04 验证", text)
-            # Doc navigation is rendered.
-            self.assertIn("## 文档导航", text)
-            self.assertIn("iteration/v1.0/05-review-release/v1.0-release-log.md", text)
         finally:
             temp.cleanup()
 
@@ -993,7 +947,7 @@ class WorkflowTests(unittest.TestCase):
             )
             with patch.object(workflow, "ROOT", root):
                 workflow.generate_workspace_readme("v1.0")
-            text = (root / "workspace" / "README.md").read_text(encoding="utf-8")
+            text = (root / "README.md").read_text(encoding="utf-8")
             self.assertIn("### 新增功能", text)
             self.assertIn("FR-300 限流开关", text)
             # Subsections not present must NOT produce headings.
@@ -1022,7 +976,7 @@ class WorkflowTests(unittest.TestCase):
             )
             with patch.object(workflow, "ROOT", root):
                 workflow.generate_workspace_readme("v1.0")
-            text = (root / "workspace" / "README.md").read_text(encoding="utf-8")
+            text = (root / "README.md").read_text(encoding="utf-8")
             self.assertNotIn("### 修复项", text)
             self.assertNotIn("ISSUE-V1.0-99", text)
         finally:
@@ -1469,30 +1423,25 @@ class WorkflowTests(unittest.TestCase):
                 "| FR-400 | 初始化推送 | TASK-API-400 | AC-400 ✅ |\n",
                 encoding="utf-8",
             )
-            # After the §17 refresh-contract change, init_version must
-            # populate `workspace/README.md`, not the instance root README.
             root_readme = root / "README.md"
-            root_readme.write_text("# Pre-existing root README\n", encoding="utf-8")
+            root_readme.write_text(
+                "# Instance\n\n## 当前系统功能说明\n\n"
+                "<!-- workflow:current-system-functionality:start -->\n旧内容\n"
+                "<!-- workflow:current-system-functionality:end -->\n",
+                encoding="utf-8",
+            )
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "FRAMEWORK_ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
                 self.assertEqual(workflow.init_version(), 0)
             self.assertFalse((root / "iteration" / "v1.0").exists())
             self.assertTrue((root / "iteration" / "v1.1").is_dir())
             archived = root / "iteration" / "archive" / "v1.0"
             self.assertTrue(archived.is_dir())
-            workspace_readme = root / "workspace" / "README.md"
-            self.assertTrue(workspace_readme.is_file())
-            workspace_text = workspace_readme.read_text(encoding="utf-8")
-            self.assertIn("<!-- workflow:workspace-readme-version: v1.0 -->", workspace_text)
-            self.assertIn("## 当前版本功能说明（v1.0）", workspace_text)
+            root_text = root_readme.read_text(encoding="utf-8")
+            self.assertIn("<!-- workflow:current-system-functionality-version: v1.0 -->", root_text)
+            self.assertIn("## 当前系统功能说明", root_text)
             # Content sourced from release-log §2.1, not requirement body.
-            self.assertIn("FR-400 初始化推送", workspace_text)
-            self.assertNotIn("# Req", workspace_text)
-            # The instance root README must remain untouched by init_version,
-            # because the workflow only rewrites it through the framework sync.
-            self.assertEqual(
-                root_readme.read_text(encoding="utf-8"),
-                "# Pre-existing root README\n",
-            )
+            self.assertIn("FR-400 初始化推送", root_text)
+            self.assertNotIn("# Req", root_text)
         finally:
             temp.cleanup()
 
@@ -1687,11 +1636,89 @@ class DiffVersionsTests(unittest.TestCase):
     # Root `README.md` ownership contract (workflow-maintenance change)
     # --------------------------------------------------------------
 
-    def test_init_instance_root_readme_matches_framework_source(self):
-        """`init-instance` must copy the framework source `README.md`
-        verbatim into the instance root, regardless of the instance name."""
-        framework_root = Path(__file__).resolve().parents[2]
-        framework_readme = (framework_root / "README.md").read_text(encoding="utf-8")
+    def test_new_instance_has_root_agents_only_and_root_readme_is_project_owned(self):
+        """The new instance contract keeps one AGENTS file and a tracked root README."""
+        with _ScratchDir("test") as raw:
+            target = Path(raw) / "single-rules-instance"
+            with patch.object(workflow, "workflow_protection_errors", return_value=[]):
+                result = workflow.main(
+                    ["init-instance", "--name", "Single Rules", "--directory", str(target)]
+                )
+            self.assertEqual(result, 0)
+            self.assertTrue((target / "AGENTS.md").is_file())
+            self.assertFalse((target / ".aw" / "AGENTS.md").exists())
+            self.assertTrue((target / ".aw" / "README.md").is_file())
+            self.assertTrue((target / "README.md").is_file())
+            self.assertNotEqual(
+                subprocess.run(
+                    ["git", "-C", str(target), "check-ignore", "--quiet", "README.md"]
+                ).returncode,
+                0,
+            )
+
+    def test_sync_preserves_instance_agents_and_root_readme_but_updates_aw_readme(self):
+        """Sync owns `.aw/README.md`, not project-owned root documents."""
+        with _ScratchDir("test") as raw:
+            target = Path(raw) / "project-owned-docs"
+            target.mkdir()
+            (target / "AGENTS.md").write_text("# Instance rules\n", encoding="utf-8")
+            (target / "README.md").write_text("# Instance functionality\n", encoding="utf-8")
+            (target / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
+            subprocess.run(["git", "init", "--quiet", str(target)], check=True)
+            subprocess.run(["git", "-C", str(target), "add", "."], check=True)
+            subprocess.run(
+                [
+                    "git", "-C", str(target), "-c", "user.email=test@example.com",
+                    "-c", "user.name=Test", "commit", "--quiet", "-m", "initial",
+                ],
+                check=True,
+            )
+            with patch.object(workflow, "workflow_protection_errors", return_value=[]):
+                result = workflow.main(["sync", "--directory", str(target)])
+            self.assertEqual(result, 0)
+            self.assertEqual((target / "AGENTS.md").read_text(encoding="utf-8"), "# Instance rules\n")
+            self.assertEqual((target / "README.md").read_text(encoding="utf-8"), "# Instance functionality\n")
+            self.assertEqual(
+                (target / ".aw" / "README.md").read_text(encoding="utf-8"),
+                (Path(__file__).resolve().parents[2] / "README.md").read_text(encoding="utf-8"),
+            )
+            self.assertFalse((target / ".aw" / "AGENTS.md").exists())
+            self.assertNotIn("/README.md", (target / ".gitignore").read_text(encoding="utf-8"))
+
+    def test_release_refresh_updates_root_readme_not_workspace_readme(self):
+        """Release functionality belongs in the project-owned root README."""
+        with _ScratchDir("test") as raw:
+            root = Path(raw) / "release-refresh"
+            (root / "workspace").mkdir(parents=True)
+            release_log = root / "iteration" / "v1.0" / "05-review-release" / "v1.0-release-log.md"
+            release_log.parent.mkdir(parents=True, exist_ok=True)
+            release_log.write_text(
+                "---\nstatus: draft\n---\n"
+                "## 2. 功能交付清单\n\n"
+                "### 2.1 新增功能(FR-XXX / YYY)\n\n"
+                "| ID | 标题 | TASK | 验收 |\n|---|---|---|---|\n"
+                "| FR-900 | 实例功能 | TASK-API-900 | AC-900 ✅ |\n",
+                encoding="utf-8",
+            )
+            (root / "README.md").write_text(
+                "# Instance\n\n## 项目说明\n手工内容\n\n"
+                "<!-- workflow:current-system-functionality:start -->\n"
+                "旧内容\n"
+                "<!-- workflow:current-system-functionality:end -->\n",
+                encoding="utf-8",
+            )
+            workspace_readme = root / "workspace" / "README.md"
+            workspace_readme.write_text("# Workspace\n\n静态说明\n", encoding="utf-8")
+            with patch.object(workflow, "ROOT", root):
+                workflow.generate_instance_readme("v1.0")
+            root_text = (root / "README.md").read_text(encoding="utf-8")
+            self.assertIn("FR-900 实例功能", root_text)
+            self.assertIn("手工内容", root_text)
+            self.assertIn("<!-- workflow:current-system-functionality:start -->", root_text)
+            self.assertEqual(workspace_readme.read_text(encoding="utf-8"), "# Workspace\n\n静态说明\n")
+
+    def test_init_instance_root_readme_is_instance_scaffold(self):
+        """`init-instance` creates a project-owned functionality README."""
         with _ScratchDir("test") as raw:
             target = Path(raw) / "owned-instance"
             with patch.object(workflow, "workflow_protection_errors", return_value=[]):
@@ -1699,16 +1726,12 @@ class DiffVersionsTests(unittest.TestCase):
                     ["init-instance", "--name", "Owned Instance", "--directory", str(target)]
                 )
             self.assertEqual(result, 0)
-            self.assertEqual(
-                (target / "README.md").read_text(encoding="utf-8"), framework_readme,
-            )
+            text = (target / "README.md").read_text(encoding="utf-8")
+            self.assertIn("# Owned Instance", text)
+            self.assertIn("## 当前系统功能说明", text)
 
-    def test_sync_overwrites_instance_root_readme_with_framework_source(self):
-        """`sync` must overwrite the instance root `README.md` with the
-        framework source, even when the instance previously committed its
-        own version."""
-        framework_root = Path(__file__).resolve().parents[2]
-        framework_readme = (framework_root / "README.md").read_text(encoding="utf-8")
+    def test_sync_preserves_instance_root_readme(self):
+        """`sync` must preserve the project-owned root README."""
         with _ScratchDir("test") as raw:
             target = Path(raw) / "owned-sync"
             target.mkdir()
@@ -1726,13 +1749,10 @@ class DiffVersionsTests(unittest.TestCase):
             with patch.object(workflow, "workflow_protection_errors", return_value=[]):
                 result = workflow.main(["sync", "--directory", str(target)])
             self.assertEqual(result, 0)
-            self.assertEqual(
-                (target / "README.md").read_text(encoding="utf-8"), framework_readme,
-            )
+            self.assertEqual((target / "README.md").read_text(encoding="utf-8"), "# Legacy\n")
 
-    def test_init_instance_root_readme_is_gitignored(self):
-        """After `init-instance`, the managed `.gitignore` block must
-        exclude the instance root `README.md` so it is never tracked."""
+    def test_init_instance_root_readme_is_trackable(self):
+        """After `init-instance`, the project-owned root README is trackable."""
         with _ScratchDir("test") as raw:
             target = Path(raw) / "ignored-instance"
             with patch.object(workflow, "workflow_protection_errors", return_value=[]):
@@ -1743,15 +1763,10 @@ class DiffVersionsTests(unittest.TestCase):
             check = subprocess.run(
                 ["git", "-C", str(target), "check-ignore", "--quiet", "README.md"],
             )
-            self.assertEqual(
-                check.returncode, 0,
-                msg="instance root `README.md` is not excluded by the managed `.gitignore` block",
-            )
+            self.assertNotEqual(check.returncode, 0)
 
-    def test_ensure_workflow_ignore_block_is_idempotent_and_includes_readme(self):
-        """`_ensure_workflow_ignore_block` must keep the instance root
-        `README.md` in the managed block and remain idempotent on repeat
-        calls."""
+    def test_ensure_workflow_ignore_block_is_idempotent_without_readme(self):
+        """The managed ignore block remains idempotent and only ignores `.aw/`."""
         with _ScratchDir("test") as raw:
             target = Path(raw) / "ignore-block"
             target.mkdir()
@@ -1761,16 +1776,11 @@ class DiffVersionsTests(unittest.TestCase):
                 workflow._ensure_workflow_ignore_block(target)
                 second = (target / ".gitignore").read_text(encoding="utf-8")
             self.assertEqual(first, second, msg="_ensure_workflow_ignore_block is not idempotent")
-            self.assertIn(
-                "README.md", first,
-                msg=".gitignore managed block must exclude the instance root `README.md`",
-            )
+            self.assertNotIn("/README.md", first)
             self.assertIn(".aw/", first)
 
-    def test_sync_managed_block_excludes_readme_alongside_aw(self):
-        """`sync` must produce a managed `.gitignore` block that excludes
-        both `.aw/` and the instance root `README.md`, regardless of any
-        prior content the instance committed."""
+    def test_sync_managed_block_excludes_only_aw(self):
+        """`sync` must preserve trackability of the instance root README."""
         with _ScratchDir("test") as raw:
             target = Path(raw) / "sync-ignore"
             target.mkdir()
@@ -1789,7 +1799,7 @@ class DiffVersionsTests(unittest.TestCase):
                 result = workflow.main(["sync", "--directory", str(target)])
             self.assertEqual(result, 0)
             ignore_text = (target / ".gitignore").read_text(encoding="utf-8")
-            self.assertIn("README.md", ignore_text)
+            self.assertNotIn("/README.md", ignore_text)
             self.assertIn(".aw/", ignore_text)
 
 

@@ -12,14 +12,13 @@ The AlchemyWorks source repository keeps its framework source files at the repos
 
 ```text
 .aw/README.md
-.aw/AGENTS.md
 .aw/.workflow/
 .aw/.agents/
 templates/
 .aw/workflow-version.yaml
 ```
 
-The instance root `AGENTS.md` starts as an identical copy of `.aw/AGENTS.md` and may then be customized by the instance project. In a synchronized instance, use `python .aw/.workflow/workflow.py ...` for local commands; when operating from the framework source repository, use the source-repository path `python .workflow/workflow.py ...` with `--project-root` for an external instance.
+The instance root `AGENTS.md` is created once from the framework rules and is then owned by the instance project. It is not synchronized afterwards, so workflow upgrades must be merged into it deliberately. In a synchronized instance, use `python .aw/.workflow/workflow.py ...` for local commands; when operating from the framework source repository, use the source-repository path `python .workflow/workflow.py ...` with `--project-root` for an external instance.
 
 ## 2. Source of Truth
 
@@ -375,11 +374,9 @@ Pay attention to:
 - Use one branch or worktree per significant feature or fix when practical.
 - Keep generated artifacts separate from unrelated source changes.
 
-When this workflow is synchronized into an instance project, the framework owns the
-instance root `README.md` — `init-instance` and `sync` overwrite it from the framework
-source, and the managed `.gitignore` block excludes it so the instance never commits it.
-The instance continues to own `.gitignore` itself. The synchronized workflow copy
-(`.workflow/`, `.agents/`, `templates/`, and the synchronized root `AGENTS.md`) may exist
+When this workflow is synchronized into an instance project, the instance owns its
+root `AGENTS.md`, root `README.md`, `.gitignore`, and `templates/`. The synchronized
+workflow copy (`.workflow/`, `.agents/`, and `.aw/README.md`) may exist
 locally for execution but is ignored by the instance Git configuration. The instance commits
 its `baseline/`, `iteration/`, `workspace/`, and `workspace/workflow/` state instead.
 
@@ -454,7 +451,7 @@ Iterations use a two-segment identifier **`v{major}.{minor}`** (e.g. `v1.0`, `v1
   - Cross-version references in frontmatter must point to a real existing iteration (e.g. `base_version: v1.0`).
 - **RC-complete** is reached only when `iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-review-release.md` has `status: Approved` and `iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-release-log.md` exists (existence-only gate; frontmatter `status` does not block the gate, see `.agents/skills/release-log/SKILL.md`).
 - Upon RC completion of `v{major}.{minor}`, draft its release log via the `release-log` skill and keep the version active as the baseline for the next iteration.
-- After `05-review-release` passes, the workflow automatically regenerates the instance's `workspace/README.md` from the current iteration's `iteration/{v{N}}/05-review-release/{v{N}}-release-log.md`. The release-log §2.1-§2.4 (delivery list), §3 (closed-issue list), and §7 (limits / assumptions) are extracted into the README under `## 当前版本功能说明（v{major}.{minor}）`, and the `<!-- workflow:workspace-readme-version: v{major}.{minor} -->` marker is refreshed. Subsections absent from the release-log are omitted from the README. The instance root `README.md` is owned by the framework sync (`init-instance` / `sync`) and is not rewritten during product development.
+- After `05-review-release` passes, the workflow automatically regenerates the marked current-system-functionality section in the instance root `README.md` from the current iteration's `iteration/{v{N}}/05-review-release/{v{N}}-release-log.md`. The release-log §2.1-§2.4 (delivery list), §3 (closed-issue list), and §7 (limits / assumptions) are extracted into that section, and the `<!-- workflow:current-system-functionality-version: v{major}.{minor} -->` marker is refreshed. Other root README content remains instance-owned. `workspace/README.md` only explains workspace conventions and does not carry system functionality.
 - When the next consecutive version is successfully created, archive that completed predecessor to `iteration/archive/v{major}.{minor}/`. The predecessor must first pass the `05-review-release` gate and the instance root README refresh check; the first version (`v1.0`) has no predecessor to archive.
 - Never skip a version number — `v1.1` cannot jump to `v1.3`.
 - **Discovery**: `discover_iteration()` returns the numerically highest `(major, minor)` pair present under `iteration/`. When no directory exists yet, it returns `v1.0`.

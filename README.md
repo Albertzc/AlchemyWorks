@@ -14,7 +14,7 @@ python .aw/.workflow/workflow.py index --iteration v1.0
 
 完整协作规则见 `AGENTS.md`；工作流运行时文件位于 `.aw/.workflow/`。本仓库自身是框架源仓库，源仓库内部命令仍使用 `.workflow/`；从源仓库操作外部实例时使用 `--project-root`。
 
-> **本 README 的所有权**：实例项目的根 `README.md` 由框架拥有：`init-instance` / `sync` 会把当前文件整段写入实例根 `README.md`，并通过实例受管 `.gitignore` 区块排除它。实例项目的功能说明应放在 `workspace/README.md`（每次 05-review-release 通过后由工作流从 `release-log.md` 重新生成），不要写在本文件。
+> **实例文档所有权**：实例项目的根 `README.md` 在初始化时创建，之后由实例项目维护；05-review-release 通过后，工作流只更新其中标记的当前系统功能说明区域。`.aw/README.md` 是由 `sync` 更新的完整工作流说明。`workspace/README.md` 仅说明 workspace 的目录职责和运行约定，不承载系统功能。
 
 ---
 
@@ -50,7 +50,6 @@ python .aw/.workflow/workflow.py index --iteration v1.0
 ├── templates/                       # 初始化时复制的默认模板，实例可维护
 └── .aw/                             # 实例项目中的工作流执行目录（整体忽略）
     ├── README.md                    # AlchemyWorks 工作流总览
-    ├── AGENTS.md                    # 完整工作流协作规则
     ├── .agents/skills/              # 阶段化 AI Agent Skill
     └── .workflow/                  # CLI、脚本与本地运行时
         ├── workflow.py              # 主 CLI（纯 stdlib）
@@ -68,7 +67,7 @@ python .aw/.workflow/workflow.py index --iteration v1.0
 
 | 内容 | 归属 | 生成/维护方式 | 实例 Git 是否提交 |
 |---|---|---|---|
-| `AGENTS.md`、根 `README.md`、`.gitignore` | 工作流仓库的治理与说明；实例的 `README.md`、`.gitignore` 由实例自己拥有 | 源仓库手工维护；`init-instance` 将完整规则同时写入实例根 `AGENTS.md` 和 `.aw/AGENTS.md` | 源仓库提交；实例根 `AGENTS.md` 可按项目需要调整 |
+| `AGENTS.md`、根 `README.md`、`.gitignore` | 工作流源仓库的治理与说明；实例的 `AGENTS.md`、`README.md`、`.gitignore` 由实例自己拥有 | `init-instance` 首次创建；后续 `sync` 不覆盖 | 源仓库提交；实例项目提交 |
 | `.aw/.workflow/workflow.py`、`.aw/.workflow/scripts/` | 实例中的工作流定义、执行器和辅助脚本 | 源仓库维护；`sync` 映射到 `.aw/` | 实例默认忽略同步副本 |
 | `.workflow/tests/` | 源仓库工作流回归测试 | 仅源仓库维护；实例初始化不复制 | 不进入实例 |
 | `.aw/.agents/skills/` | 实例中的工作流能力 | 源仓库维护；`sync` 映射到 `.aw/` | 实例默认忽略同步副本 |
@@ -76,8 +75,8 @@ python .aw/.workflow/workflow.py index --iteration v1.0
 | `baseline/` | 实例项目的 baseline 产物和用户原始输入 | `init-instance` 创建；`normalize-requirement` 起草，人工审核后进入门禁 | 提交 |
 | `iteration/raw-requirement/` | 实例项目的用户原始需求 | `init-instance` 创建；用户提供，`route-requirement` 返回目标版本；Agent 只读 | 提交 |
 | `iteration/v{major}.{minor}/`、`iteration/archive/` | 实例项目的版本产物和归档快照 | `init-version` 创建/归档，阶段 Skill 产出文档 | 提交 |
-| `README.md` | 实例项目当前版本功能说明 | 初始化时创建实例 README；05 阶段根据 Approved requirement 自动更新 | 提交 |
-| `workspace/`（含 `workspace/workflow/`） | 实例项目的代码、配置、测试、workspace 原理说明和可再生追溯状态 | 初始化时生成 `workspace/README.md` 目录说明；04 阶段写入业务代码；`index`/`state`/`refresh` 生成状态；workspace README 不承载版本功能清单 | 提交 |
+| `README.md` | 实例项目当前系统功能说明和项目入口 | 初始化时创建；05 阶段根据 release-log 更新标记区域 | 提交 |
+| `workspace/`（含 `workspace/workflow/`） | 实例项目的代码、配置、测试、workspace 原理说明和可再生追溯状态 | 初始化时生成 `workspace/README.md` 目录说明；04 阶段写入业务代码；`index`/`state`/`refresh` 生成状态；workspace README 不承载系统功能 | 提交 |
 | `.aw/workflow-version.yaml` | 实例本地工作流源版本信息 | `init-instance` / `sync` 写入；实例 Git 忽略 | 不提交 |
 
 一句话判断：工作流负责“规则、工具、能力、模板和脚手架说明”；实例项目负责“需求输入、版本产物、业务实现、测试、功能说明和工作流生成的项目状态”。同步副本可以在实例目录中运行，但不属于实例业务提交。
@@ -100,7 +99,7 @@ python .workflow/workflow.py init-instance --name "Product A" --directory "E:\pa
 python .workflow/workflow.py sync --directory "E:\path\to\product-a"
 ```
 
-`init-instance` 的生成顺序是：初始化实例 Git → 创建 `baseline/`、`iteration/`、`workspace/` 和默认 `templates/` 及其目录说明 README → 创建实例根 `README.md` 初始说明 → 将完整工作流规则同时写入实例根 `AGENTS.md` 和 `.aw/AGENTS.md` → 将工作流副本同步到 `.aw/`，写入 `.aw/workflow-version.yaml`，并追加只忽略 `.aw/` 的受管 `.gitignore` 区块。实例根 `README.md`、`AGENTS.md` 和 `templates/` 是实例可维护内容；`.aw/` 下文件是同步的工作流副本。05-review-release 通过后，工作流根据 Approved requirement 更新根 `README.md`；`workspace/README.md` 只说明 workspace 原理。`init` 只用于当前工作流仓库内创建 intake 目录；`init-version` 只能在实例 baseline 门禁通过后创建版本骨架。
+`init-instance` 的生成顺序是：初始化实例 Git → 创建 `baseline/`、`iteration/`、`workspace/` 和默认 `templates/` 及其目录说明 README → 将工作流 README 同步到 `.aw/README.md` → 在实例根创建一次 `AGENTS.md` 和项目功能 README → 写入 `.aw/workflow-version.yaml`，并追加只忽略 `.aw/` 的受管 `.gitignore` 区块。实例根 `README.md`、`AGENTS.md` 和 `templates/` 是实例可维护内容；`.aw/` 下文件是同步的工作流副本。05-review-release 通过后，工作流只更新根 `README.md` 的当前系统功能说明区域；`workspace/README.md` 只说明 workspace 原理。`init` 只用于当前工作流仓库内创建 intake 目录；`init-version` 只能在实例 baseline 门禁通过后创建版本骨架。
 
 ---
 
@@ -168,7 +167,7 @@ iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 - HTML 原型还必须保留审核 frontmatter：`reviewer`、`reviewed_at`、`review_notes`；只有 `status: Approved` 且审核人/时间/结论齐全时，原型门禁才会通过。
 - `Approved` 状态下若含占位词（`TODO` / `TBD` / `XXX` / `[待确认]` / `[未提供]` / `占位`），validate 视为 unresolved blocker
 - 上游产物必须 Approved 才能作为下游阶段的正式输入
-- 05-review-release 通过后，CLI 根据当前版本 requirement 自动生成实例根 `README.md` 的 `## 当前系统功能说明`，并更新 `<!-- workflow:workspace-readme-version: v{major}.{minor} -->`；`init-version` 会在归档前再次校验，失败时不移动旧版本。
+- 05-review-release 通过后，CLI 根据当前版本 release-log 更新实例根 `README.md` 的 `## 当前系统功能说明`，并更新 `<!-- workflow:current-system-functionality-version: v{major}.{minor} -->`；`init-version` 会在归档前再次校验，失败时不移动旧版本。
 - `workspace/README.md` 只描述 workspace 的目录职责、代码组织和运行约定，不承载版本功能清单。
 - Agent 只能创建或更新 `status: draft` / `status: In Review` 的产物，**不得**写入或修改 `status: Approved`。每个阶段完成时，Agent 必须列出待人工审核的全部必需产物及验证证据；人类手动审核并将各产物改为 `Approved` 后，才可运行该阶段的 `validate` 并开始下一阶段。
 
@@ -405,7 +404,7 @@ python .workflow/workflow.py init-instance --directory "E:\path\to\product-a"
 python .workflow/workflow.py sync --directory "E:\path\to\target-project"
 ```
 
-该命令仅同步 `workflow-file-inventory.md` 规定的共享规则、CLI 和 Skills 到实例 `.aw/`，并向根目录 `templates/` 补充缺失的默认模板；不会覆盖实例项目的 `README.md`、根 `AGENTS.md`、`templates/` 或 `.gitignore`，也不会复制项目的 `baseline/`、`iteration/`、`workspace/` 内容或运行状态。同步后会在实例 `.gitignore` 中幂等维护仅包含 `.aw/` 的工作流忽略区块，`workspace/workflow/` 和 `templates/` 状态仍可提交。目标项目可以有不相关的修改；只有同步路径发生重叠时默认拒绝执行，确认需要覆盖时才使用 `--allow-dirty`，预览可使用 `--dry-run`。
+该命令仅同步 `workflow-file-inventory.md` 规定的工作流 README、CLI 和 Skills 到实例 `.aw/`，并向根目录 `templates/` 补充缺失的默认模板；不会覆盖实例项目的根 `README.md`、根 `AGENTS.md`、`templates/` 或 `.gitignore`，也不会复制项目的 `baseline/`、`iteration/`、`workspace/` 内容或运行状态。同步后会在实例 `.gitignore` 中幂等维护仅包含 `.aw/` 的工作流忽略区块，`workspace/workflow/` 和 `templates/` 状态仍可提交。目标项目可以有不相关的修改；只有同步路径发生重叠时默认拒绝执行，确认需要覆盖时才使用 `--allow-dirty`，预览可使用 `--dry-run`。
 
 ### 2. 常用工作流
 
