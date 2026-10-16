@@ -41,7 +41,7 @@ WORKFLOW_DIR = FRAMEWORK_WORKFLOW_DIR
 # operator would want to discover by running `workflow.py --version` or by
 # inspecting `.aw/workflow-version.yaml`. Pre-1.0 numbers indicate the
 # framework is still evolving rapidly.
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 BASELINE_STAGE = "00-baseline"
 STAGES = [
     "01-product",
