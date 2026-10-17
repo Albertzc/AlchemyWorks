@@ -66,28 +66,28 @@ Implementation scope, dependent services, data environment, execution order, and
 Before starting a task, run from the project root:
 
 ```powershell
-python .workflow/workflow.py index --iteration vN
-python .workflow/workflow.py context --iteration vN --task TASK-XXX-NNN
+python .aw/.workflow/workflow.py index --iteration vN
+python .aw/.workflow/workflow.py context --iteration vN --task TASK-XXX-NNN
 ```
 
-Use the generated `.workflow/context-packs/vN-TASK-XXX-NNN.md` as the task context. The Context Pack is authoritative for the selected excerpts; load a full source artifact only when a required detail is absent and record that exception in the implementation log.
+Use the generated `.aw/.workflow/context-packs/vN-TASK-XXX-NNN.md` as the task context. The Context Pack is authoritative for the selected excerpts; load a full source artifact only when a required detail is absent and record that exception in the implementation log.
 
 ### Task completion report
 
 After each TASK's code and verification work, run:
 
 ```powershell
-python .workflow/workflow.py task-finished --iteration vN --task TASK-XXX-NNN --result succeeded
+python .aw/.workflow/workflow.py task-finished --iteration vN --task TASK-XXX-NNN --result succeeded
 ```
 
-Default behaviour (matches the unit test `test_task_finished_records_result_and_refreshes_dashboard`): the call appends one JSON record to `.workflow/task-runs/` and prints the conclusion. It does **not** re-render the dashboard — that was made explicit default-off to keep repeated `task-finished` calls O(1) instead of O(N_artifacts).
+Default behaviour (matches the unit test `test_task_finished_records_result_and_refreshes_dashboard`): the call appends one JSON record to `.aw/.workflow/task-runs/` and prints the conclusion. It does **not** re-render the dashboard — that was made explicit default-off to keep repeated `task-finished` calls O(1) instead of O(N_artifacts). When operating from the framework source repository, use the corresponding `.workflow/` paths.
 
 To see the new task on the dashboard afterwards, run **one** of:
 
 ```powershell
-python .workflow/workflow.py task-finished ... --refresh-dashboard
+python .aw/.workflow/workflow.py task-finished ... --refresh-dashboard
 # or separately:
-python .workflow/workflow.py dashboard --iteration vN
+python .aw/.workflow/workflow.py dashboard --iteration vN
 ```
 
 Use `failed` when verification fails and `blocked` when a required decision or dependency prevents completion. Do not report the TASK as complete until the task-run JSON has been written and the printed conclusion has been confirmed.

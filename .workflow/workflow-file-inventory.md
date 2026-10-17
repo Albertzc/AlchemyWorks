@@ -13,7 +13,7 @@
 
 - The workflow definitions, Skills, templates, governance rules, scripts, and tests registered in the tables below are treated as a read-only core scaffold during product development.
 - Project deliverables under `baseline/`, `iteration/`, and `workspace/` are not part of the core scaffold. The `manifest.yaml`, `traceability.json`, and `current-state.json` files under `workspace/workflow/` are reproducible instance-project state and must be managed by the instance project's Git. The synchronized `.aw/` directory is a local workflow copy that is ignored by default.
-- `python .workflow/workflow.py verify-workflow` checks whether the core scaffold has uncommitted modifications; product workflow CLI commands block when such modifications are detected.
+- `python .workflow/workflow.py verify-workflow` checks whether the framework source core scaffold has uncommitted modifications; in a synchronized instance use `python .aw/.workflow/workflow.py verify-workflow`. Product workflow CLI commands block when such modifications are detected.
 - The core scaffold may only be modified through a dedicated workflow-maintenance change. That change must update this inventory, the affected documentation, tests, and sync scripts in the same change, and must be committed cleanly before product workflow commands resume.
 
 ## 2. Required Top-Level Governance Files

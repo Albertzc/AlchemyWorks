@@ -91,29 +91,31 @@ Report
 
 ### Workflow Governance
 
-The project-level workflow control layer is implemented by `.workflow/workflow.py` and the `workflow-governance` Skill. These controls are mandatory for versioned workflow work:
+The project-level workflow control layer is implemented by the workflow CLI and the `workflow-governance` Skill. In this framework source repository the CLI is `.workflow/workflow.py`; in a synchronized instance project it is `.aw/.workflow/workflow.py`. These controls are mandatory for versioned workflow work:
 
-The authoritative inventory of workflow-owned files and directories is [`.workflow/workflow-file-inventory.md`](.workflow/workflow-file-inventory.md). Any change to the workflow itself (including its CLI, scripts, Skills, templates, governance documents, scaffold, tests, or generated-state ignore rules) MUST update that inventory in the same change.
+The authoritative inventory of workflow-owned files and directories is [`.workflow/workflow-file-inventory.md`](.workflow/workflow-file-inventory.md) in the framework source repository; the synchronized instance copy is `.aw/.workflow/workflow-file-inventory.md`. Any change to the workflow itself (including its CLI, scripts, Skills, templates, governance documents, scaffold, tests, or generated-state ignore rules) MUST update that inventory in the same change.
 
 1. **Before starting or resuming a stage**, refresh the artifact index:
-   `python .workflow/workflow.py index --iteration v{N}`
+   `python .aw/.workflow/workflow.py index --iteration v{N}`
 2. **At every stage handoff**, after the current stage's required outputs have been reviewed by a human, run its gate:
-   `python .workflow/workflow.py validate --iteration v{N} --stage <completed-stage>`
+   `python .aw/.workflow/workflow.py validate --iteration v{N} --stage <completed-stage>`
 3. A nonzero gate result is a hard stop: the next stage cannot start. Do not bypass missing, draft, unapproved, or unresolved-placeholder inputs.
 4. **Human approval is required for every stage handoff.** An agent must create or update artifacts with `status: draft` or `status: In Review`, list every required artifact and its verification evidence for human review, and wait for a human to set each artifact's frontmatter to `status: Approved`. An agent must never add, replace, or otherwise change an artifact's `status` to `Approved`.
 5. **Before implementing a TASK**, create and use exactly one task-scoped Context Pack:
-   `python .workflow/workflow.py context --iteration v{N} --task TASK-XXX-NNN`
+   `python .aw/.workflow/workflow.py context --iteration v{N} --task TASK-XXX-NNN`
 6. The Context Pack is the default implementation context. Load complete upstream documents only when the pack lacks a required detail, and record that exception in the implementation record.
 7. **After changing workflow artifacts**, rerun `index` so `workspace/workflow/manifest.yaml`, `workspace/workflow/traceability.json`, and the local hash/runtime caches reflect the new content.
 8. **After completing every TASK**, run:
-   `python .workflow/workflow.py task-finished --iteration v{N} --task TASK-XXX-NNN --result <succeeded|failed|blocked>`
+   `python .aw/.workflow/workflow.py task-finished --iteration v{N} --task TASK-XXX-NNN --result <succeeded|failed|blocked>`
 9. Do not report a TASK as complete until this command has written the task record and printed the task conclusion for human confirmation. Refresh the dashboard separately when needed.
 
 The Context Pack contains the selected TASK definition, related stable IDs, relevant contract excerpts, and input hashes. It reduces repeated full-document loading; it does not replace human approval or alter the source-of-truth priority.
 
+When these rules are executed from the framework source repository, replace `.aw/.workflow/` in the commands above with `.workflow/`; when operating on an external instance from the framework source repository, use the source CLI with `--project-root <instance-root>`.
+
 ### Workflow Core Protection
 
-During product development, the workflow core is read-only. Do not modify `AGENTS.md`, the root workflow `README.md`, `.gitignore`, `.workflow/workflow.py`, `.workflow/README.md`, `.workflow/workflow-file-inventory.md`, `.workflow/scripts/`, `.workflow/tests/`, `.agents/skills/`, or `templates/` as part of a product or iteration task. The workflow CLI blocks operational commands when these paths have uncommitted changes. Changes to them require a dedicated workflow-maintenance change, updated inventory/documentation/tests, and a clean commit before product work resumes. Project artifacts under `baseline/`, `iteration/`, and `workspace/` are not protected by this guard.
+During product development, the workflow core is read-only. Do not modify `AGENTS.md`, the root workflow `README.md`, `.gitignore`, the source workflow paths `.workflow/workflow.py`, `.workflow/README.md`, `.workflow/workflow-file-inventory.md`, `.workflow/scripts/`, `.workflow/tests/`, the source `.agents/skills/`, or `templates/` as part of a product or iteration task. In synchronized instances, the corresponding execution paths are `.aw/.workflow/` and `.aw/.agents/`; the instance `.aw/` copy is ignored by default. The workflow CLI blocks operational commands when these paths have uncommitted changes. Changes to them require a dedicated workflow-maintenance change, updated inventory/documentation/tests, and a clean commit before product work resumes. Project artifacts under `baseline/`, `iteration/`, and `workspace/` are not protected by this guard.
 
 The final report should summarize:
 

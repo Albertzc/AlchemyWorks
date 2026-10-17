@@ -45,14 +45,16 @@ Implementation work must consume one TASK-scoped Context Pack. The pack contains
 
 ## Outputs
 
-- `.workflow/manifest.yaml`
-- `.workflow/traceability.json`
-- `.workflow/current-state.json`
-- `.workflow/cache/context-packs.json`
-- `.workflow/context-packs/<iteration>-<task>.md`
-- `.workflow/task-runs/<iteration>-<task>.json`
-- `.workflow/task-runs/history/<iteration>-<task>-<timestamp>.json`
-- `.workflow/dashboard/index.html`
+- `.aw/.workflow/manifest.yaml`
+- `.aw/.workflow/traceability.json`
+- `.aw/.workflow/current-state.json`
+- `.aw/.workflow/cache/context-packs.json`
+- `.aw/.workflow/context-packs/<iteration>-<task>.md`
+- `.aw/.workflow/task-runs/<iteration>-<task>.json`
+- `.aw/.workflow/task-runs/history/<iteration>-<task>-<timestamp>.json`
+- `.aw/.workflow/dashboard/index.html`
+
+In the framework source repository, these paths use `.workflow/` instead of `.aw/.workflow/`.
 
 These are generated state, not approval records. Human approval remains represented by artifact frontmatter and must be explicit.
 

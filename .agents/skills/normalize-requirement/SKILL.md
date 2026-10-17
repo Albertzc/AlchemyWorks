@@ -14,13 +14,13 @@ Take a user-supplied raw requirement, which may arrive in inconsistent formats, 
 Before normalizing, run:
 
 ```powershell
-python .workflow/workflow.py route-requirement
+python .aw/.workflow/workflow.py route-requirement
 ```
 
 The command emits the archive location for the raw requirement according to these rules:
 
 1. When `baseline/` is empty apart from `README.md`: return `mode: baseline` and `baseline/raw-requirement/`. This is the baseline-requirement path for a first-time project; preserve the user's original wording, and draft the four baseline documents and one core-flow prototype from explicit facts in the original material, all kept as `status: draft`.
-2. When the baseline has already been initialized: return `mode: iteration`. Prefer the `iteration` field of `.workflow/manifest.yaml`; if the manifest does not exist or has no valid version, fall back to directory discovery. Store the user's original material verbatim into the emitted `iteration/raw-requirement/`; the `iteration` value returned by the command is the target version for this input.
+2. When the baseline has already been initialized: return `mode: iteration`. Prefer the `iteration` field of `.aw/.workflow/manifest.yaml`; if the manifest does not exist or has no valid version, fall back to directory discovery. Store the user's original material verbatim into the emitted `iteration/raw-requirement/`; the `iteration` value returned by the command is the target version for this input. When operating from the framework source repository, use `.workflow/manifest.yaml` instead.
 
 Raw material is not a gate artifact and does not require frontmatter or `status: Approved`. Material under `iteration/raw-requirement/` is user-owned and read-only: agents MUST NOT modify, rename, or delete the raw files. The normalized artifact MUST record the raw file path and the target version returned by `route-requirement` in its frontmatter or "Source Traceability" section; only the normalized artifact enters human review.
 
