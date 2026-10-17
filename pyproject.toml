@@ -1,5 +1,5 @@
 [project]
 name = "alchemyworks"
-version = "0.1.0"
+version = "0.1.1"
 description = "Workflow governance framework for AI-assisted software projects"
 requires-python = ">=3.11"
