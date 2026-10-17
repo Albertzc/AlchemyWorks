@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/Albertzc/AlchemyWorks/compare/v0.1.0...v0.1.1) (2026-10-17)
+
+
+### Bug Fixes
+
+* correct instance workflow command paths ([fe52391](https://github.com/Albertzc/AlchemyWorks/commit/fe52391285d8ecc4228d8c4c44d8b9c3f725b8bd))
+
 ## 0.1.0 (2026-10-16)
 
 
