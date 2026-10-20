@@ -190,8 +190,8 @@ iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 | `planning-validation` | 03 阶段任务与验证规划 | TASK DAG + AC/测试覆盖 |
 | `iterate-implementation` | 04 阶段 TASK 实施 | 源码 + 测试 + ISSUE |
 | `review-release` | 05 阶段评审与发布准备 | 评审证据 + 风险/回滚 + 发布建议 |
-| `release-log` | 05 阶段封档产物起草 | `v{N}-release-log.md`（仅需存在,无需 `Approved`） |
-| `manage-iteration` | 创建 / 归档版本 | `iteration/v{N}/` + `archive/v{N}/` |
+| `release-log` | 05 阶段封档产物起草 | `v{major}.{minor}-release-log.md`（仅需存在,无需 `Approved`） |
+| `manage-iteration` | 创建 / 归档版本 | `iteration/v{major}.{minor}/` + `archive/v{major}.{minor}/` |
 | `workflow-governance` | 任意阶段 | 唯一 CLI 操作入口：校验 + 索引 + 追溯 + Context Pack |
 
 所有 Skill 位于 `.agents/skills/<name>/SKILL.md`，触发条件命中时自动加载。
@@ -212,10 +212,10 @@ iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 
 | 模板 | 文件 | 用途 | 派生产物 |
 |---|---|---|---|
-| **product** | `product.md` | 需求 + 功能规格（合并）| `v{N}-requirement.md`（FS 段落作为 FR 子项内嵌） |
-| **design** | `design.md` | 架构 + API + DB（合并）| `v{N}-architecture-design.md` + `api-spec.md` + `database-dictionary.md` |
-| **implementation** | `implementation.md` | 任务 DAG + 验证 + 源码 + 测试 + ISSUE（合并）| `v{N}-task-plan-dag.md` + `validation-plan.md` + `source-code.md` + `test-results.md` |
-| **release-log** | `release-log.md` | RC 封档说明（8 节）| `v{N}-release-log.md`（仅需存在,无需 `Approved`） |
+| **product** | `product.md` | 需求 + 功能规格（合并）| `v{major}.{minor}-requirement.md`（FS 段落作为 FR 子项内嵌） |
+| **design** | `design.md` | 架构 + API + DB（合并）| `v{major}.{minor}-architecture-design.md` + `api-spec.md` + `database-dictionary.md` |
+| **implementation** | `implementation.md` | 任务 DAG + 验证 + 源码 + 测试 + ISSUE（合并）| `v{major}.{minor}-task-plan-dag.md` + `validation-plan.md` + `source-code.md` + `test-results.md` |
+| **release-log** | `release-log.md` | RC 封档说明（8 节）| `v{major}.{minor}-release-log.md`（仅需存在,无需 `Approved`） |
 
 辅助文件：`Prototype.html`（UI 原型基线）+ `prototype-design-system.md`（视觉规范）+ `design-tokens.json`（设计令牌）。
 
@@ -242,7 +242,7 @@ flowchart TD
     S3["03-planning<br/>task-plan-dag.md<br/>validation-plan.md"]
     S4["04-implementation<br/>source-code.md (ISSUE 列表)<br/>test-results.md<br/>每 TASK: context → 实施 → task-finished"]
     S5["05-review-release<br/>review-release.md（需 Approved）<br/>release-log.md（仅需存在）<br/>评审 / 合并 / 发布 / 封档"]
-    Arch([创建下一版本后封档上一版<br/>archive/vN/ + release-log.md])
+    Arch([创建下一版本后封档上一版<br/>archive/v{major}.{minor}/ + release-log.md])
 
     S1 -- 人工审核 → Approved<br/>validate 01 --> S2
     S2 -- 人工审核 → Approved<br/>validate 02 --> S3

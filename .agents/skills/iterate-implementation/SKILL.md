@@ -7,7 +7,7 @@ description: "04 stage write code source-code.md tests."
 
 ## Purpose
 
-Land the 03-planning TASK DAG as actual code: source, configuration, and tests, and record the implementation process structurally in three core documents under `iteration/v{N}/04-implementation/`.
+Land the 03-planning TASK DAG as actual code: source, configuration, and tests, and record the implementation process structurally in three core documents under `iteration/v{major}.{minor}/04-implementation/`.
 
 This skill covers exactly one full iteration's 04 stage (for example `v1` or `v2+`). For frontend / backend separated projects, split by workspace subdirectory.
 
@@ -15,10 +15,10 @@ This skill covers exactly one full iteration's 04 stage (for example `v1` or `v2
 
 Before entering 04, confirm:
 
-1. `iteration/v{N}/03-planning/v{N}-task-plan-dag.md` `status: Approved`.
-2. `iteration/v{N}/03-planning/v{N}-validation-plan.md` has fixed the verification commands.
-3. The `iteration/v{N}/02-design/` trio (`architecture-design.md` / `api-spec.md` / `database-dictionary.md`) is complete.
-4. `iteration/v{N}/01-product/v{N}-requirement.md`, the applicable `baseline/decisions/`, and `baseline/03-tech-stack-decision.md` exist.
+1. `iteration/v{major}.{minor}/03-planning/v{major}.{minor}-task-plan-dag.md` is `status: Approved`.
+2. `iteration/v{major}.{minor}/03-planning/v{major}.{minor}-validation-plan.md` has fixed the verification commands.
+3. The `iteration/v{major}.{minor}/02-design/` trio (`architecture-design.md` / `api-spec.md` / `database-dictionary.md`) is complete.
+4. `iteration/v{major}.{minor}/01-product/v{major}.{minor}-requirement.md`, the applicable `baseline/decisions/`, and `baseline/03-tech-stack-decision.md` exist.
 5. The user has confirmed scope, data environment, priority, and verification commands, or these decisions are explicit in the approved upstream artifacts.
 
 ## Output Artifacts
@@ -26,10 +26,10 @@ Before entering 04, confirm:
 | File | Path | Required |
 |---|---|---|
 | Actual code | `workspace/{backend,frontend,...}/` | ✅ |
-| Implementation main record | `iteration/v{N}/04-implementation/v{N}-source-code.md` | ✅ |
-| Test results | `iteration/v{N}/04-implementation/v{N}-test-results.md` | ✅ |
+| Implementation main record | `iteration/v{major}.{minor}/04-implementation/v{major}.{minor}-source-code.md` | ✅ |
+| Test results | `iteration/v{major}.{minor}/04-implementation/v{major}.{minor}-test-results.md` | ✅ |
 | Issue fixes (v1.0 only) | `iteration/v1.0/04-implementation/v1.0-issue-fixes.md` | legacy compatibility |
-| Stage navigation | `iteration/v{N}/04-implementation/README.md` | recommended |
+| Stage navigation | `iteration/v{major}.{minor}/04-implementation/README.md` | recommended |
 
 ## Scope and Environment Resolution
 
@@ -46,11 +46,11 @@ Implementation scope, dependent services, data environment, execution order, and
 
 ```text
 0. User confirms the four-tuple (implementation scope / DB / priority / verification).
-1. Create the `iteration/v{N}/04-implementation/` directory skeleton.
+1. Create the `iteration/v{major}.{minor}/04-implementation/` directory skeleton.
 2. Actually write code into `workspace/{sub-project}/`.
-3. Write `v{N}-source-code.md` main record (structure per "Artifact 3" in `templates/implementation.md`).
-4. Placeholder `v{N}-test-results.md` (fill real data after the first test run).
-5. Record known issues in `v{N}-source-code.md` §5; v1.0 also maintains `v1.0-issue-fixes.md` for legacy compatibility.
+3. Write `v{major}.{minor}-source-code.md` main record (structure per "Artifact 3" in `templates/implementation.md`).
+4. Placeholder `v{major}.{minor}-test-results.md` (fill real data after the first test run).
+5. Record known issues in `v{major}.{minor}-source-code.md` §5; v1.0 also maintains `v1.0-issue-fixes.md` for legacy compatibility.
 6. Write `README.md` (how to run tests / start the dev server).
 7. Run the static-check or build commands appropriate to the project's language and toolchain.
 8. Record the actually executable install, start, and test commands in the README and the delivery message.
@@ -66,18 +66,18 @@ Implementation scope, dependent services, data environment, execution order, and
 Before starting a task, run from the project root:
 
 ```powershell
-python .aw/.workflow/workflow.py index --iteration vN
-python .aw/.workflow/workflow.py context --iteration vN --task TASK-XXX-NNN
+python .aw/.workflow/workflow.py index --iteration v{major}.{minor}
+python .aw/.workflow/workflow.py context --iteration v{major}.{minor} --task TASK-XXX-NNN
 ```
 
-Use the generated `.aw/.workflow/context-packs/vN-TASK-XXX-NNN.md` as the task context. The Context Pack is authoritative for the selected excerpts; load a full source artifact only when a required detail is absent and record that exception in the implementation log.
+Use the generated `.aw/.workflow/context-packs/v{major}.{minor}-TASK-XXX-NNN.md` as the task context. The Context Pack is authoritative for the selected excerpts; load a full source artifact only when a required detail is absent and record that exception in the implementation log.
 
 ### Task completion report
 
 After each TASK's code and verification work, run:
 
 ```powershell
-python .aw/.workflow/workflow.py task-finished --iteration vN --task TASK-XXX-NNN --result succeeded
+python .aw/.workflow/workflow.py task-finished --iteration v{major}.{minor} --task TASK-XXX-NNN --result succeeded
 ```
 
 Default behaviour (matches the unit test `test_task_finished_records_result_and_refreshes_dashboard`): the call appends one JSON record to `.aw/.workflow/task-runs/` and prints the conclusion. It does **not** re-render the dashboard — that was made explicit default-off to keep repeated `task-finished` calls O(1) instead of O(N_artifacts). When operating from the framework source repository, use the corresponding `.workflow/` paths.
@@ -87,7 +87,7 @@ To see the new task on the dashboard afterwards, run **one** of:
 ```powershell
 python .aw/.workflow/workflow.py task-finished ... --refresh-dashboard
 # or separately:
-python .aw/.workflow/workflow.py dashboard --iteration vN
+python .aw/.workflow/workflow.py dashboard --iteration v{major}.{minor}
 ```
 
 Use `failed` when verification fails and `blocked` when a required decision or dependency prevents completion. Do not report the TASK as complete until the task-run JSON has been written and the printed conclusion has been confirmed.
@@ -102,15 +102,15 @@ Use `failed` when verification fails and `blocked` when a required decision or d
 
 ### ❌ Forbidden Anti-Patterns
 
-1. Stuffing **any one whole document** of `v{N}-requirement.md` / `architecture-design.md` / `api-spec.md` / `database-dictionary.md` / `task-plan-dag.md` / `validation-plan.md` into a single prompt.
-2. Re-reading **every previously-written section** of `v{N}-source-code.md` into the current prompt (even "just in case").
+1. Stuffing **any one whole document** of `v{major}.{minor}-requirement.md` / `architecture-design.md` / `api-spec.md` / `database-dictionary.md` / `task-plan-dag.md` / `validation-plan.md` into a single prompt.
+2. Re-reading **every previously-written section** of `v{major}.{minor}-source-code.md` into the current prompt (even "just in case").
 3. Feeding the entire git diff (**>2k lines**) to the reviewer subagent in one shot.
 4. Opening multiple non-essential `read_file` / `search_files` calls in parallel (merge independent reads into one batch).
 
 ### ✅ Correct Context-Loading Flow (30 Seconds Before Each TASK Starts)
 
 ```text
-1. Lock onto the single TASK-XXX ID (from v{N}-task-plan-dag.md).
+1. Lock onto the single TASK-XXX ID (from v{major}.{minor}-task-plan-dag.md).
 2. Extract that TASK's one-line summary plus its "depends_on" / "AC refs" from task-plan-dag.md.
 3. List every stable ID the TASK touches (FS-XXX / API-XXX / TBL-XXX / AC-XXX); for each, use
    search_files + offset / limit to pull just the section that mentions it (not the whole file).
@@ -181,7 +181,7 @@ The above constraints apply to every large implementation task; prefer the proje
 
 ## Companion Documents Structure
 
-`v{N}-source-code.md` 8-section structure (see "Artifact 3" in `templates/implementation.md`):
+`v{major}.{minor}-source-code.md` 8-section structure (see "Artifact 3" in `templates/implementation.md`):
 
 1. Delivery scope (per `task-plan-dag` list, each marked ✅ / ⚠️ / ❌).
 2. Key design decisions (implementation layer, with ADR references).
@@ -195,9 +195,9 @@ The above constraints apply to every large implementation task; prefer the proje
 ## Validation Checklist (before reporting done)
 
 - [ ] Ran the static check, build, or type-check appropriate to the current language and project toolchain.
-- [ ] `v{N}-source-code.md` has all 8 sections.
-- [ ] `v{N}-test-results.md` includes at least the AC matrix (real data may be pending).
-- [ ] v1.0's `v1.0-issue-fixes.md` carries the current known leftovers; v1.1+ known issues are recorded in `v{N}-source-code.md` §5.
+- [ ] `v{major}.{minor}-source-code.md` has all 8 sections.
+- [ ] `v{major}.{minor}-test-results.md` includes at least the AC matrix (real data may be pending).
+- [ ] v1.0's `v1.0-issue-fixes.md` carries the current known leftovers; v1.1+ known issues are recorded in `v{major}.{minor}-source-code.md` §5.
 - [ ] `README.md` contains the project's actual install, start, and test steps.
-- [ ] `v{N}-source-code.md` §5 explicitly lists "known limits".
+- [ ] `v{major}.{minor}-source-code.md` §5 explicitly lists "known limits".
 - [ ] The delivery message gives clear follow-up commands, or states there are no follow-up commands.

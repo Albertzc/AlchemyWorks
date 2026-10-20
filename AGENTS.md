@@ -56,7 +56,8 @@ Individual Implementation Preference
 
 Notes:
 
-- "Current version" = the latest approved version in `iteration/v{N}/` (or the version explicitly named by the task).
+- "Current version" = the latest approved version in `iteration/v{major}.{minor}/` (or the version explicitly named by the task).
+- **Approval/discovery distinction**: `discover_iteration()` returns the numerically highest active iteration directory; it does not filter by approval status. When a rule requires the latest approved version, the agent must inspect the `05-review-release/<version>-review-release.md` status for the discovered versions and select the highest approved `(major, minor)` pair. If no version is approved, use the numerically highest active version only where the rule explicitly permits a draft working version.
 - Cross-version references must use stable IDs (FR-XXX, FS-XXX, API-XXX-XXX, TBL-XXX-XXX, TASK-XXX-XXX, AC-XXX).
 - Do not silently resolve a conflict by guessing. State the conflict and ask for clarification, or record a clearly labeled assumption.
 
@@ -65,7 +66,7 @@ Notes:
 Before changing code, the agent MUST:
 
 1. Read the relevant baseline documents in `baseline/` first.
-2. Read the latest approved version's artifacts in `iteration/v{N}/` (latest `N` with `status: Approved`).
+2. Read the latest approved version's artifacts in `iteration/v{major}.{minor}/` (the highest approved `(major, minor)` pair).
 3. Inspect the existing repository structure and affected modules.
 4. Search for existing patterns before creating new modules, services, components, utilities, or database models.
 5. Identify affected files, dependencies, tests, and documentation.
@@ -97,78 +98,73 @@ Report
 
 **Version awareness**:
 
-- For a **new project (v1)**: preserve the user-provided raw requirement under `baseline/raw-requirement/`, use it to draft baseline artifacts (including the core user-flow prototype), and confirm the five required baseline artifacts are `status: Approved` before generating `iteration/v1/` artifacts.
-- For an **iteration (v2+)**: use `normalize-requirement` to route, archive, and normalize the raw requirement, then use `manage-iteration` to create or archive the target version; read the latest approved version's artifacts as the baseline.
+- For a **new project (v1.0)**: preserve the user-provided raw requirement under `baseline/raw-requirement/`, use it to draft baseline artifacts (including the core user-flow prototype), and confirm the five required baseline artifacts are `status: Approved` before generating `iteration/v1.0/` artifacts.
+- For a **later iteration**: use `normalize-requirement` to route, archive, and normalize the raw requirement, then use `manage-iteration` to create or archive the target `v{major}.{minor}`; read the latest approved version's artifacts as the baseline.
 - **Iteration scope rule**: each task targets exactly one version. If a request affects multiple versions, split the work or escalate.
 
 ### Workflow Governance
 
-The project-level workflow control layer is implemented by the workflow CLI and the `workflow-governance` Skill. In this framework source repository the CLI is `.workflow/workflow.py`; in a synchronized instance project it is `.aw/.workflow/workflow.py`. These controls are mandatory for versioned workflow work:
+The CLI and `workflow-governance` Skill are the operational owners. Use the
+framework source path `.workflow/workflow.py`, the synchronized instance path
+`.aw/.workflow/workflow.py`, or the source CLI with
+`--project-root <instance-root>` for an external instance. Do not copy command
+details into this file; use the Skill and the source `.workflow/README.md` (or
+instance `.aw/.workflow/README.md`) reference.
 
-The authoritative inventory of workflow-owned files and directories is `.workflow/workflow-file-inventory.md` in the framework source repository and `.aw/.workflow/workflow-file-inventory.md` in a synchronized instance. Any change to the workflow itself (including its CLI, scripts, Skills, templates, governance documents, scaffold, tests, or generated-state ignore rules) MUST update that inventory in the same change.
+The following invariants remain mandatory:
 
-1. **Before starting or resuming a stage**, refresh the artifact index:
-   `python .aw/.workflow/workflow.py index --iteration v{N}`
-2. **At every stage handoff**, after the current stage's required outputs have been reviewed by a human, run its gate:
-   `python .aw/.workflow/workflow.py validate --iteration v{N} --stage <completed-stage>`
-3. A nonzero gate result is a hard stop: the next stage cannot start. Do not bypass missing, draft, unapproved, or unresolved-placeholder inputs.
-4. **Human approval is required for every stage handoff.** An agent must create or update artifacts with `status: draft` or `status: In Review`, list every required artifact and its verification evidence for human review, and wait for a human to set each artifact's frontmatter to `status: Approved`. An agent must never add, replace, or otherwise change an artifact's `status` to `Approved`.
-5. **Before implementing a TASK**, create and use exactly one task-scoped Context Pack:
-   `python .aw/.workflow/workflow.py context --iteration v{N} --task TASK-XXX-NNN`
-6. The Context Pack is the default implementation context. Load complete upstream documents only when the pack lacks a required detail, and record that exception in the implementation record.
-7. **After changing workflow artifacts**, rerun `index` so `workspace/workflow/manifest.yaml`, `workspace/workflow/traceability.json`, and the local hash/runtime caches reflect the new content.
-8. **After completing every TASK**, run:
-   `python .aw/.workflow/workflow.py task-finished --iteration v{N} --task TASK-XXX-NNN --result <succeeded|failed|blocked>`
-9. Do not report a TASK as complete until this command has written the task record and printed the task conclusion for human confirmation. Refresh the dashboard separately when needed.
+- Refresh the index before starting or resuming a stage; a nonzero stage gate is
+  a hard stop.
+- Human approval is required at every stage handoff. Agents may create or edit
+  `draft` / `In Review` artifacts but must never set `status: Approved`.
+- Before implementing a TASK, create and use exactly one task-scoped Context
+  Pack; after it, record the task result with `task-finished`.
+- After workflow-artifact changes, refresh the index. Do not report a TASK as
+  complete before its task record and conclusion exist.
+- Use the workflow inventory as the authority for protected paths and update it
+  with any workflow-maintenance change.
 
-The Context Pack contains the selected TASK definition, related stable IDs, relevant contract excerpts, and input hashes. It reduces repeated full-document loading; it does not replace human approval or alter the source-of-truth priority.
-
-When these rules are executed from the framework source repository, replace `.aw/.workflow/` in the commands above with `.workflow/`; when operating on an external instance from the framework source repository, use the source CLI with `--project-root <instance-root>`.
+The Context Pack is the default implementation context; load complete upstream
+documents only when it lacks a required detail and record that exception.
 
 ### Workflow Core Protection
 
-During product development, the workflow core is read-only. Do not modify `AGENTS.md`, the root workflow `README.md`, `.gitignore`, the source workflow paths `.workflow/workflow.py`, `.workflow/README.md`, `.workflow/workflow-file-inventory.md`, `.workflow/scripts/`, `.workflow/tests/`, the source `.agents/skills/`, or `templates/` as part of a product or iteration task. In synchronized instances, the corresponding execution paths are `.aw/.workflow/` and `.aw/.agents/`; the instance `.aw/` copy is ignored by default. The workflow CLI blocks operational commands when these paths have uncommitted changes. Changes to them require a dedicated workflow-maintenance change, updated inventory/documentation/tests, and a clean commit before product work resumes. Project artifacts under `baseline/`, `iteration/`, and `workspace/` are not protected by this guard.
+During product development, the workflow core is read-only. In the framework
+source repository this covers `AGENTS.md`, the framework root `README.md`,
+`.gitignore`, `.workflow/`, `.agents/skills/`, and `templates/`. In a
+synchronized instance it covers `.aw/README.md`, `.aw/.workflow/`, and
+`.aw/.agents/`; the instance root `AGENTS.md`, root `README.md`, `.gitignore`,
+and root `templates/` remain instance-owned. The workflow may update only the
+marked current-system-functionality section of the instance root README after
+`05-review-release` passes. The CLI blocks operational commands when protected
+core paths are dirty. Core changes require a dedicated maintenance change,
+updated inventory/documentation/tests, and a clean commit before product work
+resumes. `baseline/`, `iteration/`, and `workspace/` are not protected by this
+guard.
 
 The final report should summarize:
 
 - What changed.
 - Why it changed.
 - Which version and stages are affected.
-- Which files (with absolute path under `iteration/v{N}/`) were modified.
+- Which files (with absolute path under `iteration/v{major}.{minor}/`, when applicable) were modified.
 - Which tests and checks were run.
 - Any remaining risks, assumptions, or follow-up work.
 
 ### Documentation Language
 
-Framework documents fall into two layers, each with a single working language. The split is intentional and is not changed instance-by-instance.
+The governance and execution layer is English: this file, `.workflow/`,
+`.agents/skills/`, their synchronized `.aw/` copies, stable IDs, CLI flags,
+source, JSON, and HTML control files. The template, entry, and product layer is
+Chinese by default: root `README.md`, `templates/`, and artifacts under
+`iteration/v{major}.{minor}/`. An instance may choose another product-layer
+language in `baseline/04-glossary.md`.
 
-**Governance & Execution Layer (English):**
-
-- `AGENTS.md` (this file, including §1–§17).
-- Framework source paths: `.workflow/` — CLI, scripts, README, inventory, tests; `.agents/skills/` — `SKILL.md` frontmatter and bodies.
-- Synchronized instance paths: `.aw/.workflow/` — CLI, scripts, README, inventory; `.aw/.agents/skills/` — `SKILL.md` frontmatter and bodies. The instance copy does not include framework regression tests.
-- Stable identifiers: `FR-XXX`, `FS-XXX`, `BR-XXX`, `NFR-XXX`, `AC-XXX`, `TASK-XXX-XXX`, `API-XXX-XXX`, `TBL-XXX-XXX`, `ISSUE-XXX`.
-- CLI flags, Python sources, JSON files, and HTML templates.
-
-Rationale: governance text and runtime behavior must be auditable by any agent or operator regardless of locale. English matches the stable-ID convention and the existing CLI vocabulary.
-
-**Template, Entry, and Product Layer (Chinese):**
-
-- `README.md` at the framework root — entry guide for instance projects (intentionally Chinese; no English mirror is published).
-- `templates/*.md` — product, design, implementation, release-log, prototype design system.
-- Every artifact produced under `iteration/v{major}.{minor}/` by following the templates, including `requirement.md`, `architecture-design.md`, `api-spec.md`, `database-dictionary.md`, `task-plan-dag.md`, `validation-plan.md`, `source-code.md`, `test-results.md`, `review-release.md`, `release-log.md`, and HTML prototypes.
-
-Rationale: templates and the artifacts they produce are read by instance teams during requirement, design, implementation, and release review. Keeping them in Chinese maximizes readability for Chinese-first teams without forcing translation overhead.
-
-**Override and Synchronization Contract:**
-
-- Instance projects may document their own product-layer language preference in `baseline/04-glossary.md`. The framework does not enforce a single product-layer language; the choice above is the default.
-- `templates/` is copied once by `init-instance` and is never overwritten by `sync`. A framework language change does not retroactively update already-synchronized instances; instance templates remain as previously copied.
-- The framework root `README.md` is intentionally Chinese; operators needing an English entry point may use `.workflow/README.md` plus this file's §1–§17 as a substitute.
-
-**Translation Discipline:**
-
-When the governance layer references a template-layer artifact by path or section, the reference uses the file's English-stable identifier (for example `01-product`, `requirement.md`) and the section number, never the Chinese heading text. This keeps cross-layer linking stable across language changes and avoids accidental drift when a Chinese heading is revised.
+`templates/` is copied once and is not overwritten by `sync`. The framework root
+README remains Chinese; use `.workflow/README.md` or
+`.aw/.workflow/README.md` as the English execution reference. Governance text
+must refer to template artifacts by stable path/identifier and section number,
+not by translated headings.
 
 ## 5. Minimal Change and Existing Patterns
 
@@ -179,69 +175,39 @@ When the governance layer references a template-layer artifact by path or sectio
 - Do not introduce a new framework or dependency without explaining the reason and trade-offs.
 - Do not reformat unrelated files.
 - Keep each change focused on one feature, fix, or documented purpose.
-- **Version-scope rule**: do not modify an artifact of version `v{N}` when the active task targets `v{N+1}`. If you discover an issue in `v{N}`, file it as a follow-up rather than silently fixing across versions.
+- **Version-scope rule**: do not modify an artifact of one `v{major}.{minor}` when the active task targets another version. If you discover an issue in a different version, file it as a follow-up rather than silently fixing across versions.
 
 ## 6. Architecture Rules
 
-Respect the project's layer boundaries. Unless the approved architecture states otherwise, use a structure similar to:
+Respect the approved layer boundaries. Unless the architecture says otherwise,
+keep the flow `presentation → application → domain → infrastructure`.
 
-```text
-Presentation Layer
-        ↓
-Application Layer
-        ↓
-Domain Layer
-        ↓
-Infrastructure Layer
-```
-
-General rules:
-
-- Keep UI components focused on presentation and interaction.
-- Keep controllers and route handlers thin.
-- Keep business rules in domain or service modules.
-- Keep database access in repository or infrastructure modules.
-- Do not bypass authentication or authorization boundaries.
-- Avoid circular dependencies and hidden global state.
-- Keep external integrations behind explicit interfaces.
+- Keep UI, controllers, business rules, persistence, and external integrations
+  in their respective layers.
+- Keep authentication and authorization boundaries intact; avoid circular
+  dependencies and hidden global state.
 
 ## 7. Requirements and Documentation
 
 Important behavior must be represented in durable project artifacts, not only in chat history.
 
-Keep the following chain synchronized:
+Keep durable project records synchronized through the stage sequence
+`01-product → 02-design → 03-planning → 04-implementation →
+05-review-release`. The exact artifact list and gate conditions belong to the
+`stage-gate` Skill and the templates.
 
-```text
-Raw Requirement (user-provided, unstructured)
-    ↓
-Baseline (baseline/, first-project intake only)
-    ↓
-Raw Requirement Library (iteration/raw-requirement/, user-owned and read-only; route-requirement returns target version)
-    ↓
-Product Requirement  (iteration/v{N}/01-product/v{N}-requirement.md)   # 需求 + 功能规格（FS 作为 FR 子项内嵌）
-    ↓
-Prototype Decision   (`prototype_required: true|false` in the requirement frontmatter)
-    ↓ (only when true)
-HTML Prototype       (iteration/v{N}/01-product/v{N}-prototype.html)
-    ↓
-Architecture Design   (iteration/v{N}/02-design/v{N}-architecture-design.md)
-+
-API Spec              (iteration/v{N}/02-design/v{N}-api-spec.md)
-+
-Database Dictionary   (iteration/v{N}/02-design/v{N}-database-dictionary.md)
-    ↓
-Task Plan DAG         (iteration/v{N}/03-planning/v{N}-task-plan-dag.md)
-+
-Validation Plan       (iteration/v{N}/03-planning/v{N}-validation-plan.md)
-    ↓
-Source Code           (iteration/v{N}/04-implementation/v{N}-source-code.md)   # 实施主记录 + ISSUE 列表
-+
-Test Results          (iteration/v{N}/04-implementation/v{N}-test-results.md)
-    ↓
-Review & Release      (iteration/v{N}/05-review-release/v{N}-review-release.md)   # 评审、合并、发布决定与 release notes
-    ↓
-Release Log           (iteration/v{N}/05-review-release/v{N}-release-log.md)    # 封档说明,RC 完成后产出（仅需存在,无需 Approved）
-```
+- For a new project, preserve the unstructured source in
+  `baseline/raw-requirement/`, pass the baseline gate, then create `v1.0`.
+- For an initialized project, preserve the source in
+  `iteration/raw-requirement/`, use `normalize-requirement` to route and
+  normalize it, then use `manage-iteration` for the target version.
+- Every iteration records its product requirement, prototype decision, design,
+  plan, implementation evidence, and release review under
+  `iteration/v{major}.{minor}/`. A prototype is required only when its
+  requirement frontmatter says so; the baseline core-flow prototype is always
+  required for a new project.
+- Release-log creation is the post-RC closing step and is an existence-only
+  condition; it does not require `status: Approved`.
 
 Update documentation when implementation changes:
 
@@ -255,129 +221,50 @@ Update documentation when implementation changes:
 
 Do not document behavior that the code does not actually provide.
 
-**Templates are shared across versions.** Any modification to `templates/` must be evaluated against in-flight versions before applying.
+**Templates are shared across versions.** Any modification to `templates/` must
+be evaluated against in-flight versions before applying.
 
 ## 8. Coding Standards
 
-- Use clear, intention-revealing names.
-- Keep functions and classes focused on one responsibility.
-- Prefer simple, explicit implementations over premature abstraction.
-- Handle expected errors explicitly.
-- Do not silently swallow exceptions or failures.
-- Add comments only when they explain why a non-obvious decision exists.
-- Preserve type safety and strict compiler settings when the project supports them.
-- Do not leave debug output, temporary files, or experimental code in production paths.
+Use clear names, focused functions, explicit error handling, and existing type
+and compiler settings. Prefer simple implementations, explain non-obvious
+decisions, and remove debug output or experimental code from production paths.
 
 ## 9. Testing and Verification
 
-Code is not complete until it has been verified.
-
-For behavior changes, add or update appropriate tests, including where relevant:
-
-- Happy paths.
-- Error cases.
-- Boundary conditions.
-- Authentication and authorization cases.
-- Data validation.
-- Regression cases.
-- Integration behavior.
-- End-to-end user flows.
-
-Run the project's actual commands rather than assuming a tool or framework. Typical checks may include:
-
-```text
-Format Check
-Lint
-Type Check
-Unit Tests
-Integration Tests
-End-to-End Tests
-Build
-Security Scan
-```
-
-Never claim that a test, build, or check passed unless it was actually run and its result was observed.
+Code is incomplete until the project's actual checks have run. Cover applicable
+happy paths, failures, boundaries, security, validation, regression,
+integration, and end-to-end behavior. Never claim a check passed without
+observed evidence; concrete framework commands are listed in §16.
 
 ## 10. Definition of Done
 
-A task is complete only when all applicable conditions are satisfied:
-
-### Functional
-
-- The requested behavior is implemented.
-- Approved acceptance criteria are satisfied.
-- Error and boundary cases are handled.
-
-### Technical
-
-- The project builds or starts successfully.
-- Relevant tests pass.
-- No obvious regression is introduced.
-- Code follows existing architecture and conventions.
-
-### Documentation
-
-- The relevant artifacts under `iteration/v{N}/<stage>/` are updated.
-- The baseline core user-flow prototype is present and approved for a new project; each iteration records whether an additional prototype is required and why.
-- The relevant baseline document (`baseline/`) is updated if scope changes affect project-level constants.
-- API or user documentation is updated when behavior changes.
-- Configuration or migration instructions are documented when needed.
-
-### Review
-
-- The diff has been self-reviewed.
-- Unrelated changes are removed.
-- Security and performance impact has been considered.
-- Remaining risks and assumptions are reported.
+Complete only when the requested behavior and approved acceptance criteria are
+implemented, relevant checks pass, architecture and documentation are current,
+the diff is self-reviewed, and remaining risks or assumptions are reported.
+For a new project, the approved baseline core-flow prototype is mandatory; each
+iteration must record its prototype decision.
 
 ## 11. Security and Privacy
 
-Always consider:
-
-- Authentication.
-- Authorization.
-- Input validation.
-- Output encoding.
-- Secret management.
-- Sensitive data exposure.
-- Dependency vulnerabilities.
-- Auditability.
-
-Never:
-
-- Commit passwords, API keys, tokens, private keys, or production credentials.
-- Print secrets or sensitive user data in logs.
-- Disable security checks to make tests pass.
-- Weaken authentication or authorization without explicit approval.
-- Send project or user data to an external service without authorization.
-
-Use placeholders and environment-based configuration in examples.
+Consider authentication, authorization, validation, encoding, secrets,
+dependency risk, sensitive data, and auditability. Never commit credentials,
+print sensitive data, weaken security to pass tests, or send project data to an
+external service without authorization. Use placeholders and environment-based
+configuration in examples.
 
 ## 12. Database and Data Changes
 
-- Treat production data as sensitive and potentially irreversible.
-- Use migrations for schema changes.
-- Do not rewrite an applied migration unless explicitly authorized.
-- Review destructive operations carefully.
-- Consider backward compatibility and rollback behavior.
-- Preserve tenant, user, and authorization scopes where applicable.
-- Add tests for constraints, indexes, validation, and migration behavior when relevant.
+Treat production data as sensitive and potentially irreversible. Use migrations,
+do not rewrite an applied migration without authorization, review destructive
+operations and rollback compatibility, preserve tenant/user scopes, and test
+constraints and migration behavior when relevant.
 
 ## 13. Performance and Reliability
 
-Do not optimize based only on assumptions. Measure when performance matters.
-
-Pay attention to:
-
-- Excessive database queries.
-- Unbounded memory usage.
-- Unnecessary network requests.
-- Missing pagination or batching.
-- Race conditions.
-- Timeouts and retries.
-- Idempotency.
-- Resource cleanup.
-- Observability and actionable error messages.
+Measure before optimizing. Review query and network volume, memory bounds,
+pagination, races, timeouts, retries, idempotency, cleanup, observability, and
+actionable error messages.
 
 ## 14. Git and Change Management
 
@@ -388,25 +275,16 @@ Pay attention to:
 - Use one branch or worktree per significant feature or fix when practical.
 - Keep generated artifacts separate from unrelated source changes.
 
-When this workflow is synchronized into an instance project, the instance owns its
-root `AGENTS.md`, root `README.md`, `.gitignore`, and `templates/`. The synchronized
-workflow copy (`.aw/.workflow/`, `.aw/.agents/`, and `.aw/README.md`) may exist
-locally for execution but is ignored by the instance Git configuration. The instance commits
-its `baseline/`, `iteration/`, `workspace/`, and `workspace/workflow/` state instead.
+When synchronized into an instance, the instance owns root `AGENTS.md`, root
+`README.md`, `.gitignore`, and `templates/`. The local execution copy
+(`.aw/.workflow/`, `.aw/.agents/`, `.aw/README.md`) is ignored; the instance
+commits `baseline/`, `iteration/`, `workspace/`, and `workspace/workflow/`.
 
-Commit messages should explain the change and its purpose. Use the project's existing convention; otherwise prefer:
+Commit messages should explain the change and use the project's existing
+convention; otherwise prefer:
 
 ```text
 <type>: <short description>
-```
-
-Examples:
-
-```text
-feat: add production order status workflow
-fix: reject invalid connector configuration
-test: add pipeline execution regression cases
-docs: update local development instructions
 ```
 
 ### Framework release versioning
@@ -427,60 +305,62 @@ source ref and commit used for synchronization.
 
 The agent MUST:
 
-- Read applicable rules and project context before acting.
-- Check `baseline/`, the relevant user-provided raw requirement, and the latest approved `iteration/v{N}/` before any artifact change.
-- Keep assumptions explicit.
-- Ask for clarification when ambiguity can materially change the result.
-- Prefer reversible operations.
-- Preserve user changes.
-- Use existing tools and patterns before inventing new ones.
-- Stop and report when a required dependency, permission, or decision is missing.
-- Report verification evidence accurately.
-- Use stable IDs across versions to enable traceability.
+- Read applicable rules, `baseline/`, the relevant raw requirement, and the
+  latest approved `iteration/v{major}.{minor}/` before artifact changes.
+- Keep assumptions explicit, ask when ambiguity can materially change the
+  result, and preserve user changes with reversible operations.
+- Reuse existing tools and patterns, stop when a required dependency or decision
+  is missing, and report evidence accurately using stable IDs.
 
 The agent MUST NOT:
 
-- Pretend that requirements are clearer than they are.
-- Hide failed checks or unresolved risks.
-- Remove tests to make a build pass.
-- Make unrelated architectural changes.
-- Use destructive commands without explicit authorization.
-- Claim completion without verification.
-- Modify an artifact under `iteration/v{N}/` when the task targets `v{N+1}` (cross-version contamination).
-- Skip the `stage-gate` check before creating `iteration/v1/`, or normalize a user-provided raw requirement without preserving its source and routing decision.
-- Add or change any artifact frontmatter value to `status: Approved`. The agent must instead hand off the draft or `In Review` artifacts, their paths, and validation evidence for human review.
+- Pretend requirements are clear, hide failures or risks, remove tests to pass,
+  make unrelated architectural changes, use destructive commands without
+  authorization, or claim completion without verification.
+- Modify an artifact in a different iteration from the task target, skip the
+  baseline gate before creating `v1.0`, or normalize raw input without
+  preserving its source and routing decision.
+- Set or change any artifact frontmatter to `status: Approved`; hand off
+  `draft` / `In Review` artifacts with paths and validation evidence for human
+  review instead.
 
 ## 16. Project-Specific Overrides
 
-Projects should extend this file with concrete values for:
+The following values apply to the AlchemyWorks framework source repository:
 
-- Technology stack (must agree with `baseline/03-tech-stack-decision.md`).
-- Directory structure (must follow the `baseline/ + iteration/ + templates/ + workspace/` convention).
-- Package manager.
-- Build command.
-- Lint and type-check commands.
-- Unit, integration, and end-to-end test commands.
-- Deployment process.
-- Database migration process.
-- Required security checks.
-- Commit and pull-request conventions.
+- Technology stack: Python `>=3.11`; standard-library-only runtime; GitHub Actions for CI and framework releases.
+- Directory structure: `.workflow/` for CLI, scripts, dashboard, and source-only regression tests; `.agents/skills/` for Skills; `templates/` for instance defaults; root `AGENTS.md` and `README.md` for framework governance and entry guidance.
+- Package manager: none required by the framework; use the configured Python interpreter directly.
+- Build command: not applicable; syntax verification is `python -m compileall -q .workflow`.
+- Lint command: no linter is configured; run `git diff --check` for whitespace errors before commit.
+- Type-check command: none configured for this standard-library Python framework.
+- Unit, integration, and end-to-end test command: `python .workflow/tests/test_workflow.py` (the current suite is the framework's combined regression suite; separate unit/integration/e2e commands are not defined).
+- Deployment process: no runtime deployment; framework releases are produced by `.github/workflows/release.yml` from versioned Git commits and tags.
+- Database migration process: not applicable; the framework has no database schema or migration system.
+- Required security checks: no automated security scan is configured; manually verify that credentials and private data are not committed and review workflow and dependency changes before merge.
+- Commit and pull-request conventions: use `<type>: <short description>`; keep workflow-core changes in a dedicated maintenance change and require review before merging to `main`.
 
-Project-specific rules should be precise, executable, and consistent with the approved architecture and baseline.
+An initialized instance must replace or extend the instance-specific rows above with concrete values from its approved `baseline/03-tech-stack-decision.md`, architecture, and validation plan before implementation begins. At minimum, the instance root `AGENTS.md` must name its package manager, build/start command, lint/type-check command or explicit `not configured` value, test commands, deployment process, migration process or `not applicable`, required security checks, and commit/PR convention. Project-specific rules must be precise, executable, and consistent with the approved architecture and baseline.
 
 ## 17. Versioning and Archive Rules
 
-Iterations use a two-segment identifier **`v{major}.{minor}`** (e.g. `v1.0`, `v1.1`, `v2.0`). The major segment changes on baseline-level shifts (new project, architecture reset, tech-stack swap, major feature sets); the minor segment changes on incremental work (additive features, bug fixes, experience refinements) on top of the same baseline.
+Iterations use the two-segment identifier **`v{major}.{minor}`**. The major
+segment changes only for a baseline-level shift; incremental work advances the
+minor segment. The CLI and `manage-iteration` Skill own parsing, discovery,
+creation, and archive mechanics; this section states the invariants:
 
-- **Format**: `v{major}.{minor}`. Plain `v{N}` is accepted as a backward-compatibility alias for `v{N}.0`.
-- **Monotonic**: within the same major, minor numbers are monotonic integers; major numbers are monotonic integers. Never reuse a pair.
-- **Directory layout**:
-  - Active versions live under `iteration/v{major}.{minor}/`.
-  - All versioned artifacts use the `v{major}.{minor}-` filename prefix.
-  - Cross-version references in frontmatter must point to a real existing iteration (e.g. `base_version: v1.0`).
-- **RC-complete** is reached only when the release log has been drafted, `iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-review-release.md` has `status: Approved`, and `iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-release-log.md` exists. The release log is an existence-only gate: its frontmatter `status` is not required to be `Approved`. In the framework source repository, the related Skill is `.agents/skills/release-log/SKILL.md`; in an instance, it is `.aw/.agents/skills/release-log/SKILL.md`.
-- After `05-review-release` passes, the workflow automatically regenerates the marked current-system-functionality section in the instance root `README.md` from the current iteration's `iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-release-log.md`. The release-log §2.1-§2.4 (delivery list), §3 (closed-issue list), and §7 (limits / assumptions) are extracted into that section, and the `<!-- workflow:current-system-functionality-version: v{major}.{minor} -->` marker is refreshed. Other root README content remains instance-owned. `workspace/README.md` only explains workspace conventions and does not carry system functionality.
-- When the next consecutive version is successfully created, archive that completed predecessor to `iteration/archive/v{major}.{minor}/`. The predecessor must first pass the `05-review-release` gate and the instance root README refresh check; the first version (`v1.0`) has no predecessor to archive.
-- Never skip a version number — `v1.1` cannot jump to `v1.3`.
-- **Discovery**: `discover_iteration()` returns the numerically highest `(major, minor)` pair present under `iteration/`. When no directory exists yet, it returns `v1.0`.
-- **Archived versions are read-only**; any correction must be done in a new version.
-- **The `baseline/` is not versioned**; changes go through ADR.
+- `v{N}` is accepted only as a CLI compatibility alias for `v{N}.0`; it must
+  not appear in normative paths, filenames, or version arithmetic.
+- The next consecutive version after `v{major}.{minor}` is
+  `v{major}.{minor+1}`. A major bump to `v{major+1}.0` requires an explicit
+  baseline-level shift. Never reuse or skip a pair.
+- Active artifacts use `iteration/v{major}.{minor}/` and the same version prefix
+  in filenames. Cross-version frontmatter references must point to an existing
+  iteration. Archived versions under `iteration/archive/` are read-only.
+- RC-complete requires an Approved `05-review-release` artifact and an existing
+  release log. The release log is existence-only; its status need not be
+  Approved. The detailed closing procedure belongs to `review-release` and
+  `release-log`.
+- After RC completion, the workflow refreshes only the marked functionality
+  section of the instance root `README.md`. The next version is created before
+  the completed predecessor is archived; `baseline/` is not versioned.

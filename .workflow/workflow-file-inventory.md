@@ -23,6 +23,22 @@
 - Instance-owned `AGENTS.md`, root `README.md`, `templates/`, `baseline/`, `iteration/`, `workspace/`, and `workspace/workflow/` remain outside the synchronized `.aw/` copy and are tracked by the instance project.
 - `sync` must not be used to make framework source paths and instance paths interchangeable: the source-to-instance mapping is intentional and is defined by `WORKFLOW_SYNC_ITEMS`.
 
+### 1.3 Rule Ownership Map
+
+The same rule must have one authoritative owner. Other layers may summarize or
+link to it, but must not introduce a competing interpretation:
+
+| Rule category | Authoritative owner | Role of the other layers |
+|---|---|---|
+| Source priority, approval boundary, version scope, security, and agent conduct | `AGENTS.md` | Skills and README explain the application; CLI may reject objectively invalid states. |
+| Version parsing/discovery, stage validation, required paths, archive preconditions, README marker checks, generated state, and protected-core dirty checks | `.workflow/workflow.py` plus regression tests | `AGENTS.md` states the invariant; `workflow-governance` and `manage-iteration` document how to invoke it. |
+| Stage procedure, raw-requirement handling, artifact authoring, review evidence, and human decision checklists | `.agents/skills/*/SKILL.md` | `AGENTS.md` keeps only the non-negotiable boundary and links to the Skill. |
+| Command reference, examples, synchronization walkthroughs, and troubleshooting | `.workflow/README.md` and root `README.md` | `AGENTS.md` points to the relevant reference and does not duplicate the command manual. |
+| Workflow-owned path inventory and source-to-instance mapping | This inventory | `AGENTS.md` and README use the mapping; sync code follows `WORKFLOW_SYNC_ITEMS`. |
+
+When a rule changes, update its authoritative owner and the dependent summary,
+tests, and synchronization inputs in the same workflow-maintenance change.
+
 ## 2. Required Top-Level Governance Files
 
 | Path | Type | Purpose |
@@ -64,7 +80,7 @@ versions.
 | `.aw/.agents/skills/planning-validation/` | `SKILL.md` | 03-planning TASK DAG, acceptance-coverage, and validation-plan constraints. |
 | `.aw/.agents/skills/iterate-implementation/` | `SKILL.md` | Implementation-stage code, tests, and record constraints; v1.0 keeps a standalone `issue-fixes.md`, v1.1+ merges ISSUE records into `source-code.md`. |
 | `.aw/.agents/skills/review-release/` | `SKILL.md` | 05-review-release review evidence, risks, rollback, and release-decision constraints. |
-| `.aw/.agents/skills/release-log/` | `SKILL.md` | 05-review-release closing artifact (`v{N}-release-log.md`); existence-only contract, no `status: Approved` check. |
+| `.aw/.agents/skills/release-log/` | `SKILL.md` | 05-review-release closing artifact (`v{major}.{minor}-release-log.md`); existence-only contract, no `status: Approved` check. |
 | `.aw/.agents/skills/workflow-governance/` | `SKILL.md` | Sole operational entry point for the workflow CLI: index, state, validate, traceability, Context Pack, and task-finished commands. |
 
 ## 5. Required Cross-Project Template Directory

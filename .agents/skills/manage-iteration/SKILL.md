@@ -1,6 +1,6 @@
 ---
 name: manage-iteration
-description: Use when creating a new iteration directory (iteration/v{N}/), archiving a previous iteration to iteration/archive/, or resolving the current active iteration reference. Centralizes all iteration-number operations.
+description: Use when creating a new iteration directory (iteration/v{major}.{minor}/), archiving a previous iteration to iteration/archive/, or resolving the current active iteration reference. Centralizes all iteration-number operations.
 ---
 
 # Manage Iteration
@@ -9,9 +9,9 @@ description: Use when creating a new iteration directory (iteration/v{N}/), arch
 
 Centralize every iteration-number operation. The iteration identifier format is `v{major}.{minor}`; see AGENTS.md §17 for the full versioning rules.
 
-1. **Detect the next iteration number**: scan the existing `v{N}(.{M})?/` directories under `iteration/`, and return `v{N+1}.0` (major bump) or `v{N}.{M+1}` (minor bump).
-2. **Create a new iteration skeleton**: create the five empty delivery-stage subdirectories under `iteration/v{N}/`; raw user requirements are stored centrally under `iteration/raw-requirement/`.
-3. **Archive a finished iteration**: after the next consecutive version's skeleton is created successfully and the instance root `README.md` has merged the RC-complete predecessor's functionality into the current system-functionality section, move the predecessor wholesale to `iteration/archive/v{N}/` and record the archive time.
+1. **Detect the next iteration number**: scan existing `v{major}.{minor}/` directories under `iteration/` and return the next consecutive pair.
+2. **Create a new iteration skeleton**: create the five empty delivery-stage subdirectories under `iteration/v{major}.{minor}/`; raw user requirements are stored centrally under `iteration/raw-requirement/`.
+3. **Archive a finished iteration**: after the next consecutive version's skeleton is created successfully and the instance root `README.md` has merged the RC-complete predecessor's functionality into the current system-functionality section, move the predecessor wholesale to `iteration/archive/v{major}.{minor}/` and record the archive time.
 4. **Resolve the active iteration**: return the latest Approved iteration number for use by other skills.
 
 ## Path Conventions
@@ -19,10 +19,10 @@ Centralize every iteration-number operation. The iteration identifier format is 
 ```text
 Project Root
 ├── iteration/
-│   ├── v1/                                  ← currently active
-│   ├── v2/                                  ← currently active
+│   ├── v1.0/                                ← currently active
+│   ├── v1.1/                                ← currently active
 │   └── archive/
-│       └── v1/                              ← RC-complete snapshot
+│       └── v1.0/                            ← RC-complete snapshot
 ```
 
 ## Operations
@@ -40,7 +40,7 @@ python .aw/.workflow/workflow.py init-version
 
 ### 1. Detect Next Version
 
-Scan the `v{N}(.{M})?/` directory names under `iteration/` and return the next iteration number.
+Scan the `v{major}.{minor}/` directory names under `iteration/` and return the next consecutive version number.
 
 ```python
 import re
@@ -74,7 +74,7 @@ def next_version(iteration_dir: Path) -> str:
 ### 2. Create New Version Skeleton
 
 ```text
-iteration/v{N}/
+iteration/v{major}.{minor}/
 ├── 01-product/
 ├── 02-design/
 ├── 03-planning/
@@ -91,17 +91,17 @@ Trigger: after the next consecutive version's skeleton has been created successf
 Execution steps:
 
 1. Create the next consecutive version's five stage directories; if this step fails, do not archive.
-2. Create the `iteration/archive/v{N}/` directory (where `{N}` is the predecessor's iteration number, such as `v1.0` or `v1.1`).
-3. Move **all content** under `iteration/v{N}/` into `iteration/archive/v{N}/`.
-4. Write the archive metadata into `iteration/archive/v{N}/ARCHIVED.md`:
+2. Create the `iteration/archive/v{major}.{minor}/` directory for the predecessor.
+3. Move **all content** under `iteration/v{major}.{minor}/` into `iteration/archive/v{major}.{minor}/`.
+4. Write the archive metadata into `iteration/archive/v{major}.{minor}/ARCHIVED.md`:
 
 ```text
-# Archive: v{N}
+# Archive: v{major}.{minor}
 
 - archived_at: YYYY-MM-DD
 - superseded_by: v{next_major}.{next_minor}
-- rc_artifact: iteration/v{N}/05-review-release/v{N}-review-release.md
-- release_log: iteration/v{N}/05-review-release/v{N}-release-log.md  (reference)
+- rc_artifact: iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-review-release.md
+- release_log: iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-release-log.md  (reference)
 - note: this directory is read-only; do not modify.
 ```
 
@@ -138,7 +138,7 @@ Return the latest **Approved** iteration number:
 |---|---|
 | Directly `mkdir iteration/v1.1/` without invoking this skill | Use manage-iteration so the references and archive chain stay complete. |
 | Archive the predecessor but forget to write the release log | Prompt the user: `v{major}.{minor}-release-log.md` must exist (it is required to exist before `05-review-release` passes; no extra write is needed before archive). |
-| Manually edit files under `iteration/archive/v{N}/` | Block; if a correction is needed, open a new iteration. |
+| Manually edit files under `iteration/archive/v{major}.{minor}/` | Block; if a correction is needed, open a new iteration. |
 Instance documentation ownership: `AGENTS.md` and root `README.md` are created during initialization and then remain instance-owned; `sync` updates only `.aw/README.md` and other workflow files. The root README's marked current-system-functionality section is refreshed after 05-review-release, while `workspace/README.md` remains static workspace guidance.
 
 This ownership rule supersedes any earlier wording in this skill that describes the root README as framework-owned.
