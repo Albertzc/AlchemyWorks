@@ -1237,6 +1237,249 @@ def check_readme_freshness(errors: list[str]) -> None:
             )
 
 
+_FUNCTIONAL_ID_RE = re.compile(r"^(FR|BR)-\d+$")
+_FUNCTIONAL_DEFINITION_RE = re.compile(
+    r"^\s*(?:[-*]\s*)?(?:#{1,6}\s*)?\*\*(FR|BR)-([0-9]+)\*\*\s*[：:—–-]\s*(.*)$"
+)
+_FUNCTIONAL_PLAIN_DEFINITION_RE = re.compile(
+    r"^\s*(?:[-*]\s*)?(?:#{1,6}\s*)?(FR|BR)-([0-9]+)\s*[：:—–-]\s*(.*)$"
+)
+_FUNCTIONAL_TABLE_ROW_RE = re.compile(r"^\s*\|\s*\*?(FR|BR)-([0-9]+)\*?\s*\|(.*)\|\s*$")
+
+
+def _functionality_version_directories(iteration: str) -> list[tuple[str, Path]]:
+    """Return the active and archived iteration history through ``iteration``."""
+    target = canonical_iteration(iteration)
+    target_number = iteration_number(target)
+    found: dict[tuple[int, int], tuple[str, Path]] = {}
+    for base in (ROOT / "iteration", ROOT / "iteration" / "archive"):
+        if not base.exists():
+            continue
+        for path in base.iterdir():
+            if not path.is_dir():
+                continue
+            match = re.fullmatch(r"v(\d+)(?:\.(\d+))?", path.name)
+            if not match:
+                continue
+            version = (int(match.group(1)), int(match.group(2) or 0))
+            if version > target_number:
+                continue
+            if version in found:
+                previous = found[version][1]
+                raise ValueError(
+                    f"ambiguous iteration history for {path.name}: "
+                    f"both {previous.relative_to(ROOT).as_posix()} and {path.relative_to(ROOT).as_posix()} exist"
+                )
+            found[version] = (f"v{version[0]}.{version[1]}", path)
+    if target_number not in found:
+        raise ValueError(f"iteration history does not contain target {target}")
+    if (1, 0) not in found:
+        raise ValueError(f"iteration history is missing v1.0 before target {target}")
+    return [found[key] for key in sorted(found)]
+
+
+def _extract_functional_definitions(text: str, *, version: str, relative_path: str) -> dict[str, str]:
+    """Extract FR/BR definition blocks only from recognized requirement sections."""
+    section_lines: list[str] = []
+    in_functional_section = False
+    found_section = False
+    in_fence = False
+    for line in text.splitlines():
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        heading = re.match(r"^##\s+(?:\d+\.\s*)?(.+?)\s*$", line)
+        if heading and not in_fence:
+            title = heading.group(1).strip()
+            is_functional = bool(re.search(r"功能需求|功能规格|业务规则|功能清单", title))
+            if is_functional:
+                in_functional_section = True
+                found_section = True
+                continue
+            in_functional_section = False
+        if in_functional_section and not in_fence:
+            section_lines.append(line)
+    if not found_section:
+        raise ValueError(f"cannot parse functional requirement sections in {version}: {relative_path}")
+
+    definitions: dict[str, str] = {}
+    current_id: str | None = None
+    current_lines: list[str] = []
+
+    def save_current() -> None:
+        if current_id is None:
+            return
+        description = " ".join(part.strip() for part in current_lines if part.strip())
+        description = re.sub(r"\s+", " ", description).strip()
+        description = re.sub(r"\*\*", "", description)
+        description = re.sub(r"`([^`]*)`", r"\1", description)
+        if not description:
+            raise ValueError(f"empty functional definition {current_id} in {version}: {relative_path}")
+        if current_id in definitions:
+            raise ValueError(f"duplicate functional definition {current_id} in {version}: {relative_path}")
+        definitions[current_id] = f"{current_id}：{description}"
+
+    for line in section_lines:
+        table_match = _FUNCTIONAL_TABLE_ROW_RE.match(line)
+        if table_match:
+            save_current()
+            identifier = f"{table_match.group(1)}-{table_match.group(2)}"
+            cells = [cell.strip() for cell in table_match.group(3).split("|")]
+            description = " ".join(cell for cell in cells if cell and not re.fullmatch(r"[-: ]+", cell))
+            description = re.sub(r"\*\*", "", description).strip()
+            if identifier in definitions:
+                raise ValueError(f"duplicate functional definition {identifier} in {version}: {relative_path}")
+            if description:
+                definitions[identifier] = f"{identifier}：{description}"
+            current_id = None
+            current_lines = []
+            continue
+        match = _FUNCTIONAL_DEFINITION_RE.match(line) or _FUNCTIONAL_PLAIN_DEFINITION_RE.match(line)
+        if match:
+            save_current()
+            current_id = f"{match.group(1)}-{match.group(2)}"
+            current_lines = [match.group(3)]
+        elif current_id is not None:
+            current_lines.append(line)
+    save_current()
+    return definitions
+
+
+def _declared_functional_changes(text: str, *, version: str, relative_path: str) -> dict[str, list[str]]:
+    """Read change_set keys strictly so unsupported operations are not ignored."""
+    declared = {"added": [], "modified": [], "deprecated": []}
+    if not (text.startswith("---\n") or text.startswith("---\r\n")):
+        return declared
+    lines = text.splitlines()
+    try:
+        end = lines.index("---", 1)
+    except ValueError:
+        return declared
+    in_change_set = False
+    seen: set[str] = set()
+    for line in lines[1:end]:
+        if re.match(r"^change_set:\s*$", line):
+            in_change_set = True
+            continue
+        if in_change_set and line and not line[0].isspace():
+            in_change_set = False
+        if not in_change_set:
+            continue
+        match = re.match(r"^\s+([A-Za-z_][\w-]*):\s*\[(.*?)\]\s*$", line)
+        if not match:
+            continue
+        operation, raw_ids = match.groups()
+        if operation not in declared:
+            raise ValueError(f"unknown change_set operation '{operation}' in {version}: {relative_path}")
+        ids = [token for token in re.split(r"[\s,]+", raw_ids.strip()) if token]
+        for identifier in ids:
+            if not re.fullmatch(r"(?:FR|BR|NFR|AC)-\d+", identifier):
+                raise ValueError(f"invalid change_set ID '{identifier}' in {version}: {relative_path}")
+            if identifier in seen:
+                raise ValueError(f"duplicate change_set ID {identifier} across operations in {version}: {relative_path}")
+            seen.add(identifier)
+            if _FUNCTIONAL_ID_RE.fullmatch(identifier):
+                declared[operation].append(identifier)
+    return declared
+
+
+def _brief_functional_description(description: str) -> str:
+    """Keep README catalog entries readable while preserving full definitions for replay comparisons."""
+    _, _, text = description.partition("：")
+    text = text.strip()
+    sentence_ends = [position for mark in ("。", "；") if (position := text.find(mark)) >= 0]
+    if sentence_ends:
+        return text[: min(sentence_ends) + 1]
+    if len(text) > 220:
+        return text[:217].rstrip() + "…"
+    return text
+
+
+def functionality_history(
+    iteration: str,
+) -> tuple[dict[str, str], dict[str, list[str]], list[str]]:
+    """Replay approved product requirements into the active FR/BR catalog."""
+    target = canonical_iteration(iteration)
+    catalog: dict[str, str] = {}
+    warnings: list[str] = []
+    effective = {"added": [], "modified": [], "deprecated": []}
+    for version, version_dir in _functionality_version_directories(target):
+        requirement = version_dir / "01-product" / f"{version_dir.name}-requirement.md"
+        relative = requirement.relative_to(ROOT).as_posix()
+        if not requirement.exists():
+            raise ValueError(f"approved requirement missing for {version}: {relative}")
+        text = requirement.read_text(encoding="utf-8")
+        metadata, _ = parse_frontmatter(text)
+        if metadata.get("status", "").lower() != "approved":
+            raise ValueError(f"requirement must be Approved for {version}: {relative}")
+        definitions = _extract_functional_definitions(text, version=version, relative_path=relative)
+        if iteration_number(version) == (1, 0):
+            catalog.update(definitions)
+            if iteration_number(version) == iteration_number(target):
+                effective["added"] = sorted(definitions)
+            continue
+
+        declared = _declared_functional_changes(text, version=version, relative_path=relative)
+        previous = dict(catalog)
+        effective_added: list[str] = []
+        effective_modified: list[str] = []
+        inferred_added: list[str] = []
+        inferred_modified: list[str] = []
+        for identifier in declared["added"]:
+            if identifier not in definitions:
+                raise ValueError(f"added ID {identifier} has no definition in {version}: {relative}")
+            if identifier in previous:
+                warnings.append(
+                    f"{version}: {identifier} is declared in change_set.added but already exists; "
+                    f"treated as modified from {relative}"
+                )
+                catalog[identifier] = definitions[identifier]
+                effective_modified.append(identifier)
+            else:
+                catalog[identifier] = definitions[identifier]
+                effective_added.append(identifier)
+        for identifier in declared["modified"]:
+            if identifier not in definitions:
+                raise ValueError(f"modified ID {identifier} has no definition in {version}: {relative}")
+            if identifier not in previous:
+                warnings.append(
+                    f"{version}: {identifier} is declared in change_set.modified but is absent from the prior catalog; "
+                    f"treated as added from {relative}"
+                )
+                catalog[identifier] = definitions[identifier]
+                effective_added.append(identifier)
+            else:
+                catalog[identifier] = definitions[identifier]
+                effective_modified.append(identifier)
+        for identifier in declared["deprecated"]:
+            if identifier not in previous:
+                raise ValueError(f"deprecated ID {identifier} does not exist in {version}: {relative}")
+            if identifier in definitions:
+                raise ValueError(f"deprecated ID {identifier} still has a definition in {version}: {relative}")
+            catalog.pop(identifier)
+
+        for identifier, definition in definitions.items():
+            if identifier not in previous and identifier not in declared["added"] and identifier not in declared["modified"]:
+                inferred_added.append(identifier)
+                effective_added.append(identifier)
+                catalog[identifier] = definition
+            elif identifier in previous and definition != previous[identifier] and identifier not in declared["modified"] and identifier not in declared["added"]:
+                inferred_modified.append(identifier)
+                effective_modified.append(identifier)
+                catalog[identifier] = definition
+        for identifier in sorted(inferred_added):
+            warnings.append(f"{version}: {identifier} is defined in {relative} but omitted from change_set.added; included automatically")
+        for identifier in sorted(inferred_modified):
+            warnings.append(f"{version}: {identifier} changed in {relative} but omitted from change_set.modified; included automatically")
+        if iteration_number(version) == iteration_number(target):
+            effective = {
+                "added": sorted(set(effective_added)),
+                "modified": sorted(set(effective_modified)),
+                "deprecated": sorted(declared["deprecated"]),
+            }
+    return dict(sorted(catalog.items())), effective, warnings
+
+
 def check_instance_readme_freshness(iteration: str, errors: list[str]) -> None:
     """Require the project-owned root README to contain current functionality."""
     iteration = canonical_iteration(iteration)
@@ -1245,14 +1488,30 @@ def check_instance_readme_freshness(iteration: str, errors: list[str]) -> None:
         errors.append("README.md missing; required before version archive")
         return
     text = readme.read_text(encoding="utf-8")
-    marker = f"<!-- workflow:current-system-functionality-version: {iteration} -->"
-    if marker not in text:
-        errors.append(
-            f"README.md is not refreshed for {iteration}; "
-            f"add marker '{marker}' after merging the version functionality"
-        )
     if "## 当前系统功能说明" not in text:
         errors.append("README.md missing required heading: ## 当前系统功能说明")
+    start_marker = "<!-- workflow:current-system-functionality:start -->"
+    end_marker = "<!-- workflow:current-system-functionality:end -->"
+    if text.count(start_marker) != 1 or text.count(end_marker) != 1:
+        errors.append("README.md must contain exactly one current-system-functionality marker pair")
+        return
+    start = text.index(start_marker) + len(start_marker)
+    end = text.index(end_marker)
+    if end < start:
+        errors.append("README.md current-system-functionality markers are out of order")
+        return
+    try:
+        expected, _ = render_instance_readme_section(iteration)
+    except ValueError as exc:
+        errors.append(f"README.md cannot be checked for {iteration}: {exc}")
+        return
+    actual = text[start:end]
+    expected_section = "\n" + expected
+    if actual != expected_section:
+        errors.append(
+            f"README.md current-system-functionality content is stale for {iteration}; "
+            "run the 05-review-release validation to regenerate it"
+        )
 
 
 # Backward-compatible alias for callers using the intermediate workspace name.
@@ -1344,53 +1603,72 @@ def _extract_release_log_entries(release_log_path: Path) -> dict[str, list[str]]
     }
 
 
-def generate_instance_readme(iteration: str) -> None:
-    """Refresh the marked functionality section in the project root README."""
-    requested_iteration = iteration
+def render_instance_readme_section(iteration: str) -> tuple[str, list[str]]:
+    """Render cumulative current functionality and this version's functional delta."""
     iteration = canonical_iteration(iteration)
-    release_log = ROOT / f"iteration/{iteration}/05-review-release/{iteration}-release-log.md"
-    if not release_log.exists() and requested_iteration != iteration:
-        release_log = ROOT / f"iteration/{requested_iteration}/05-review-release/{requested_iteration}-release-log.md"
+    history = _functionality_version_directories(iteration)
+    catalog, delta, warnings = functionality_history(iteration)
+    target_dir = history[-1][1]
+    release_log = target_dir / "05-review-release" / f"{target_dir.name}-release-log.md"
     if not release_log.exists():
-        raise ValueError(f"README source missing: {release_log.relative_to(ROOT)}")
+        raise ValueError(f"README source missing: {release_log.relative_to(ROOT).as_posix()}")
     entries = _extract_release_log_entries(release_log)
+    previous_catalog: dict[str, str] = {}
+    if len(history) > 1:
+        previous_catalog, _, _ = functionality_history(history[-2][0])
 
-    sections: list[str] = []
-    if entries["frs"]:
-        sections.append("### 新增功能\n\n" + "\n".join(f"- {line}" for line in entries["frs"]))
-    if entries["optimizations"]:
-        sections.append("### 体验优化\n\n" + "\n".join(f"- {line}" for line in entries["optimizations"]))
-    if entries["brs"]:
-        sections.append("### 业务规则\n\n" + "\n".join(f"- {line}" for line in entries["brs"]))
-    if entries["acs"]:
-        sections.append("### 验收标准\n\n" + "\n".join(f"- {line}" for line in entries["acs"]))
-    if entries["fixes"]:
-        sections.append("### 修复项\n\n" + "\n".join(f"- {line}" for line in entries["fixes"]))
-
-    body_parts: list[str] = []
-    if sections:
-        body_parts.append("\n\n".join(sections))
-    if entries["limits"]:
-        body_parts.append("## 已知限制与假设\n\n" + "\n".join(f"- {line}" for line in entries["limits"]))
-
-    body_text = "\n\n".join(body_parts) if body_parts else "本版本暂无已登记的功能交付项。"
+    parts = [f"## 当前功能\n\n" + (
+        "\n".join(f"- **{identifier}**：{_brief_functional_description(description)}" for identifier, description in catalog.items())
+        if catalog else "当前暂无已登记的 FR/BR 功能。"
+    )]
+    changes: list[str] = []
+    for title, key in (("新增", "added"), ("增强", "modified"), ("移除", "deprecated")):
+        identifiers = delta[key]
+        if not identifiers:
+            continue
+        rows = []
+        for identifier in identifiers:
+            source = previous_catalog if key == "deprecated" else catalog
+            description = source.get(identifier, identifier)
+            label = _brief_functional_description(description) if "：" in description else description
+            rows.append(f"- **{identifier}**：{label}")
+        changes.append(f"### {title}\n\n" + "\n".join(rows))
+    if changes:
+        parts.append("## 本版本变更\n\n" + "\n\n".join(changes))
+    else:
+        parts.append("## 本版本变更\n\n本版本无功能变化。")
+    limits = "\n".join(f"- {line}" for line in entries["limits"])
+    parts.append(
+        "## 已知限制与假设\n\n" + (limits or "本版本暂无已登记的限制与假设。")
+    )
     generated = (
         f"<!-- workflow:current-system-functionality-version: {iteration} -->\n\n"
-        + body_text
+        + "\n\n".join(parts)
         + "\n"
     )
+    return generated, warnings
+
+
+def generate_instance_readme(iteration: str) -> None:
+    """Atomically refresh the marked functionality section in the project root README."""
+    iteration = canonical_iteration(iteration)
     start_marker = "<!-- workflow:current-system-functionality:start -->"
     end_marker = "<!-- workflow:current-system-functionality:end -->"
     readme_path = ROOT / "README.md"
-    existing = readme_path.read_text(encoding="utf-8") if readme_path.exists() else instance_readme_intro("Instance")
-    start = existing.find(start_marker)
-    end = existing.find(end_marker, start + len(start_marker)) if start >= 0 else -1
-    section = start_marker + "\n" + generated + end_marker
-    if start >= 0 and end >= 0:
-        content = existing[:start] + section + existing[end + len(end_marker):]
-    else:
-        content = existing.rstrip() + "\n\n## 当前系统功能说明\n\n" + section + "\n"
+    if not readme_path.exists():
+        raise ValueError("README.md missing; initialize the instance README before generation")
+    existing = readme_path.read_text(encoding="utf-8")
+    if existing.count(start_marker) != 1 or existing.count(end_marker) != 1:
+        raise ValueError("README.md must contain exactly one current-system-functionality marker pair")
+    start = existing.index(start_marker)
+    end = existing.index(end_marker)
+    if end < start + len(start_marker):
+        raise ValueError("README.md current-system-functionality markers are out of order")
+    generated, warnings = render_instance_readme_section(iteration)
+    content = existing[:start] + start_marker + "\n" + generated + end_marker + existing[end + len(end_marker):]
     write_text_atomic(readme_path, content)
+    for warning in warnings:
+        print(f"WARNING functionality history: {warning}")
 
 
 # Compatibility alias for callers using the old function name.

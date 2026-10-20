@@ -75,7 +75,7 @@ python .aw/.workflow/workflow.py index --iteration v1.0
 | `baseline/` | 实例项目的 baseline 产物和用户原始输入 | `init-instance` 创建；`normalize-requirement` 起草，人工审核后进入门禁 | 提交 |
 | `iteration/raw-requirement/` | 实例项目按 intake 批次集中存放的用户原始需求 | `init-instance` 创建；`archive-requirement` 归档并写入来源索引；Agent 只读 | 提交 |
 | `iteration/v{major}.{minor}/`、`iteration/archive/` | 实例项目的版本产物和归档快照 | `init-version` 创建/归档，阶段 Skill 产出文档 | 提交 |
-| `README.md` | 实例项目当前系统功能说明和项目入口 | 初始化时创建；05 阶段根据 release-log 更新标记区域 | 提交 |
+| `README.md` | 实例项目当前系统功能说明和项目入口 | 初始化时创建；05 阶段根据 Approved 需求历史、当前功能变更和 release-log 限制自动重建标记区域，不增加单独 README 审核 | 提交 |
 | `workspace/`（含 `workspace/workflow/`） | 实例项目的代码、配置、测试、workspace 原理说明和可再生追溯状态 | 初始化时生成 `workspace/README.md` 目录说明；04 阶段写入业务代码；`index`/`state`/`refresh` 生成状态；workspace README 不承载系统功能 | 提交 |
 | `.aw/workflow-version.yaml` | 实例本地工作流源版本信息 | `init-instance` / `sync` 写入；实例 Git 忽略 | 不提交 |
 
@@ -171,7 +171,7 @@ iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 - HTML 原型还必须保留审核 frontmatter：`reviewer`、`reviewed_at`、`review_notes`；只有 `status: Approved` 且审核人/时间/结论齐全时，原型门禁才会通过。
 - `Approved` 状态下若含占位词（`TODO` / `TBD` / `XXX` / `[待确认]` / `[未提供]` / `占位`），validate 视为 unresolved blocker
 - 上游产物必须 Approved 才能作为下游阶段的正式输入
-- 05-review-release 通过后，CLI 根据当前版本 release-log 更新实例根 `README.md` 的 `## 当前系统功能说明`，并更新 `<!-- workflow:current-system-functionality-version: v{major}.{minor} -->`；`init-version` 会在归档前再次校验，失败时不移动旧版本。
+- 05-review-release 通过后，CLI 从 v1.0 到当前版本（包含归档版本）的 Approved 产品需求重建完整 FR/BR 功能目录，并用当前版本 release-log 的已知限制与假设更新实例根 `README.md` 标记区域。`change_set.added` / `modified` 遗漏时，CLI 根据需求定义推断并输出警告；删除只能通过 `change_set.deprecated` 声明。该 README 自动生成，不增加单独人工审核；现有 05-review-release 审核门禁不变。CLI 按生成后的完整内容检查新鲜度，`init-version` 归档前会再次校验并刷新前一版本的 README。
 - `workspace/README.md` 只描述 workspace 的目录职责、代码组织和运行约定，不承载版本功能清单。
 - Agent 只能创建或更新 `status: draft` / `status: In Review` 的产物，**不得**写入或修改 `status: Approved`。每个阶段完成时，Agent 必须列出待人工审核的全部必需产物及验证证据；人类手动审核并将各产物改为 `Approved` 后，才可运行该阶段的 `validate` 并开始下一阶段。
 
@@ -424,7 +424,7 @@ python .workflow/workflow.py sync --directory "E:\path\to\target-project"
 5. 触发 normalize-requirement → 生成 v1.0-requirement.md
 6. 人工审核 → status: Approved
 7. 进入 02-design / 03-planning / 04-implementation / 05-review-release
-8. RC 完成 → 自动生成实例根 `README.md`，写入 v1.0 功能并更新版本标记；release-log skill 起草 v1.0-release-log.md（仅需文件存在，无需 `Approved`）;v1.0 保持活动状态,直至 v1.1 创建成功后归档
+8. RC 完成且 05-review-release 门禁通过 → 自动从 v1.0 Approved 需求重建实例根 `README.md` 的完整当前功能目录，并合并本版本变更、限制和假设；release-log 仅需存在，无需 `Approved`。README 不增加单独审批；v1.0 保持活动状态，直至 v1.1 创建成功后归档
 ```
 
 #### 2.2 启动 v1.1+ 增量迭代

@@ -15,6 +15,13 @@
 
 ---
 
+### 功能目录自动生成约定
+
+- v1.0 的 Approved 产品需求是实例根 `README.md` 当前功能目录的种子；后续版本按版本号重放 v1.0 至目标版本的 Approved 需求，包括 `iteration/archive/` 中的历史版本。
+- `change_set.added`、`change_set.modified`、`change_set.deprecated` 应完整记录本迭代的功能变化。README 只展示 `FR-*` 和 `BR-*`；非功能需求、验收标准和工程任务不作为当前功能条目。
+- 若需求正文出现了新增或修改的 FR/BR 定义，但遗漏对应 `change_set` 项，或旧版 `change_set` 把新增/修改操作标反，CLI 会根据前一版目录和当前定义修正有效变更、纳入 README 并输出警告。定义无法提取时仍会阻止生成。删除无法从增量需求正文可靠推断，必须明确填写 `change_set.deprecated`；CLI 不会因定义缺席而删除历史功能。
+- `05-review-release` 通过后，CLI 自动重建实例根 README 标记区域中的完整当前功能、当前版本变更和已知限制/假设。生成内容不增加单独人工审批；现有 Approved review-release 门禁保持不变。
+
 ## 文档骨架
 
 ```markdown

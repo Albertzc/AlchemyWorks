@@ -475,6 +475,13 @@ class WorkflowTests(unittest.TestCase):
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
                 self.add_full_chain_after_fixture(root)
                 final_dir = root / "iteration" / "v1" / "05-review-release"
+                requirement = root / "iteration" / "v1" / "01-product" / "v1-requirement.md"
+                requirement.write_text(
+                    "---\nstatus: Approved\nprototype_required: true\n---\n"
+                    "## 6. 功能需求\n- **FR-100**：推送优化。\n- **FR-101**：校验补全。\n"
+                    "\n## 7. 业务规则\n- **BR-016**：术语统一。\n",
+                    encoding="utf-8",
+                )
                 (final_dir / "v1-release-log.md").unlink()
                 import io, contextlib
                 buf = io.StringIO()
@@ -487,11 +494,9 @@ class WorkflowTests(unittest.TestCase):
                 (final_dir / "v1-review-release.md").write_text(
                     "---\nstatus: Approved\n---\n# review release\n", encoding="utf-8"
                 )
-                # The instance root README is no longer touched by validate
-                # after the §17 refresh-contract change; reserve it before
-                # the next run so we can verify it stays untouched.
+                # Release validation refreshes only the marked functionality section.
                 root_readme = root / "README.md"
-                root_readme.write_text("# Workflow\n", encoding="utf-8")
+                root_readme.write_text(workflow.instance_readme_intro("Demo"), encoding="utf-8")
                 buf2 = io.StringIO()
                 with contextlib.redirect_stdout(buf2):
                     rc = workflow.validate("v1", "05-review-release")
@@ -538,13 +543,11 @@ class WorkflowTests(unittest.TestCase):
                 instance_text = instance_readme.read_text(encoding="utf-8")
                 self.assertIn("<!-- workflow:current-system-functionality-version: v1.0 -->", instance_text)
                 self.assertIn("## 当前系统功能说明", instance_text)
-                # Source sections come from release-log, not from requirement.md body.
-                self.assertIn("FR-100 推送优化", instance_text)
-                self.assertIn("FR-101 校验补全", instance_text)
-                self.assertIn("BR-016 术语统一", instance_text)
-                self.assertIn("AC-100 推送正确", instance_text)
-                self.assertIn("ISSUE-V1.0-01 UI", instance_text)
-                # Handed-over (not fixed) issues must NOT appear in the README.
+                self.assertIn("**FR-100**：推送优化", instance_text)
+                self.assertIn("**FR-101**：校验补全", instance_text)
+                self.assertIn("**BR-016**：术语统一", instance_text)
+                self.assertNotIn("AC-100", instance_text)
+                self.assertNotIn("ISSUE-V1.0-01", instance_text)
                 self.assertNotIn("ISSUE-V1.0-02", instance_text)
                 self.assertIn("## 已知限制与假设", instance_text)
                 self.assertIn("单实例最多 100 并发", instance_text)
@@ -563,6 +566,12 @@ class WorkflowTests(unittest.TestCase):
         try:
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
                 self.add_full_chain_after_fixture(root)
+                requirement = root / "iteration" / "v1" / "01-product" / "v1-requirement.md"
+                requirement.write_text(
+                    "---\nstatus: Approved\nprototype_required: true\n---\n## 6. 功能需求\n",
+                    encoding="utf-8",
+                )
+                (root / "README.md").write_text(workflow.instance_readme_intro("Demo"), encoding="utf-8")
                 final_dir = root / "iteration" / "v1" / "05-review-release"
                 final_dir.mkdir(parents=True, exist_ok=True)
                 (final_dir / "v1-review-release.md").write_text(
@@ -794,7 +803,7 @@ class WorkflowTests(unittest.TestCase):
                 errors: list[str] = []
                 workflow.check_workspace_readme_freshness("v1", errors)
             self.assertTrue(
-                any("README.md" in error and "not refreshed" in error for error in errors),
+                any("README.md" in error and "marker pair" in error for error in errors),
                 msg=f"gate did not flag missing marker; errors={errors}",
             )
             self.assertTrue(
@@ -823,9 +832,7 @@ class WorkflowTests(unittest.TestCase):
         temp, root = self.make_repo()
         try:
             (root / "iteration" / "v1").rename(root / "iteration" / "v1.0")
-            (root / "README.md").write_text(
-                "# Workflow\n", encoding="utf-8"
-            )
+            (root / "README.md").write_text(workflow.instance_readme_intro("Demo"), encoding="utf-8")
             for relative in [
                 "iteration/v1.0/01-product/v1.0-prototype.html",
                 "iteration/v1.0/02-design/v1.0-architecture-design.md",
@@ -842,7 +849,8 @@ class WorkflowTests(unittest.TestCase):
                 self.add_approved(root, relative, "TASK-API-010\n")
             requirement = root / "iteration" / "v1.0" / "01-product" / "v1.0-requirement.md"
             requirement.write_text(
-                "---\nstatus: Approved\nprototype_required: true\n---\n# Workspace Req Body\n",
+                "---\nstatus: Approved\nprototype_required: true\n---\n# Workspace Req Body\n\n"
+                "## 6. 功能需求\n- **FR-100**：推送优化。\n",
                 encoding="utf-8",
             )
             plan = root / "iteration" / "v1.0" / "03-planning" / "v1.0-task-plan-dag.md"
@@ -871,19 +879,18 @@ class WorkflowTests(unittest.TestCase):
             root_text = root_readme.read_text(encoding="utf-8")
             self.assertIn("<!-- workflow:current-system-functionality-version: v1.0 -->", root_text)
             self.assertIn("## 当前系统功能说明", root_text)
-            # Content comes from release-log §2.1, not from requirement body.
-            self.assertIn("FR-100 推送优化", root_text)
+            # Current functionality comes from the approved requirement.
+            self.assertIn("**FR-100**：推送优化", root_text)
             self.assertNotIn("# Workspace Req Body", root_text)
             self.assertEqual(workspace_readme.read_text(encoding="utf-8"), "# Workspace\n\n静态说明\n")
         finally:
             temp.cleanup()
 
     def test_workspace_readme_extracts_release_log_sections(self):
-        """Happy path: each release-log subsection present in §2.1-§2.4, §3, §7
-        renders into the corresponding workspace/README.md section.
-        """
+        """The cumulative README uses approved FR/BR definitions and current limits."""
         temp, root = self.make_repo()
         try:
+            (root / "iteration" / "v1").rename(root / "iteration" / "v1.0")
             release_log = root / "iteration" / "v1.0" / "05-review-release" / "v1.0-release-log.md"
             release_log.parent.mkdir(parents=True, exist_ok=True)
             release_log.write_text(
@@ -909,23 +916,26 @@ class WorkflowTests(unittest.TestCase):
                 "| 假设 | 仅在 Ubuntu 22.04 验证 |\n",
                 encoding="utf-8",
             )
+            requirement = root / "iteration" / "v1.0" / "01-product" / "v1.0-requirement.md"
+            requirement.parent.mkdir(parents=True, exist_ok=True)
+            requirement.write_text(
+                "---\nstatus: Approved\nprototype_required: true\n---\n"
+                "## 6. 功能需求\n- **FR-200**：调度改进。\n- **FR-201**：主题切换。\n"
+                "\n## 7. 业务规则\n- **BR-050**：限速口径：单租户 25 rps。\n",
+                encoding="utf-8",
+            )
+            (root / "README.md").write_text(workflow.instance_readme_intro("Demo"), encoding="utf-8")
             with patch.object(workflow, "ROOT", root):
                 workflow.generate_workspace_readme("v1.0")
             text = (root / "README.md").read_text(encoding="utf-8")
             # Heading + marker present.
             self.assertIn("<!-- workflow:current-system-functionality-version: v1.0 -->", text)
             self.assertIn("## 当前系统功能说明", text)
-            # Each extracted row appears.
-            self.assertIn("### 新增功能", text)
-            self.assertIn("FR-200 调度改进", text)
-            self.assertIn("### 体验优化", text)
-            self.assertIn("FR-201 主题切换", text)
-            self.assertIn("### 业务规则", text)
-            self.assertIn("BR-050 限速口径", text)
-            self.assertIn("### 验收标准", text)
-            self.assertIn("AC-200 调度正确", text)
-            self.assertIn("### 修复项", text)
-            self.assertIn("ISSUE-V1.0-10 前端", text)
+            self.assertIn("**FR-200**：调度改进", text)
+            self.assertIn("**FR-201**：主题切换", text)
+            self.assertIn("**BR-050**：限速口径：单租户 25 rps", text)
+            self.assertNotIn("AC-200", text)
+            self.assertNotIn("ISSUE-V1.0-10", text)
             self.assertIn("## 已知限制与假设", text)
             self.assertIn("假设：仅在 Ubuntu 22.04 验证", text)
         finally:
@@ -935,6 +945,7 @@ class WorkflowTests(unittest.TestCase):
         """Subsections absent in release-log render as no section in workspace/README.md."""
         temp, root = self.make_repo()
         try:
+            (root / "iteration" / "v1").rename(root / "iteration" / "v1.0")
             release_log = root / "iteration" / "v1.0" / "05-review-release" / "v1.0-release-log.md"
             release_log.parent.mkdir(parents=True, exist_ok=True)
             # Only §2.1 present; everything else omitted.
@@ -946,17 +957,22 @@ class WorkflowTests(unittest.TestCase):
                 "| FR-300 | 限流开关 | TASK-API-300 | AC-300 ✅ |\n",
                 encoding="utf-8",
             )
+            requirement = root / "iteration" / "v1.0" / "01-product" / "v1.0-requirement.md"
+            requirement.parent.mkdir(parents=True, exist_ok=True)
+            requirement.write_text(
+                "---\nstatus: Approved\nprototype_required: true\n---\n"
+                "## 6. 功能需求\n- **FR-300**：限流开关。\n",
+                encoding="utf-8",
+            )
+            (root / "README.md").write_text(workflow.instance_readme_intro("Demo"), encoding="utf-8")
             with patch.object(workflow, "ROOT", root):
                 workflow.generate_workspace_readme("v1.0")
             text = (root / "README.md").read_text(encoding="utf-8")
-            self.assertIn("### 新增功能", text)
-            self.assertIn("FR-300 限流开关", text)
-            # Subsections not present must NOT produce headings.
-            self.assertNotIn("### 体验优化", text)
-            self.assertNotIn("### 业务规则", text)
-            self.assertNotIn("### 验收标准", text)
+            self.assertIn("**FR-300**：限流开关", text)
             self.assertNotIn("### 修复项", text)
-            self.assertNotIn("## 已知限制与假设", text)
+            self.assertNotIn("验收标准", text)
+            self.assertIn("## 已知限制与假设", text)
+            self.assertIn("本版本暂无已登记的限制与假设。", text)
         finally:
             temp.cleanup()
 
@@ -966,6 +982,7 @@ class WorkflowTests(unittest.TestCase):
         """
         temp, root = self.make_repo()
         try:
+            (root / "iteration" / "v1").rename(root / "iteration" / "v1.0")
             release_log = root / "iteration" / "v1.0" / "05-review-release" / "v1.0-release-log.md"
             release_log.parent.mkdir(parents=True, exist_ok=True)
             release_log.write_text(
@@ -975,6 +992,13 @@ class WorkflowTests(unittest.TestCase):
                 "| ISSUE-V1.0-99 | 后端 | ⏳ 交接至 v1.1：性能调优 |\n",
                 encoding="utf-8",
             )
+            requirement = root / "iteration" / "v1.0" / "01-product" / "v1.0-requirement.md"
+            requirement.parent.mkdir(parents=True, exist_ok=True)
+            requirement.write_text(
+                "---\nstatus: Approved\nprototype_required: true\n---\n## 6. 功能需求\n",
+                encoding="utf-8",
+            )
+            (root / "README.md").write_text(workflow.instance_readme_intro("Demo"), encoding="utf-8")
             with patch.object(workflow, "ROOT", root):
                 workflow.generate_workspace_readme("v1.0")
             text = (root / "README.md").read_text(encoding="utf-8")
@@ -989,7 +1013,15 @@ class WorkflowTests(unittest.TestCase):
         """
         temp, root = self.make_repo()
         try:
+            (root / "iteration" / "v1").rename(root / "iteration" / "v1.0")
             (root / "iteration" / "v1.0" / "05-review-release").mkdir(parents=True)
+            requirement = root / "iteration" / "v1.0" / "01-product" / "v1.0-requirement.md"
+            requirement.parent.mkdir(parents=True, exist_ok=True)
+            requirement.write_text(
+                "---\nstatus: Approved\nprototype_required: true\n---\n## 6. 功能需求\n",
+                encoding="utf-8",
+            )
+            (root / "README.md").write_text(workflow.instance_readme_intro("Demo"), encoding="utf-8")
             with patch.object(workflow, "ROOT", root):
                 with self.assertRaises(ValueError) as ctx:
                     workflow.generate_workspace_readme("v1.0")
@@ -1443,12 +1475,13 @@ class WorkflowTests(unittest.TestCase):
                 self.add_approved(root, relative, "TASK-API-010\n")
             requirement = root / "iteration" / "v1.0" / "01-product" / "v1.0-requirement.md"
             requirement.write_text(
-                "---\nstatus: Approved\nprototype_required: true\n---\n# Req\nAC-001\n",
+                "---\nstatus: Approved\nprototype_required: true\n---\n# Req\n"
+                "## 6. 功能需求\n- **FR-001**：已有功能。\n",
                 encoding="utf-8",
             )
             plan = root / "iteration" / "v1.0" / "03-planning" / "v1.0-task-plan-dag.md"
             plan.write_text("---\nstatus: Approved\n---\nTASK-API-010\n", encoding="utf-8")
-            (root / "README.md").write_text("# Pre-existing root README\n", encoding="utf-8")
+            (root / "README.md").write_text(workflow.instance_readme_intro("Demo"), encoding="utf-8")
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
                 self.assertEqual(workflow.init_version(), 0)
             self.assertTrue((root / "iteration" / "v1.1" / "01-product").is_dir())
@@ -1479,7 +1512,8 @@ class WorkflowTests(unittest.TestCase):
                 self.add_approved(root, relative, "TASK-API-010\n")
             requirement = root / "iteration" / "v1.0" / "01-product" / "v1.0-requirement.md"
             requirement.write_text(
-                "---\nstatus: Approved\nprototype_required: true\n---\n# Req\nAC-001\n",
+                "---\nstatus: Approved\nprototype_required: true\n---\n# Req\n"
+                "## 6. 功能需求\n- **FR-400**：初始化推送。\n",
                 encoding="utf-8",
             )
             plan = root / "iteration" / "v1.0" / "03-planning" / "v1.0-task-plan-dag.md"
@@ -1494,12 +1528,7 @@ class WorkflowTests(unittest.TestCase):
                 encoding="utf-8",
             )
             root_readme = root / "README.md"
-            root_readme.write_text(
-                "# Instance\n\n## 当前系统功能说明\n\n"
-                "<!-- workflow:current-system-functionality:start -->\n旧内容\n"
-                "<!-- workflow:current-system-functionality:end -->\n",
-                encoding="utf-8",
-            )
+            root_readme.write_text(workflow.instance_readme_intro("Instance"), encoding="utf-8")
             with patch.object(workflow, "ROOT", root), patch.object(workflow, "FRAMEWORK_ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
                 self.assertEqual(workflow.init_version(), 0)
             self.assertFalse((root / "iteration" / "v1.0").exists())
@@ -1509,8 +1538,8 @@ class WorkflowTests(unittest.TestCase):
             root_text = root_readme.read_text(encoding="utf-8")
             self.assertIn("<!-- workflow:current-system-functionality-version: v1.0 -->", root_text)
             self.assertIn("## 当前系统功能说明", root_text)
-            # Content sourced from release-log §2.1, not requirement body.
-            self.assertIn("FR-400 初始化推送", root_text)
+            # Content sourced from the approved product requirement.
+            self.assertIn("**FR-400**：初始化推送", root_text)
             self.assertNotIn("# Req", root_text)
         finally:
             temp.cleanup()
@@ -1574,6 +1603,285 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(f"v{major}.{minor}", "v2.0")
             major, minor = workflow.iteration_number("v1.3")
             self.assertEqual(f"v{major}.{minor}", "v1.3")
+        finally:
+            temp.cleanup()
+
+
+class FunctionalityHistoryTests(unittest.TestCase):
+    def make_repo(self, draft=False):
+        return WorkflowTests.make_repo(self, draft)
+
+    def _write_requirement(self, root, version, body, change_set=""):
+        path = root / "iteration" / version / "01-product" / f"{version}-requirement.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "---\nstatus: Approved\nprototype_required: false\n"
+            + ("change_set:\n" + change_set if change_set else "")
+            + "---\n# Requirements\n\n"
+            + body,
+            encoding="utf-8",
+        )
+        return path
+
+    def test_functionality_history_seeds_v1_and_replays_archived_deltas(self):
+        temp, root = self.make_repo()
+        try:
+            v1 = root / "iteration" / "v1"
+            v1.rename(root / "iteration" / "v1.0")
+            self._write_requirement(
+                root,
+                "v1.0",
+                "## 6. 功能需求\n- **FR-001**：创建项目。\n\n## 7. 业务规则\n- **BR-001**：项目数据隔离。\n",
+            )
+            v11 = root / "iteration" / "v1.1"
+            self._write_requirement(
+                root,
+                "v1.1",
+                "## 6. 功能需求\n- **FR-002**：导入数据。\n",
+                "  added: [FR-002]\n  modified: []\n  deprecated: []\n",
+            )
+            (root / "iteration" / "archive").mkdir(parents=True)
+            v11.rename(root / "iteration" / "archive" / "v1.1")
+            with patch.object(workflow, "ROOT", root):
+                catalog, delta, warnings = workflow.functionality_history("v1.1")
+            self.assertEqual(set(catalog), {"FR-001", "BR-001", "FR-002"})
+            self.assertEqual(delta, {"added": ["FR-002"], "modified": [], "deprecated": []})
+            self.assertEqual(warnings, [])
+        finally:
+            temp.cleanup()
+
+    def test_functionality_history_applies_added_modified_and_deprecated(self):
+        temp, root = self.make_repo()
+        try:
+            (root / "iteration" / "v1").rename(root / "iteration" / "v1.0")
+            self._write_requirement(root, "v1.0", "## 6. 功能需求\n- **FR-001**：旧描述。\n- **FR-002**：待移除。\n")
+            self._write_requirement(
+                root,
+                "v1.1",
+                "## 6. 功能需求\n- **FR-001**：增强后的描述。\n- **FR-003**：新功能。\n",
+                "  added: [FR-003]\n  modified: [FR-001]\n  deprecated: [FR-002]\n",
+            )
+            with patch.object(workflow, "ROOT", root):
+                catalog, delta, _ = workflow.functionality_history("v1.1")
+            self.assertEqual(set(catalog), {"FR-001", "FR-003"})
+            self.assertIn("增强后的描述", catalog["FR-001"])
+            self.assertEqual(delta, {"added": ["FR-003"], "modified": ["FR-001"], "deprecated": ["FR-002"]})
+        finally:
+            temp.cleanup()
+
+    def test_functionality_history_infers_omitted_function_changes(self):
+        temp, root = self.make_repo()
+        try:
+            (root / "iteration" / "v1").rename(root / "iteration" / "v1.0")
+            self._write_requirement(root, "v1.0", "## 6. 功能需求\n- **FR-001**：旧描述。\n")
+            self._write_requirement(
+                root,
+                "v1.1",
+                "## 6. 功能需求\n- **FR-001**：更新描述。\n- **BR-001**：新增规则。\n"
+                "\n## 8. 非功能需求\n- **NFR-001**：工程质量。\n\n## 11. 验收标准\n- **AC-001**：验收。\n",
+                "  added: []\n  modified: []\n  deprecated: []\n",
+            )
+            with patch.object(workflow, "ROOT", root):
+                catalog, delta, warnings = workflow.functionality_history("v1.1")
+            self.assertEqual(set(catalog), {"FR-001", "BR-001"})
+            self.assertEqual(delta, {"added": ["BR-001"], "modified": ["FR-001"], "deprecated": []})
+            self.assertEqual(len(warnings), 2)
+            self.assertTrue(all("v1.1" in warning for warning in warnings))
+        finally:
+            temp.cleanup()
+
+    def test_functionality_history_parses_legacy_dash_and_table_definitions(self):
+        temp, root = self.make_repo()
+        try:
+            (root / "iteration" / "v1").rename(root / "iteration" / "v1.0")
+            self._write_requirement(root, "v1.0", "## 6. 功能需求\n- **FR-001**：旧版基线功能。\n")
+            self._write_requirement(
+                root,
+                "v1.1",
+                "## 5. 本次迭代功能需求（FR）\n"
+                "- **FR-002** — 破折号格式的新功能。\n\n"
+                "### 5.2 Bug 修复\n\n"
+                "| FR | Bug ID | 严重度 | 一句话 |\n|---|---|---|---|\n"
+                "| FR-003 | BUG-003 | P1 | 表格格式的新功能。 |\n",
+                "  added: [FR-002]\n  modified: []\n  deprecated: []\n",
+            )
+            with patch.object(workflow, "ROOT", root):
+                catalog, delta, warnings = workflow.functionality_history("v1.1")
+            self.assertEqual(set(catalog), {"FR-001", "FR-002", "FR-003"})
+            self.assertIn("破折号格式的新功能", catalog["FR-002"])
+            self.assertIn("表格格式的新功能", catalog["FR-003"])
+            self.assertEqual(delta["added"], ["FR-002", "FR-003"])
+            self.assertTrue(any("FR-003" in warning for warning in warnings))
+        finally:
+            temp.cleanup()
+
+    def test_functionality_history_corrects_wrong_add_or_modify_operation_with_warning(self):
+        temp, root = self.make_repo()
+        try:
+            (root / "iteration" / "v1").rename(root / "iteration" / "v1.0")
+            self._write_requirement(root, "v1.0", "## 6. 功能需求\n- **FR-001**：既有功能。\n")
+            self._write_requirement(
+                root,
+                "v1.1",
+                "## 6. 功能需求\n- **FR-001**：更新功能。\n- **FR-002**：新增功能。\n",
+                "  added: [FR-001]\n  modified: [FR-002]\n  deprecated: []\n",
+            )
+            with patch.object(workflow, "ROOT", root):
+                catalog, delta, warnings = workflow.functionality_history("v1.1")
+            self.assertEqual(set(catalog), {"FR-001", "FR-002"})
+            self.assertEqual(delta, {"added": ["FR-002"], "modified": ["FR-001"], "deprecated": []})
+            self.assertEqual(len(warnings), 2)
+        finally:
+            temp.cleanup()
+
+    def test_functionality_history_rejects_invalid_declared_operations(self):
+        for change_set, expected in [
+            ("  added: [FR-001]\n  modified: []\n  deprecated: []\n", "no definition"),
+            ("  added: []\n  modified: [FR-999]\n  deprecated: []\n", "no definition"),
+            ("  added: [FR-002]\n  unknown: [FR-003]\n", "unknown change_set operation"),
+        ]:
+            temp, root = self.make_repo()
+            try:
+                (root / "iteration" / "v1").rename(root / "iteration" / "v1.0")
+                self._write_requirement(root, "v1.0", "## 6. 功能需求\n- **FR-001**：已有功能。\n")
+                self._write_requirement(root, "v1.1", "## 6. 功能需求\n- **FR-002**：新功能。\n", change_set)
+                with patch.object(workflow, "ROOT", root):
+                    with self.assertRaisesRegex(ValueError, expected):
+                        workflow.functionality_history("v1.1")
+            finally:
+                temp.cleanup()
+
+    def test_functionality_history_requires_approved_requirements_and_rejects_ambiguous_legacy_input(self):
+        temp, root = self.make_repo()
+        try:
+            (root / "iteration" / "v1").rename(root / "iteration" / "v1.0")
+            requirement = self._write_requirement(root, "v1.0", "## 6. 功能需求\n无新增功能。\n")
+            requirement.write_text(requirement.read_text(encoding="utf-8").replace("status: Approved", "status: In Review"), encoding="utf-8")
+            with patch.object(workflow, "ROOT", root):
+                with self.assertRaisesRegex(ValueError, "Approved.*v1.0"):
+                    workflow.functionality_history("v1.0")
+            requirement.write_text("---\nstatus: Approved\n---\n# Legacy without recognizable sections\nFR-001 appears in prose.\n", encoding="utf-8")
+            with patch.object(workflow, "ROOT", root):
+                with self.assertRaisesRegex(ValueError, "v1.0.*requirement.md"):
+                    workflow.functionality_history("v1.0")
+        finally:
+            temp.cleanup()
+
+    def _setup_render_history(self, has_changes=True):
+        temp, root = self.make_repo()
+        (root / "iteration" / "v1").rename(root / "iteration" / "v1.0")
+        self._write_requirement(
+            root,
+            "v1.0",
+            "## 6. 功能需求\n- **FR-001**：创建项目。\n- **FR-002**：查看运行。\n\n"
+            "## 7. 业务规则\n- **BR-001**：项目隔离。\n",
+        )
+        current_body = "## 6. 功能需求\n"
+        change_set = "  added: []\n  modified: []\n  deprecated: []\n"
+        if has_changes:
+            current_body += "- **FR-001**：创建和管理项目。\n- **FR-003**：查看运行详情。\n"
+            change_set = "  added: [FR-003]\n  modified: [FR-001]\n  deprecated: [FR-002]\n"
+        current_body += "\n## 7. 业务规则\n"
+        self._write_requirement(root, "v1.1", current_body, change_set)
+        release = root / "iteration" / "v1.1" / "05-review-release" / "v1.1-release-log.md"
+        release.parent.mkdir(parents=True, exist_ok=True)
+        release.write_text(
+            "## 7. 已知限制与假设\n\n| 类型 | 内容 |\n|---|---|\n| 限制 | 仅支持单区域部署 |\n",
+            encoding="utf-8",
+        )
+        readme = root / "README.md"
+        readme.write_text(workflow.instance_readme_intro("Demo"), encoding="utf-8")
+        return temp, root, readme
+
+    def test_instance_readme_renders_cumulative_catalog_and_current_delta(self):
+        temp, root, _ = self._setup_render_history()
+        try:
+            with patch.object(workflow, "ROOT", root):
+                generated, warnings = workflow.render_instance_readme_section("v1.1")
+            self.assertIn("**FR-001**：创建和管理项目", generated)
+            self.assertIn("**FR-003**：查看运行详情", generated)
+            self.assertIn("**BR-001**：项目隔离", generated)
+            self.assertNotIn("**FR-002**", generated.split("## 本版本变更", 1)[0])
+            self.assertIn("新增", generated)
+            self.assertIn("增强", generated)
+            self.assertIn("移除", generated)
+            self.assertIn("仅支持单区域部署", generated)
+            self.assertIn("<!-- workflow:current-system-functionality-version: v1.1 -->", generated)
+            self.assertEqual(warnings, [])
+        finally:
+            temp.cleanup()
+
+    def test_instance_readme_preserves_catalog_when_iteration_has_no_function_changes(self):
+        temp, root, _ = self._setup_render_history(has_changes=False)
+        try:
+            with patch.object(workflow, "ROOT", root):
+                generated, _ = workflow.render_instance_readme_section("v1.1")
+            self.assertIn("**FR-001**：创建项目", generated)
+            self.assertIn("**FR-002**：查看运行", generated)
+            self.assertIn("**BR-001**：项目隔离", generated)
+            self.assertIn("本版本无功能变化", generated)
+        finally:
+            temp.cleanup()
+
+    def test_instance_readme_freshness_detects_content_drift_with_current_marker(self):
+        temp, root, readme = self._setup_render_history()
+        try:
+            with patch.object(workflow, "ROOT", root):
+                workflow.generate_instance_readme("v1.1")
+                fresh_errors: list[str] = []
+                workflow.check_instance_readme_freshness("v1.1", fresh_errors)
+                self.assertEqual(fresh_errors, [])
+                text = readme.read_text(encoding="utf-8")
+                text = text.replace("**FR-001**：创建和管理项目", "过期功能说明")
+                readme.write_text(text, encoding="utf-8")
+                errors: list[str] = []
+                workflow.check_instance_readme_freshness("v1.1", errors)
+            self.assertTrue(any("content" in error.lower() or "内容" in error for error in errors))
+        finally:
+            temp.cleanup()
+
+    def test_instance_readme_invalid_markers_do_not_modify_file(self):
+        for content in [
+            "# Demo\n\n## 当前系统功能说明\n",
+            "# Demo\n<!-- workflow:current-system-functionality:start -->\nA\n"
+            "<!-- workflow:current-system-functionality:end -->\n"
+            "<!-- workflow:current-system-functionality:start -->\nB\n"
+            "<!-- workflow:current-system-functionality:end -->\n",
+        ]:
+            temp, root, readme = self._setup_render_history()
+            try:
+                readme.write_text(content, encoding="utf-8")
+                before = readme.read_bytes()
+                with patch.object(workflow, "ROOT", root):
+                    with self.assertRaisesRegex(ValueError, "marker"):
+                        workflow.generate_instance_readme("v1.1")
+                self.assertEqual(readme.read_bytes(), before)
+            finally:
+                temp.cleanup()
+
+    def test_init_version_refreshes_predecessor_readme_before_archive(self):
+        temp, root = self.make_repo()
+        try:
+            (root / "iteration" / "v1").rename(root / "iteration" / "v1.0")
+            self._write_requirement(root, "v1.0", "## 6. 功能需求\n- **FR-001**：完整功能。\n")
+            release = root / "iteration" / "v1.0" / "05-review-release" / "v1.0-release-log.md"
+            release.parent.mkdir(parents=True, exist_ok=True)
+            release.write_text("## 7. 已知限制与假设\n", encoding="utf-8")
+            (root / "README.md").write_text(workflow.instance_readme_intro("Demo"), encoding="utf-8")
+
+            def fake_validate(version, stage):
+                if stage == "05-review-release":
+                    workflow.generate_instance_readme(version)
+                return 0
+
+            with patch.object(workflow, "ROOT", root), patch.object(
+                workflow, "validate", side_effect=fake_validate
+            ), patch.object(workflow, "index", return_value=None):
+                self.assertEqual(workflow.init_version("v1.1"), 0)
+            self.assertTrue((root / "iteration" / "archive" / "v1.0").exists())
+            text = (root / "README.md").read_text(encoding="utf-8")
+            self.assertIn("**FR-001**：完整功能", text)
+            self.assertIn("<!-- workflow:current-system-functionality-version: v1.0 -->", text)
         finally:
             temp.cleanup()
 
@@ -1774,6 +2082,12 @@ class DiffVersionsTests(unittest.TestCase):
                 "| FR-900 | 实例功能 | TASK-API-900 | AC-900 ✅ |\n",
                 encoding="utf-8",
             )
+            requirement = root / "iteration" / "v1.0" / "01-product" / "v1.0-requirement.md"
+            requirement.parent.mkdir(parents=True, exist_ok=True)
+            requirement.write_text(
+                "---\nstatus: Approved\n---\n## 6. 功能需求\n- **FR-900**：实例功能。\n",
+                encoding="utf-8",
+            )
             (root / "README.md").write_text(
                 "# Instance\n\n## 项目说明\n手工内容\n\n"
                 "<!-- workflow:current-system-functionality:start -->\n"
@@ -1786,7 +2100,7 @@ class DiffVersionsTests(unittest.TestCase):
             with patch.object(workflow, "ROOT", root):
                 workflow.generate_instance_readme("v1.0")
             root_text = (root / "README.md").read_text(encoding="utf-8")
-            self.assertIn("FR-900 实例功能", root_text)
+            self.assertIn("**FR-900**：实例功能", root_text)
             self.assertIn("手工内容", root_text)
             self.assertIn("<!-- workflow:current-system-functionality:start -->", root_text)
             self.assertEqual(workspace_readme.read_text(encoding="utf-8"), "# Workspace\n\n静态说明\n")
