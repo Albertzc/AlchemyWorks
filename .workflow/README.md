@@ -8,6 +8,10 @@ This directory contains the standard-library CLI and workflow source definitions
 
 Workflow-owned source files and required scaffold directories are authoritatively listed in [`workflow-file-inventory.md`](workflow-file-inventory.md). Keep that inventory synchronized with every workflow change.
 
+## Directory and Git ownership
+
+The framework source repository tracks and releases `.workflow/`, `.agents/`, `templates/`, `AGENTS.md`, and the root `README.md`. An initialized instance receives those workflow files under `.aw/.workflow/`, `.aw/.agents/`, and `.aw/README.md`; the entire `.aw/` directory is ignored by the instance project's Git configuration. The instance project instead tracks its root `AGENTS.md`, root `README.md`, root `templates/`, `baseline/`, `iteration/`, `workspace/`, and `workspace/workflow/`. `sync` updates only the synchronized workflow copy and missing default templates; it does not replace instance-owned documents or product state.
+
 ## Commands
 
 Run from the project root:

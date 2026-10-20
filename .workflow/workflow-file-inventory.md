@@ -16,6 +16,13 @@
 - `python .workflow/workflow.py verify-workflow` checks whether the framework source core scaffold has uncommitted modifications; in a synchronized instance use `python .aw/.workflow/workflow.py verify-workflow`. Product workflow CLI commands block when such modifications are detected.
 - The core scaffold may only be modified through a dedicated workflow-maintenance change. That change must update this inventory, the affected documentation, tests, and sync scripts in the same change, and must be committed cleanly before product workflow commands resume.
 
+### 1.2 Source and instance ownership
+
+- The framework source repository tracks `.workflow/`, `.agents/`, `templates/`, `AGENTS.md`, and its root `README.md` as release inputs.
+- An initialized instance receives synchronized copies at `.aw/.workflow/`, `.aw/.agents/`, and `.aw/README.md`; the instance Git configuration ignores `.aw/`.
+- Instance-owned `AGENTS.md`, root `README.md`, `templates/`, `baseline/`, `iteration/`, `workspace/`, and `workspace/workflow/` remain outside the synchronized `.aw/` copy and are tracked by the instance project.
+- `sync` must not be used to make framework source paths and instance paths interchangeable: the source-to-instance mapping is intentional and is defined by `WORKFLOW_SYNC_ITEMS`.
+
 ## 2. Required Top-Level Governance Files
 
 | Path | Type | Purpose |

@@ -20,6 +20,18 @@ templates/
 
 The instance root `AGENTS.md` is created once from the framework rules and is then owned by the instance project. It is not synchronized afterwards, so workflow upgrades must be merged into it deliberately. In a synchronized instance, use `python .aw/.workflow/workflow.py ...` for local commands; when operating from the framework source repository, use the source-repository path `python .workflow/workflow.py ...` with `--project-root` for an external instance.
 
+Directory ownership is intentionally different between the framework source repository and an initialized instance:
+
+| Concern | Framework source repository | Instance project |
+|---|---|---|
+| Workflow CLI and definitions | `.workflow/` | `.aw/.workflow/` |
+| Agent Skills | `.agents/skills/` | `.aw/.agents/skills/` |
+| Workflow entry README | root `README.md` | `.aw/README.md` |
+| Instance-owned templates | root `templates/` | root `templates/` |
+| Product and generated project state | not applicable | `baseline/`, `iteration/`, `workspace/`, `workspace/workflow/` |
+
+The framework source directories are tracked and released with the framework. The synchronized `.aw/` directory is an instance-local copy and is ignored by the instance project's Git configuration; instance-owned templates and product state remain tracked.
+
 ## 2. Source of Truth
 
 Use the following priority order when information conflicts:
@@ -86,14 +98,14 @@ Report
 **Version awareness**:
 
 - For a **new project (v1)**: preserve the user-provided raw requirement under `baseline/raw-requirement/`, use it to draft baseline artifacts (including the core user-flow prototype), and confirm the five required baseline artifacts are `status: Approved` before generating `iteration/v1/` artifacts.
-- For an **iteration (v2+)**: use `normalize-iteration-requirement` to detect and create the new version; read the latest approved version's artifacts as the baseline.
+- For an **iteration (v2+)**: use `normalize-requirement` to route, archive, and normalize the raw requirement, then use `manage-iteration` to create or archive the target version; read the latest approved version's artifacts as the baseline.
 - **Iteration scope rule**: each task targets exactly one version. If a request affects multiple versions, split the work or escalate.
 
 ### Workflow Governance
 
 The project-level workflow control layer is implemented by the workflow CLI and the `workflow-governance` Skill. In this framework source repository the CLI is `.workflow/workflow.py`; in a synchronized instance project it is `.aw/.workflow/workflow.py`. These controls are mandatory for versioned workflow work:
 
-The authoritative inventory of workflow-owned files and directories is [`.workflow/workflow-file-inventory.md`](.workflow/workflow-file-inventory.md) in the framework source repository; the synchronized instance copy is `.aw/.workflow/workflow-file-inventory.md`. Any change to the workflow itself (including its CLI, scripts, Skills, templates, governance documents, scaffold, tests, or generated-state ignore rules) MUST update that inventory in the same change.
+The authoritative inventory of workflow-owned files and directories is `.workflow/workflow-file-inventory.md` in the framework source repository and `.aw/.workflow/workflow-file-inventory.md` in a synchronized instance. Any change to the workflow itself (including its CLI, scripts, Skills, templates, governance documents, scaffold, tests, or generated-state ignore rules) MUST update that inventory in the same change.
 
 1. **Before starting or resuming a stage**, refresh the artifact index:
    `python .aw/.workflow/workflow.py index --iteration v{N}`
@@ -133,8 +145,8 @@ Framework documents fall into two layers, each with a single working language. T
 **Governance & Execution Layer (English):**
 
 - `AGENTS.md` (this file, including §1–§17).
-- `.workflow/` — CLI, scripts, README, inventory, tests.
-- `.agents/skills/` — `SKILL.md` frontmatter and bodies.
+- Framework source paths: `.workflow/` — CLI, scripts, README, inventory, tests; `.agents/skills/` — `SKILL.md` frontmatter and bodies.
+- Synchronized instance paths: `.aw/.workflow/` — CLI, scripts, README, inventory; `.aw/.agents/skills/` — `SKILL.md` frontmatter and bodies. The instance copy does not include framework regression tests.
 - Stable identifiers: `FR-XXX`, `FS-XXX`, `BR-XXX`, `NFR-XXX`, `AC-XXX`, `TASK-XXX-XXX`, `API-XXX-XXX`, `TBL-XXX-XXX`, `ISSUE-XXX`.
 - CLI flags, Python sources, JSON files, and HTML templates.
 
@@ -378,7 +390,7 @@ Pay attention to:
 
 When this workflow is synchronized into an instance project, the instance owns its
 root `AGENTS.md`, root `README.md`, `.gitignore`, and `templates/`. The synchronized
-workflow copy (`.workflow/`, `.agents/`, and `.aw/README.md`) may exist
+workflow copy (`.aw/.workflow/`, `.aw/.agents/`, and `.aw/README.md`) may exist
 locally for execution but is ignored by the instance Git configuration. The instance commits
 its `baseline/`, `iteration/`, `workspace/`, and `workspace/workflow/` state instead.
 
@@ -465,9 +477,8 @@ Iterations use a two-segment identifier **`v{major}.{minor}`** (e.g. `v1.0`, `v1
   - Active versions live under `iteration/v{major}.{minor}/`.
   - All versioned artifacts use the `v{major}.{minor}-` filename prefix.
   - Cross-version references in frontmatter must point to a real existing iteration (e.g. `base_version: v1.0`).
-- **RC-complete** is reached only when `iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-review-release.md` has `status: Approved` and `iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-release-log.md` exists (existence-only gate; frontmatter `status` does not block the gate, see `.agents/skills/release-log/SKILL.md`).
-- Upon RC completion of `v{major}.{minor}`, draft its release log via the `release-log` skill and keep the version active as the baseline for the next iteration.
-- After `05-review-release` passes, the workflow automatically regenerates the marked current-system-functionality section in the instance root `README.md` from the current iteration's `iteration/{v{N}}/05-review-release/{v{N}}-release-log.md`. The release-log §2.1-§2.4 (delivery list), §3 (closed-issue list), and §7 (limits / assumptions) are extracted into that section, and the `<!-- workflow:current-system-functionality-version: v{major}.{minor} -->` marker is refreshed. Other root README content remains instance-owned. `workspace/README.md` only explains workspace conventions and does not carry system functionality.
+- **RC-complete** is reached only when the release log has been drafted, `iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-review-release.md` has `status: Approved`, and `iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-release-log.md` exists. The release log is an existence-only gate: its frontmatter `status` is not required to be `Approved`. In the framework source repository, the related Skill is `.agents/skills/release-log/SKILL.md`; in an instance, it is `.aw/.agents/skills/release-log/SKILL.md`.
+- After `05-review-release` passes, the workflow automatically regenerates the marked current-system-functionality section in the instance root `README.md` from the current iteration's `iteration/v{major}.{minor}/05-review-release/v{major}.{minor}-release-log.md`. The release-log §2.1-§2.4 (delivery list), §3 (closed-issue list), and §7 (limits / assumptions) are extracted into that section, and the `<!-- workflow:current-system-functionality-version: v{major}.{minor} -->` marker is refreshed. Other root README content remains instance-owned. `workspace/README.md` only explains workspace conventions and does not carry system functionality.
 - When the next consecutive version is successfully created, archive that completed predecessor to `iteration/archive/v{major}.{minor}/`. The predecessor must first pass the `05-review-release` gate and the instance root README refresh check; the first version (`v1.0`) has no predecessor to archive.
 - Never skip a version number — `v1.1` cannot jump to `v1.3`.
 - **Discovery**: `discover_iteration()` returns the numerically highest `(major, minor)` pair present under `iteration/`. When no directory exists yet, it returns `v1.0`.
