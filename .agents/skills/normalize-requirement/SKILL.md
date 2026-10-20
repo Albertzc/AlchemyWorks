@@ -11,18 +11,21 @@ Take a user-supplied raw requirement, which may arrive in inconsistent formats, 
 
 ## Route First
 
-Before normalizing, run:
+Before normalizing, resolve the route and archive the input as one intake batch:
 
 ```powershell
 python .aw/.workflow/workflow.py route-requirement
+python .aw/.workflow/workflow.py archive-requirement --source <file> --iteration <target-version>
 ```
+
+Use `--iteration` only when `route-requirement` returns `mode: iteration`; omit it for `mode: baseline`. The archive command output and index record are authoritative for the target selected at intake time.
 
 The command emits the archive location for the raw requirement according to these rules:
 
 1. When `baseline/` is empty apart from `README.md`: return `mode: baseline` and `baseline/raw-requirement/`. This is the baseline-requirement path for a first-time project; preserve the user's original wording, and draft the four baseline documents and one core-flow prototype from explicit facts in the original material, all kept as `status: draft`.
-2. When the baseline has already been initialized: return `mode: iteration`. Prefer the `iteration` field of `.aw/.workflow/manifest.yaml`; if the manifest does not exist or has no valid version, fall back to directory discovery. Store the user's original material verbatim into the emitted `iteration/raw-requirement/`; the `iteration` value returned by the command is the target version for this input. When operating from the framework source repository, use `.workflow/manifest.yaml` instead.
+2. When the baseline has already been initialized: return `mode: iteration`. Prefer the `iteration` field of `workspace/workflow/manifest.yaml`; if the manifest does not exist or has no valid version, fall back to directory discovery. `archive-requirement` stores the user's original material verbatim under an `intake-<name>/` batch directory and records the target version in `workspace/workflow/raw-requirement-index.yaml`.
 
-Raw material is not a gate artifact and does not require frontmatter or `status: Approved`. Material under `iteration/raw-requirement/` is user-owned and read-only: agents MUST NOT modify, rename, or delete the raw files. The normalized artifact MUST record the raw file path and the target version returned by `route-requirement` in its frontmatter or "Source Traceability" section; only the normalized artifact enters human review.
+Raw material is not a gate artifact and does not require frontmatter or `status: Approved`. Material under `iteration/raw-requirement/` is user-owned and read-only: agents MUST NOT modify, rename, or delete the raw files. The normalized artifact MUST record the intake batch, raw file path, and the target version returned by `route-requirement` in its frontmatter or "Source Traceability" section; only the normalized artifact enters human review.
 
 ## Pre-flight
 
@@ -39,7 +42,7 @@ Under the iteration route, the following MUST be read before conversion:
 - `baseline/01-product-vision.md`
 - `baseline/02-product-charter.md`
 - `baseline/04-glossary.md`
-- All raw requirement material in `iteration/raw-requirement/` that maps to the target version returned by `route-requirement`.
+- All raw requirement batches listed in `workspace/workflow/raw-requirement-index.yaml` for the target version returned by `route-requirement`.
 - `iteration/{previous approved version}/01-product/{previous version}-requirement.md` (for diff and inheritance).
 - `iteration/{previous approved version}/05-review-release/{previous version}-release-log.md` (when present; records the predecessor's closing scope, ISSUE closure, and hand-off items).
 - `templates/product.md` (the merged unified template).
@@ -217,7 +220,7 @@ After conversion, the agent MUST keep `status: draft` or `status: In Review`, li
 
 ## Validation Checklist
 
-- [ ] Ran `route-requirement` and archived the raw material according to the returned mode and directory.
+- [ ] Archived the input with `archive-requirement`, confirmed its batch and target-version index record, and ran `route-requirement`.
 - [ ] Under the baseline route, drafted the full baseline; under the iteration route, read the approved baseline.
 - [ ] Read the standard template and the baseline.
 - [ ] Every explicit fact in the raw input is findable in the output.

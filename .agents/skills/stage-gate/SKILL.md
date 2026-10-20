@@ -48,8 +48,8 @@ Every HTML prototype MUST use an HTML-comment frontmatter that includes at least
 
 Raw requirements are user-supplied source material that may arrive as Markdown without frontmatter, plain text, email, meeting notes, or any other readable file. They are not stage artifacts that require `status: Approved`; agents MUST NOT rewrite their original text.
 
-- When `baseline/` is empty apart from `README.md`: archive the raw material to `baseline/raw-requirement/`, and let `normalize-requirement` draft the baseline documents.
-- When the baseline has already been initialized: run `python .aw/.workflow/workflow.py route-requirement`. That command prefers the `iteration` field of `.aw/.workflow/manifest.yaml` to determine the version, and emits the centralized raw-requirement library `iteration/raw-requirement/` together with the target version. That directory holds user input only and is read-only for agents. When operating from the framework source repository, use the source path `.workflow/` instead.
+- When `baseline/` is empty apart from `README.md`: route the input, then use `archive-requirement --source <file>` to preserve it in a batch under `baseline/raw-requirement/`; let `normalize-requirement` draft the baseline documents.
+- When the baseline has already been initialized: run `route-requirement`, then pass its iteration value to `archive-requirement --source <file> --iteration <target-version>` to create an immutable `intake-<name>/` batch under `iteration/raw-requirement/`. The batch, source paths, hashes, and target version are recorded in `workspace/workflow/raw-requirement-index.yaml`; the manifest source is `workspace/workflow/manifest.yaml`. The raw directory holds user input only and is read-only for agents.
 - Normalized baseline or product requirements enter human review and `stage-gate`; raw requirements never do.
 
 ## Ownership Boundary

@@ -73,7 +73,7 @@ python .aw/.workflow/workflow.py index --iteration v1.0
 | `.aw/.agents/skills/` | 实例中的工作流能力 | 源仓库维护；`sync` 映射到 `.aw/` | 实例默认忽略同步副本 |
 | `templates/` | 实例项目可维护的默认模板 | `init-instance` 首次复制；后续同步不覆盖实例修改 | 提交 |
 | `baseline/` | 实例项目的 baseline 产物和用户原始输入 | `init-instance` 创建；`normalize-requirement` 起草，人工审核后进入门禁 | 提交 |
-| `iteration/raw-requirement/` | 实例项目的用户原始需求 | `init-instance` 创建；用户提供，`route-requirement` 返回目标版本；Agent 只读 | 提交 |
+| `iteration/raw-requirement/` | 实例项目按 intake 批次集中存放的用户原始需求 | `init-instance` 创建；`archive-requirement` 归档并写入来源索引；Agent 只读 | 提交 |
 | `iteration/v{major}.{minor}/`、`iteration/archive/` | 实例项目的版本产物和归档快照 | `init-version` 创建/归档，阶段 Skill 产出文档 | 提交 |
 | `README.md` | 实例项目当前系统功能说明和项目入口 | 初始化时创建；05 阶段根据 release-log 更新标记区域 | 提交 |
 | `workspace/`（含 `workspace/workflow/`） | 实例项目的代码、配置、测试、workspace 原理说明和可再生追溯状态 | 初始化时生成 `workspace/README.md` 目录说明；04 阶段写入业务代码；`index`/`state`/`refresh` 生成状态；workspace README 不承载系统功能 | 提交 |
@@ -135,9 +135,9 @@ python .workflow/workflow.py init-version  # baseline 门禁通过后创建下�
 
 ```text
 用户提供的原始需求（格式不限）
-        ↓ route-requirement + normalize-requirement
-baseline/ 为空 → baseline/raw-requirement/ → 起草 baseline → validate 00-baseline
-baseline/ 已初始化 → iteration/raw-requirement/（route-requirement 返回目标版本）→ 起草 01-product
+        ↓ archive-requirement + route-requirement + normalize-requirement
+baseline/ 为空 → baseline/raw-requirement/intake-*/ → 起草 baseline → validate 00-baseline
+baseline/ 已初始化 → iteration/raw-requirement/intake-*/（索引关联目标版本）→ 起草 01-product
 baseline/
         05-core-user-flow-prototype.html            # 必需：核心用户旅程交互基线
 iteration/v{major}.{minor}/01-product/
@@ -167,7 +167,7 @@ iteration/archive/v{major}.{minor}/    ← 旧版整体快照（只读）
 
 **关键约定**：
 
-- 每份正式阶段产物需有 `status: Approved` frontmatter 才算"通过"（否则 gate 拒绝）；原始需求是来源材料，不要求统一格式或审批状态。`iteration/raw-requirement/` 除 README 外仅保存用户原文件，Agent 只读，不得修改、重命名或删除；`route-requirement` 输出其对应版本。
+- 每份正式阶段产物需有 `status: Approved` frontmatter 才算"通过"（否则 gate 拒绝）；原始需求是来源材料，不要求统一格式或审批状态。`archive-requirement` 将原文件复制到 `intake-<name>/` 批次，并在 `workspace/workflow/raw-requirement-index.yaml` 记录目标版本、来源路径、哈希与字节数；原始文件归用户所有，Agent 只读，不得修改、重命名或删除。
 - HTML 原型还必须保留审核 frontmatter：`reviewer`、`reviewed_at`、`review_notes`；只有 `status: Approved` 且审核人/时间/结论齐全时，原型门禁才会通过。
 - `Approved` 状态下若含占位词（`TODO` / `TBD` / `XXX` / `[待确认]` / `[未提供]` / `占位`），validate 视为 unresolved blocker
 - 上游产物必须 Approved 才能作为下游阶段的正式输入
@@ -303,6 +303,8 @@ python .workflow/workflow.py verify-workflow                 # 检查工作流�
 | 子命令 | 功能 | 写入文件 |
 |---|---|---|
 | `index` | 全产物索引 + traceability 图 + 恢复检查点 | `workspace/workflow/manifest.yaml` / `traceability.json` / `current-state.json` |
+| `route-requirement` | 解析原始需求归档目录与目标版本 | stdout / JSON |
+| `archive-requirement` | 按 intake 批次原样归档原始需求并记录来源索引 | `baseline/raw-requirement/` 或 `iteration/raw-requirement/`；`workspace/workflow/raw-requirement-index.yaml` |
 | `state` | 刷新或读取当前阶段、阻塞项、下一动作和 Context Pack | `workspace/workflow/current-state.json` |
 | `refresh` | 文档变更后依次执行 `index`、`state --refresh` 和 `validate`；首个失败即停止 | 同 `index` / `state`，并输出门禁结果 |
 | `resume` | 输出新会话所需的最小恢复 JSON | stdout |
@@ -415,10 +417,10 @@ python .workflow/workflow.py sync --directory "E:\path\to\target-project"
 #### 2.1 启动一个新版本（v1.0）
 
 ```
-1. 用户提供原始需求；`route-requirement` 发现 baseline 为空并返回 `baseline/raw-requirement/`
-2. 归档原始材料，触发 normalize-requirement 起草 4 份 baseline 文档和核心流程原型
+1. 用户提供原始需求；`archive-requirement` 按 intake 批次归档，路由发现 baseline 为空并返回 `baseline/raw-requirement/`
+2. 来源索引记录批次与来源文件，触发 normalize-requirement 起草 4 份 baseline 文档和核心流程原型
 3. 人工审核 baseline → `validate --stage 00-baseline`
-4. 创建 `iteration/v1.0/` 骨架；`route-requirement` 返回该原始需求的目标版本，原文件保留在 `iteration/raw-requirement/`
+4. 创建 `iteration/v1.0/` 骨架；再次归档同一组原始输入，来源索引将新批次关联到 `v1.0`
 5. 触发 normalize-requirement → 生成 v1.0-requirement.md
 6. 人工审核 → status: Approved
 7. 进入 02-design / 03-planning / 04-implementation / 05-review-release
@@ -428,8 +430,8 @@ python .workflow/workflow.py sync --directory "E:\path\to\target-project"
 #### 2.2 启动 v1.1+ 增量迭代
 
 ```
-1. 用户提供原始需求；`route-requirement` 从 manifest.yaml（缺失时目录发现）解析目标版本
-2. 确认上一版本已通过 05-review-release 且已自动生成实例根 `README.md`；创建目标版本骨架后，CLI 自动归档上一版本；将原始材料原样保存到 `iteration/raw-requirement/`，并以 `route-requirement` 返回的目标版本归一化
+1. 用户提供原始需求；`archive-requirement` 创建 intake 批次并从 `workspace/workflow/manifest.yaml`（缺失时目录发现）解析目标版本
+2. 确认上一版本已通过 05-review-release 且已自动生成实例根 `README.md`；创建目标版本骨架后，CLI 自动归档上一版本；来源索引记录原始文件与目标版本，按该版本归一化
 3. 触发 normalize-requirement → 读项目基线、原始需求、上一版 requirement 与 release-log
 4. 输出对应版本 requirement.md（含 change_set: added / modified / deprecated）
 5. 人工审核 → status: Approved

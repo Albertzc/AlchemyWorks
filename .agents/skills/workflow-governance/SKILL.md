@@ -45,16 +45,17 @@ Implementation work must consume one TASK-scoped Context Pack. The pack contains
 
 ## Outputs
 
-- `.aw/.workflow/manifest.yaml`
-- `.aw/.workflow/traceability.json`
-- `.aw/.workflow/current-state.json`
+- `workspace/workflow/manifest.yaml`
+- `workspace/workflow/traceability.json`
+- `workspace/workflow/current-state.json`
+- `workspace/workflow/raw-requirement-index.yaml`
 - `.aw/.workflow/cache/context-packs.json`
 - `.aw/.workflow/context-packs/<iteration>-<task>.md`
 - `.aw/.workflow/task-runs/<iteration>-<task>.json`
 - `.aw/.workflow/task-runs/history/<iteration>-<task>-<timestamp>.json`
 - `.aw/.workflow/dashboard/index.html`
 
-In the framework source repository, these paths use `.workflow/` instead of `.aw/.workflow/`.
+The manifest, traceability graph, recovery checkpoint, and raw-requirement index are committed instance-project state under `workspace/workflow/`. In the framework source repository, use the same paths under the selected project root (pass `--project-root` for an external instance). Local execution caches, Context Packs, task-run records, and the dashboard remain under `.aw/.workflow/` for synchronized instances or `.workflow/` in the source repository.
 
 These are generated state, not approval records. Human approval remains represented by artifact frontmatter and must be explicit.
 

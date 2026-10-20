@@ -659,6 +659,9 @@ def requirement_route(iteration: str | None = None) -> dict[str, str | None]:
             "iteration": None,
             "raw_requirement_dir": "baseline/raw-requirement",
             "version_source": None,
+            "raw_requirement_layout": "batch",
+            "raw_requirement_index": "workspace/workflow/raw-requirement-index.yaml",
+            "manifest_path": "workspace/workflow/manifest.yaml",
         }
     resolved = canonical_iteration(iteration) if iteration else manifest_iteration() or discover_iteration()
     source = "explicit" if iteration else "manifest" if manifest_iteration() else "discovery"
@@ -668,7 +671,130 @@ def requirement_route(iteration: str | None = None) -> dict[str, str | None]:
         "raw_requirement_dir": "iteration/raw-requirement",
         "version_source": source,
         "raw_requirement_access": "user-owned-read-only",
+        "raw_requirement_layout": "batch",
+        "raw_requirement_index": "workspace/workflow/raw-requirement-index.yaml",
+        "manifest_path": "workspace/workflow/manifest.yaml",
     }
+
+
+INTAKE_ID_RE = re.compile(r"intake-[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+def _yaml_quote(value: object) -> str:
+    """Return a single-quoted YAML scalar for generated workflow metadata."""
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def _append_raw_requirement_index(entry: dict[str, object]) -> Path:
+    """Append one generated intake record to the Git-managed source index."""
+    path = project_state_dir() / "raw-requirement-index.yaml"
+    lines = [
+        "  - intake_id: " + _yaml_quote(entry["intake_id"]),
+        "    mode: " + _yaml_quote(entry["mode"]),
+        "    target_scope: " + _yaml_quote(entry["target_scope"]),
+        "    target_iteration: " + (
+            _yaml_quote(entry["target_iteration"])
+            if entry["target_iteration"] is not None
+            else "null"
+        ),
+        "    created_at: " + _yaml_quote(entry["created_at"]),
+        "    source_files:",
+    ]
+    for source_file in entry["source_files"]:
+        lines.append("      - path: " + _yaml_quote(source_file["path"]))
+        lines.append("        sha256: " + _yaml_quote(source_file["sha256"]))
+        lines.append("        bytes: " + str(source_file["bytes"]))
+
+    if path.exists():
+        existing = path.read_text(encoding="utf-8").rstrip()
+        if not existing.startswith("schema_version:"):
+            raise ValueError(f"raw requirement index has an unsupported format: {path}")
+        content = existing + "\n" + "\n".join(lines) + "\n"
+    else:
+        content = "schema_version: '1'\nentries:\n" + "\n".join(lines) + "\n"
+    write_text_atomic(path, content)
+    return path
+
+
+def archive_requirement(
+    sources: list[str],
+    *,
+    iteration: str | None = None,
+    intake_id: str | None = None,
+) -> dict[str, object]:
+    """Archive raw source files into one immutable intake batch and index it."""
+    if not sources:
+        raise ValueError("at least one --source file is required")
+
+    route = requirement_route(iteration)
+    source_paths: list[Path] = []
+    source_names: set[str] = set()
+    for raw_source in sources:
+        source_path = Path(raw_source)
+        if not source_path.is_absolute():
+            source_path = ROOT / source_path
+        source_path = source_path.resolve()
+        if not source_path.is_file():
+            raise ValueError(f"source file does not exist: {raw_source}")
+        name_key = source_path.name.casefold()
+        if name_key in source_names:
+            raise ValueError(f"duplicate source filename: {source_path.name}")
+        source_names.add(name_key)
+        source_paths.append(source_path)
+
+    if intake_id is None:
+        intake_id = "intake-" + local_filename_timestamp()
+        intake_root = ROOT / route["raw_requirement_dir"] / intake_id
+        suffix = 2
+        while intake_root.exists():
+            intake_id = f"intake-{local_filename_timestamp()}-{suffix}"
+            intake_root = ROOT / route["raw_requirement_dir"] / intake_id
+            suffix += 1
+    elif not INTAKE_ID_RE.fullmatch(intake_id):
+        raise ValueError("intake id must match intake-<name>")
+    else:
+        intake_root = ROOT / route["raw_requirement_dir"] / intake_id
+
+    if intake_root.exists():
+        raise ValueError(f"intake batch already exists: {intake_id}")
+
+    archived_files: list[dict[str, object]] = []
+    try:
+        intake_root.mkdir(parents=True)
+        for source_path in source_paths:
+            destination = intake_root / source_path.name
+            shutil.copy2(source_path, destination)
+            archived_files.append(
+                {
+                    "path": destination.relative_to(ROOT).as_posix(),
+                    "sha256": sha256(destination),
+                    "bytes": destination.stat().st_size,
+                }
+            )
+        index_entry = {
+            "intake_id": intake_id,
+            "mode": route["mode"],
+            "target_scope": route["mode"],
+            "target_iteration": route["iteration"],
+            "created_at": now(),
+            "source_files": archived_files,
+        }
+        index_path = _append_raw_requirement_index(index_entry)
+    except Exception:
+        if intake_root.exists():
+            shutil.rmtree(intake_root)
+        raise
+
+    result = {
+        "mode": route["mode"],
+        "intake_id": intake_id,
+        "intake_dir": intake_root.relative_to(ROOT).as_posix(),
+        "target_iteration": route["iteration"],
+        "source_files": [item["path"] for item in archived_files],
+        "index": index_path.relative_to(ROOT).as_posix(),
+    }
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return result
 
 
 def next_iteration() -> str:
@@ -702,22 +828,23 @@ def project_scaffold_readmes() -> dict[str, str]:
         "baseline/raw-requirement/README.md": (
             "# 原始需求输入\n\n"
             "存放用户提供的原始需求材料，保留原文件格式与原文。baseline 尚未初始化时，"
-            "normalize-requirement 以此目录为输入起草 baseline 文档。\n"
+            "使用 `archive-requirement` 归档为 intake 批次后，normalize-requirement 以此目录为输入起草 baseline 文档。\n"
         ),
         "iteration/README.md": (
             "# Iterations\n\n"
             "存放版本化交付物。不要手工创建版本目录；baseline 门禁通过后使用 "
             "`python .aw/.workflow/workflow.py init-version` 创建下一个版本。\n\n"
-            "`raw-requirement/` 仅存放用户提供的原始需求。运行 "
-            "`python .aw/.workflow/workflow.py route-requirement` 确定该输入对应的版本；"
-            "Agent 仅可读取，不得修改、重命名或删除其中的文件。\n"
+            "`raw-requirement/` 按 `intake-<name>/` 批次目录集中存放用户提供的原始需求。使用 "
+            "`python .aw/.workflow/workflow.py archive-requirement --source <file>` 归档输入，"
+            "再用 `route-requirement` 或批次索引确定目标版本；Agent 仅可读取，不得修改、重命名或删除其中的文件。\n"
         ),
         "iteration/raw-requirement/README.md": (
             "# 迭代原始需求输入\n\n"
-            "本目录保存用户提供的迭代原始需求，保留文件格式、文件名与原文。运行 "
-            "`python .aw/.workflow/workflow.py route-requirement` 确定当前输入对应的目标版本。\n\n"
-            "除本说明文件外，目录中的原始需求归用户所有且只读：Agent 不得修改、"
-            "重命名或删除。归一化产物必须记录所读取的原始文件路径和目标版本。\n"
+            "本目录按 `intake-<name>/` 批次保存用户提供的迭代原始需求，保留文件格式、文件名与原文。使用 "
+            "`python .aw/.workflow/workflow.py archive-requirement --source <file>` 归档，"
+            "并在 `workspace/workflow/raw-requirement-index.yaml` 中记录批次与目标版本。\n\n"
+            "除本说明文件外，目录中的原始需求归用户所有且只读：Agent 不得修改、重命名或删除。"
+            "归一化产物必须记录所读取的原始文件路径、批次和目标版本。\n"
         ),
         "workspace/README.md": (
             "# Workspace\n\n"
@@ -2268,6 +2395,13 @@ def main(argv: list[str] | None = None) -> int:
     finished.add_argument("--refresh-dashboard", action="store_true", help="Also re-render the static dashboard after writing the task record. Off by default; run `python .workflow/workflow.py dashboard` separately when needed.")
     route = subparsers.add_parser("route-requirement", help="Resolve the archive location for a newly received raw requirement.")
     route.add_argument("--iteration", help="Override the version recorded in manifest.yaml.")
+    archive = subparsers.add_parser(
+        "archive-requirement",
+        help="Copy raw requirement files into an immutable intake batch and update the source index.",
+    )
+    archive.add_argument("--source", action="append", required=True, help="Source file to archive; repeat for a batch of files.")
+    archive.add_argument("--iteration", help="Override the version recorded in manifest.yaml.")
+    archive.add_argument("--intake-id", help="Optional stable batch id matching intake-<name>.")
     subparsers.add_parser("init", help="Create the non-versioned project directory skeleton.")
     init_instance_parser = subparsers.add_parser("init-instance", help="Create an instance project and pin its workflow source commit.")
     init_instance_parser.add_argument("--name", help="Instance name; defaults to the target directory name.")
@@ -2343,6 +2477,9 @@ def main(argv: list[str] | None = None) -> int:
             return review_pack(args.iteration, args.stage, as_json=args.json)
         if args.command == "route-requirement":
             print(json.dumps(requirement_route(args.iteration), ensure_ascii=False, indent=2))
+            return 0
+        if args.command == "archive-requirement":
+            archive_requirement(args.source, iteration=args.iteration, intake_id=args.intake_id)
             return 0
         return task_finished(args.iteration, args.task, args.result, refresh_index=args.refresh_index or args.auto_refresh, refresh_dashboard=args.refresh_dashboard)
     except (OSError, ValueError, json.JSONDecodeError) as error:

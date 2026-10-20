@@ -1302,6 +1302,75 @@ class WorkflowTests(unittest.TestCase):
         finally:
             temp.cleanup()
 
+    def test_archive_requirement_creates_batch_and_index(self):
+        temp, root = self.make_repo()
+        try:
+            source = root / "incoming" / "notes.md"
+            source.parent.mkdir()
+            source.write_bytes("原始需求\n".encode("utf-8"))
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"), patch.object(
+                workflow, "local_filename_timestamp", return_value="20261020T103000.000000+0800"
+            ):
+                result = workflow.archive_requirement([str(source)], iteration="v1.1")
+
+            archived = root / "iteration" / "raw-requirement" / "intake-20261020T103000.000000+0800" / "notes.md"
+            self.assertEqual(result["intake_id"], "intake-20261020T103000.000000+0800")
+            self.assertEqual(result["target_iteration"], "v1.1")
+            self.assertEqual(archived.read_bytes(), source.read_bytes())
+            index = root / "workspace" / "workflow" / "raw-requirement-index.yaml"
+            index_text = index.read_text(encoding="utf-8")
+            self.assertIn("intake_id: 'intake-20261020T103000.000000+0800'", index_text)
+            self.assertIn("target_scope: 'iteration'", index_text)
+            self.assertIn("target_iteration: 'v1.1'", index_text)
+            self.assertIn("iteration/raw-requirement/intake-20261020T103000.000000+0800/notes.md", index_text)
+        finally:
+            temp.cleanup()
+
+    def test_archive_requirement_rejects_duplicate_source_names_before_copying(self):
+        temp, root = self.make_repo()
+        try:
+            first = root / "one" / "notes.md"
+            second = root / "two" / "notes.md"
+            first.parent.mkdir()
+            second.parent.mkdir()
+            first.write_text("one", encoding="utf-8")
+            second.write_text("two", encoding="utf-8")
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                with self.assertRaisesRegex(ValueError, "duplicate source filename"):
+                    workflow.archive_requirement([str(first), str(second)], iteration="v1.1", intake_id="intake-test")
+            self.assertFalse((root / "iteration" / "raw-requirement" / "intake-test").exists())
+        finally:
+            temp.cleanup()
+
+    def test_archive_requirement_rejects_missing_source_without_creating_state(self):
+        temp, root = self.make_repo()
+        try:
+            missing = root / "missing.md"
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                with self.assertRaisesRegex(ValueError, "source file does not exist"):
+                    workflow.archive_requirement([str(missing)], iteration="v1.1", intake_id="intake-test")
+            self.assertFalse((root / "iteration" / "raw-requirement" / "intake-test").exists())
+            self.assertFalse((root / "workspace" / "workflow" / "raw-requirement-index.yaml").exists())
+        finally:
+            temp.cleanup()
+
+    def test_archive_requirement_appends_batches_without_replacing_prior_index_entries(self):
+        temp, root = self.make_repo()
+        try:
+            source = root / "source.txt"
+            source.write_text("source", encoding="utf-8")
+            with patch.object(workflow, "ROOT", root), patch.object(workflow, "WORKFLOW_DIR", root / ".workflow"):
+                workflow.archive_requirement([str(source)], iteration="v1.1", intake_id="intake-first")
+                workflow.archive_requirement([str(source)], iteration="v1.2", intake_id="intake-second")
+            index_text = (root / "workspace" / "workflow" / "raw-requirement-index.yaml").read_text(encoding="utf-8")
+            self.assertEqual(index_text.count("  - intake_id:"), 2)
+            self.assertIn("intake_id: 'intake-first'", index_text)
+            self.assertIn("intake_id: 'intake-second'", index_text)
+            self.assertIn("target_iteration: 'v1.1'", index_text)
+            self.assertIn("target_iteration: 'v1.2'", index_text)
+        finally:
+            temp.cleanup()
+
     def test_init_creates_project_intake_directories(self):
         with _ScratchDir("test") as raw:
             root = Path(raw)
