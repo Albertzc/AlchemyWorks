@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.2.0](https://github.com/Albertzc/AlchemyWorks/compare/v0.1.0...v0.2.0) (2026-10-21)
+
+
+### Features
+
+* batch and index raw requirement intake ([07a7c6d](https://github.com/Albertzc/AlchemyWorks/commit/07a7c6d7c84075a113b5d10be57cef3ce6a49f6d))
+* generate product-only modular instance readme ([e6f41af](https://github.com/Albertzc/AlchemyWorks/commit/e6f41af4246cfb32a7759f0171439a0d0a687b9f))
+
+
+### Bug Fixes
+
+* correct instance workflow command paths ([fe52391](https://github.com/Albertzc/AlchemyWorks/commit/fe52391285d8ecc4228d8c4c44d8b9c3f725b8bd))
+* regenerate cumulative instance README ([c9402da](https://github.com/Albertzc/AlchemyWorks/commit/c9402dab68378617995f51f25f0c38f5a65cd71b))
+
+
+### Documentation
+
+* clarify workflow ownership and paths ([8065fd6](https://github.com/Albertzc/AlchemyWorks/commit/8065fd67addf89fa0273da227bc1a730ba048778))
+* consolidate workflow governance rules ([69bf4b4](https://github.com/Albertzc/AlchemyWorks/commit/69bf4b4620ed62f8a24ae1808279aa453b021b76))
+
 ## 0.1.0 (2026-10-16)
 
 
