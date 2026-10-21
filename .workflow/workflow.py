@@ -1383,18 +1383,6 @@ def _declared_functional_changes(text: str, *, version: str, relative_path: str)
     return declared
 
 
-def _brief_functional_description(description: str) -> str:
-    """Keep README catalog entries readable while preserving full definitions for replay comparisons."""
-    _, _, text = description.partition("：")
-    text = text.strip()
-    sentence_ends = [position for mark in ("。", "；") if (position := text.find(mark)) >= 0]
-    if sentence_ends:
-        return text[: min(sentence_ends) + 1]
-    if len(text) > 220:
-        return text[:217].rstrip() + "…"
-    return text
-
-
 def functionality_history(
     iteration: str,
 ) -> tuple[dict[str, str], dict[str, list[str]], list[str]]:
@@ -1481,36 +1469,21 @@ def functionality_history(
 
 
 def check_instance_readme_freshness(iteration: str, errors: list[str]) -> None:
-    """Require the project-owned root README to contain current functionality."""
+    """Require the complete project-owned root README to match its product render."""
     iteration = canonical_iteration(iteration)
     readme = ROOT / "README.md"
     if not readme.exists():
         errors.append("README.md missing; required before version archive")
         return
     text = readme.read_text(encoding="utf-8")
-    if "## 当前系统功能说明" not in text:
-        errors.append("README.md missing required heading: ## 当前系统功能说明")
-    start_marker = "<!-- workflow:current-system-functionality:start -->"
-    end_marker = "<!-- workflow:current-system-functionality:end -->"
-    if text.count(start_marker) != 1 or text.count(end_marker) != 1:
-        errors.append("README.md must contain exactly one current-system-functionality marker pair")
-        return
-    start = text.index(start_marker) + len(start_marker)
-    end = text.index(end_marker)
-    if end < start:
-        errors.append("README.md current-system-functionality markers are out of order")
-        return
     try:
         expected, _ = render_instance_readme_section(iteration)
     except ValueError as exc:
         errors.append(f"README.md cannot be checked for {iteration}: {exc}")
         return
-    actual = text[start:end]
-    expected_section = "\n" + expected
-    if actual != expected_section:
+    if text != expected:
         errors.append(
-            f"README.md current-system-functionality content is stale for {iteration}; "
-            "run the 05-review-release validation to regenerate it"
+            f"README.md content is stale for {iteration}; run the 05-review-release validation to regenerate the complete file"
         )
 
 
@@ -1554,119 +1527,97 @@ def _parse_md_table_after_heading(text: str, heading_prefix: str) -> list[list[s
 
 
 def _extract_release_log_entries(release_log_path: Path) -> dict[str, list[str]]:
-    """Pull bullet strings for each release-log section consumed by the workspace README.
-
-    The release-log template (see ``templates/release-log.md``) holds the
-    per-version delivery list in §2.1-§2.4, the closed-issues table in §3, and
-    known limits / assumptions in §7. The README consumes only a flat bullet
-    view of those tables. Subsections absent from the release-log render as
-    empty lists and the caller drops the corresponding README section.
-    """
-    empty = {"frs": [], "optimizations": [], "brs": [], "acs": [], "fixes": [], "limits": []}
+    """Extract only user-visible capability limits; technical assumptions stay in release artifacts."""
     if not release_log_path.exists():
-        return empty
+        return {"limits": []}
     text = release_log_path.read_text(encoding="utf-8")
-
-    def id_title(rows: list[list[str]]) -> list[str]:
-        out: list[str] = []
-        for row in rows:
-            if len(row) < 2 or not row[0]:
-                continue
-            out.append(f"{row[0]} {row[1]}")
-        return out
-
-    def fixed_issues(rows: list[list[str]]) -> list[str]:
-        out: list[str] = []
-        for row in rows:
-            if len(row) < 3 or not row[0]:
-                continue
-            final_state = row[2]
-            if "本版本已修复" in final_state:
-                out.append(f"{row[0]} {row[1]}")
-        return out
-
     def limits(rows: list[list[str]]) -> list[str]:
         out: list[str] = []
         for row in rows:
-            if len(row) < 2 or not row[1]:
+            if len(row) < 2 or not row[1] or row[0].strip() not in {"限制", "能力边界"}:
                 continue
             out.append(f"{row[0]}：{row[1]}" if row[0] else row[1])
         return out
 
-    return {
-        "frs": id_title(_parse_md_table_after_heading(text, "### 2.1 新增功能")),
-        "optimizations": id_title(_parse_md_table_after_heading(text, "### 2.2 体验优化")),
-        "brs": id_title(_parse_md_table_after_heading(text, "### 2.3 业务规则")),
-        "acs": id_title(_parse_md_table_after_heading(text, "### 2.4 验收标准")),
-        "fixes": fixed_issues(_parse_md_table_after_heading(text, "## 3. ISSUE 收尾")),
-        "limits": limits(_parse_md_table_after_heading(text, "## 7. 已知限制与假设")),
-    }
+    return {"limits": limits(_parse_md_table_after_heading(text, "## 7. 已知限制与假设"))}
 
 
 def render_instance_readme_section(iteration: str) -> tuple[str, list[str]]:
-    """Render cumulative current functionality and this version's functional delta."""
+    """Render the complete product-only README from the approved current module catalog."""
     iteration = canonical_iteration(iteration)
     history = _functionality_version_directories(iteration)
-    catalog, delta, warnings = functionality_history(iteration)
+    catalog, _, warnings = functionality_history(iteration)
     target_dir = history[-1][1]
     release_log = target_dir / "05-review-release" / f"{target_dir.name}-release-log.md"
     if not release_log.exists():
         raise ValueError(f"README source missing: {release_log.relative_to(ROOT).as_posix()}")
+    requirement = target_dir / "01-product" / f"{target_dir.name}-requirement.md"
+    requirement_text = requirement.read_text(encoding="utf-8")
+    metadata, requirement_body = parse_frontmatter(requirement_text)
+    product_name = metadata.get("product_name", "").strip()
+    if not product_name:
+        raise ValueError(f"README source missing product_name in {requirement.relative_to(ROOT).as_posix()}")
+    overview, modules = _parse_readme_module_summary(
+        requirement_body, version=iteration, relative_path=requirement.relative_to(ROOT).as_posix()
+    )
+    active_ids = set(catalog)
+    covered: dict[str, str] = {}
+    for module in modules:
+        for identifier in module["ids"]:
+            if identifier not in active_ids:
+                raise ValueError(f"README module {module['id']} in {iteration} covers inactive or unknown ID {identifier}")
+            if identifier in covered:
+                raise ValueError(f"README module coverage duplicates {identifier} in {iteration}: {covered[identifier]} and {module['id']}")
+            covered[identifier] = module["id"]
+    missing = sorted(active_ids - covered.keys())
+    if missing:
+        raise ValueError(f"README module catalog in {iteration} does not cover active ID(s): {', '.join(missing)}")
     entries = _extract_release_log_entries(release_log)
-    previous_catalog: dict[str, str] = {}
-    if len(history) > 1:
-        previous_catalog, _, _ = functionality_history(history[-2][0])
-
-    parts = [f"## 当前功能\n\n" + (
-        "\n".join(f"- **{identifier}**：{_brief_functional_description(description)}" for identifier, description in catalog.items())
-        if catalog else "当前暂无已登记的 FR/BR 功能。"
-    )]
-    changes: list[str] = []
-    for title, key in (("新增", "added"), ("增强", "modified"), ("移除", "deprecated")):
-        identifiers = delta[key]
-        if not identifiers:
-            continue
-        rows = []
-        for identifier in identifiers:
-            source = previous_catalog if key == "deprecated" else catalog
-            description = source.get(identifier, identifier)
-            label = _brief_functional_description(description) if "：" in description else description
-            rows.append(f"- **{identifier}**：{label}")
-        changes.append(f"### {title}\n\n" + "\n".join(rows))
-    if changes:
-        parts.append("## 本版本变更\n\n" + "\n\n".join(changes))
-    else:
-        parts.append("## 本版本变更\n\n本版本无功能变化。")
-    limits = "\n".join(f"- {line}" for line in entries["limits"])
-    parts.append(
-        "## 已知限制与假设\n\n" + (limits or "本版本暂无已登记的限制与假设。")
-    )
-    generated = (
-        f"<!-- workflow:current-system-functionality-version: {iteration} -->\n\n"
-        + "\n\n".join(parts)
-        + "\n"
-    )
+    parts = [f"# {product_name}", f"> 当前版本：{iteration}", "## 产品简介", overview, "## 系统功能"]
+    for module in modules:
+        parts.extend([f"### {module['name']}", module["summary"]])
+    if entries["limits"]:
+        parts.append("## 当前能力边界\n\n" + "\n".join(f"- {line}" for line in entries["limits"]))
+    generated = "\n\n".join(parts).rstrip() + "\n"
     return generated, warnings
 
 
+def _parse_readme_module_summary(text: str, *, version: str, relative_path: str) -> tuple[str, list[dict[str, object]]]:
+    """Parse the complete current-state module catalog embedded in a requirement."""
+    match = re.search(r"^## README 模块摘要\s*$([\s\S]*?)(?=^##\s|\Z)", text, re.MULTILINE)
+    if not match:
+        raise ValueError(f"README 模块摘要 missing for {version}: {relative_path}")
+    section = match.group(1).strip()
+    overview_match = re.search(r"^产品简介：(.+?)\s*$", section, re.MULTILINE)
+    if not overview_match or not overview_match.group(1).strip():
+        raise ValueError(f"README 产品简介 missing for {version}: {relative_path}")
+    modules: list[dict[str, object]] = []
+    headers = list(re.finditer(r"^###\s+(MOD-[A-Z0-9-]+)\s*\|\s*(.+?)\s*$", section, re.MULTILINE))
+    seen: set[str] = set()
+    for index, header in enumerate(headers):
+        module_id, name = header.groups()
+        if module_id in seen:
+            raise ValueError(f"duplicate README module ID {module_id} in {version}: {relative_path}")
+        seen.add(module_id)
+        end = headers[index + 1].start() if index + 1 < len(headers) else len(section)
+        body = section[header.end():end]
+        summary = re.search(r"^功能摘要：(.+?)\s*$", body, re.MULTILINE)
+        ids_match = re.search(r"^覆盖 ID：(.+?)\s*$", body, re.MULTILINE)
+        if not name.strip() or not summary or not summary.group(1).strip() or not ids_match:
+            raise ValueError(f"README module {module_id} requires 功能摘要 and 覆盖 ID in {version}: {relative_path}")
+        ids = [item for item in re.split(r"[,，\s]+", ids_match.group(1).strip()) if item]
+        if not ids or not all(_FUNCTIONAL_ID_RE.fullmatch(item) for item in ids):
+            raise ValueError(f"README module {module_id} has invalid FR/BR coverage in {version}: {relative_path}")
+        modules.append({"id": module_id, "name": name.strip(), "summary": summary.group(1).strip(), "ids": ids})
+    return overview_match.group(1).strip(), modules
+
+
 def generate_instance_readme(iteration: str) -> None:
-    """Atomically refresh the marked functionality section in the project root README."""
+    """Atomically replace the complete project root README with product documentation."""
     iteration = canonical_iteration(iteration)
-    start_marker = "<!-- workflow:current-system-functionality:start -->"
-    end_marker = "<!-- workflow:current-system-functionality:end -->"
     readme_path = ROOT / "README.md"
-    if not readme_path.exists():
-        raise ValueError("README.md missing; initialize the instance README before generation")
-    existing = readme_path.read_text(encoding="utf-8")
-    if existing.count(start_marker) != 1 or existing.count(end_marker) != 1:
-        raise ValueError("README.md must contain exactly one current-system-functionality marker pair")
-    start = existing.index(start_marker)
-    end = existing.index(end_marker)
-    if end < start + len(start_marker):
-        raise ValueError("README.md current-system-functionality markers are out of order")
     generated, warnings = render_instance_readme_section(iteration)
-    content = existing[:start] + start_marker + "\n" + generated + end_marker + existing[end + len(end_marker):]
-    write_text_atomic(readme_path, content)
+    write_text_atomic(readme_path, generated)
     for warning in warnings:
         print(f"WARNING functionality history: {warning}")
 
@@ -1676,26 +1627,9 @@ generate_workspace_readme = generate_instance_readme
 
 
 def instance_readme_intro(instance_name: str, *, include_title: bool = True) -> str:
-    """Return the initial project-owned instance README scaffold."""
+    """Return a minimal product-only placeholder until first release generation."""
     title = f"# {instance_name}\n\n" if include_title else ""
-    return (
-        title +
-        "## 当前系统功能说明\n\n"
-        "<!-- workflow:current-system-functionality:start -->\n"
-        "首个版本发布前，系统功能说明将在 05-review-release 通过后由工作流生成。\n"
-        "<!-- workflow:current-system-functionality:end -->\n\n"
-        "## 项目开发说明\n\n"
-        "本节由实例项目维护，记录安装、启动、测试和部署约定。\n\n"
-        "## 工作流入口\n\n"
-        "本项目使用 AlchemyWorks 工作流。工作流副本位于 `.aw/`，不是业务代码目录。\n\n"
-        "从项目根目录运行以下命令：\n\n"
-        "```powershell\n"
-        "python .aw/.workflow/workflow.py resume --json\n"
-        "python .aw/.workflow/workflow.py index --iteration v1.0\n"
-        "```\n\n"
-        "完整工作流说明见 `.aw/README.md`；协作规则见 `AGENTS.md`；"
-        "工作流运行时文件位于 `.aw/.workflow/`。\n\n"
-    )
+    return title + "## 产品简介\n\n首个版本发布后，将根据已批准的产品需求自动生成产品功能说明。\n"
 
 
 def validation_report(iteration: str, stage: str | None, artifacts: list[Artifact] | None = None) -> tuple[list[Artifact], list[str], list[str]]:

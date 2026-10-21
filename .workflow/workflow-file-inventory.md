@@ -44,7 +44,7 @@ tests, and synchronization inputs in the same workflow-maintenance change.
 | Path | Type | Purpose |
 |---|---|---|
 | `AGENTS.md` | Governance rules | Defines collaboration, approval, versioning, change, and security constraints. |
-| `README.md` | Framework source entry and usage guide | The framework source README is synchronized into instance `.aw/README.md`. `init-instance` creates a separate project-owned root `README.md`; `sync` never overwrites or ignores it. |
+| `README.md` | Framework source entry and usage guide | The framework source README is synchronized into instance `.aw/README.md`. `init-instance` creates a product-only placeholder root `README.md`; after the release gate the workflow replaces the complete file from the approved product/module summary source; `sync` never overwrites or ignores it. |
 | `.gitignore` | Version-control rules | The source repository normally tracks workflow source files; the sync script only idempotently appends a managed block that ignores `.aw/` into instance projects. It never overwrites existing instance rules and never excludes instance state under `workspace/workflow/`. |
 
 ## 2.1 Framework Repository Release Metadata and CI
@@ -63,7 +63,7 @@ versions.
 
 | Path | Required contents | Purpose |
 |---|---|---|
-| `.aw/.workflow/` (source repo: `.workflow/`) | `workflow.py`, `README.md` | Workflow CLI (including baseline core-flow prototype and per-iteration prototype gates, the `refresh` command run after document changes, cumulative instance README generation by replaying approved FR/BR requirements through the target version and applying explicit deprecations, content-based freshness validation after `05-review-release`, version-archive validation, and Context Pack cache cleanup for archived versions) and its operating documentation. The instance copy of this directory does not include regression tests. |
+| `.aw/.workflow/` (source repo: `.workflow/`) | `workflow.py`, `README.md` | Workflow CLI (including baseline core-flow prototype and per-iteration prototype gates, the `refresh` command run after document changes, full product-only instance README generation from the target approved module summary catalog with active FR/BR coverage validation, atomic whole-file freshness validation after `05-review-release`, version-archive validation, and Context Pack cache cleanup for archived versions) and its operating documentation. The instance copy of this directory does not include regression tests. |
 | `.aw/.workflow/scripts/` (source repo: `.workflow/scripts/`) | `stage_status.py`, `id_registry.py`, `query_id.py`, `check_links.py`, `diff_versions.py` | State, ID, link, and version-comparison utilities callable by agents and maintainers. |
 | `.aw/.workflow/dashboard/` | `template.html` | Workflow dashboard source template; dashboard pages are generated on demand. |
 | `.workflow/tests/` (source repo only) | `test_workflow.py` | Regression tests for the workflow CLI; not copied into instance projects at initialization. |

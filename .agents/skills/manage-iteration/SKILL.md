@@ -109,13 +109,9 @@ Execution steps:
 
 #### Instance README refresh
 
-The generated instance root `README.md` MUST show the full active FR/BR catalog from v1.0 through the target version, the target iteration's functional additions / enhancements / explicit removals, current release-log limits and assumptions, and the precise version marker:
+The generated instance root `README.md` MUST show the target version's product name, product overview, complete module-level current capability summaries, and user-visible limits. The target Approved product requirement MUST contain a complete `README 模块摘要` catalog with each active FR/BR covered exactly once. The README contains no per-requirement list, workflow instructions, or HTML markers. The target version is shown as reader-facing text.
 
-```html
-<!-- workflow:current-system-functionality-version: v{major}.{minor} -->
-```
-
-The CLI extracts the catalog from each approved requirement's functional sections. It infers omitted additions or modifications from definitions and emits warnings; a removal must be declared in `change_set.deprecated`. The 05-review-release gate automatically writes the marked section without a separate README approval. Freshness compares the complete expected section, and `init-version` reruns validation before archiving; any replay or content error blocks the archive.
+The CLI replays approved FR/BR history to validate module coverage, then atomically replaces the whole root README after 05-review-release passes. Missing, duplicate, unknown, or deprecated coverage blocks generation without changing the file. No separate README approval is added. Freshness compares the complete expected file, and `init-version` reruns validation before archiving; any replay or content error blocks the archive.
 
 ### 4. Resolve Current Active Version
 
@@ -139,6 +135,6 @@ Return the latest **Approved** iteration number:
 | Directly `mkdir iteration/v1.1/` without invoking this skill | Use manage-iteration so the references and archive chain stay complete. |
 | Archive the predecessor but forget to write the release log | Prompt the user: `v{major}.{minor}-release-log.md` must exist (it is required to exist before `05-review-release` passes; no extra write is needed before archive). |
 | Manually edit files under `iteration/archive/v{major}.{minor}/` | Block; if a correction is needed, open a new iteration. |
-Instance documentation ownership: `AGENTS.md` and root `README.md` are created during initialization and then remain instance-owned; `sync` updates only `.aw/README.md` and other workflow files. The root README's marked current-system-functionality section is automatically rebuilt after 05-review-release from the full approved FR/BR history, target-version deltas, and release-log limits; `workspace/README.md` remains static workspace guidance.
+Instance documentation ownership: `AGENTS.md` and root `README.md` are created during initialization and then remain instance-owned; `sync` updates only `.aw/README.md` and other workflow files. The root README is fully regenerated after 05-review-release from the target Approved requirement's complete module summary catalog and user-visible release-log limits; `workspace/README.md` remains static workspace guidance.
 
 This ownership rule supersedes any earlier wording in this skill that describes the root README as framework-owned.

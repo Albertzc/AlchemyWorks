@@ -15,12 +15,13 @@
 
 ---
 
-### 功能目录自动生成约定
+### 实例根 README 自动生成约定
 
-- v1.0 的 Approved 产品需求是实例根 `README.md` 当前功能目录的种子；后续版本按版本号重放 v1.0 至目标版本的 Approved 需求，包括 `iteration/archive/` 中的历史版本。
-- `change_set.added`、`change_set.modified`、`change_set.deprecated` 应完整记录本迭代的功能变化。README 只展示 `FR-*` 和 `BR-*`；非功能需求、验收标准和工程任务不作为当前功能条目。
-- 若需求正文出现了新增或修改的 FR/BR 定义，但遗漏对应 `change_set` 项，或旧版 `change_set` 把新增/修改操作标反，CLI 会根据前一版目录和当前定义修正有效变更、纳入 README 并输出警告。定义无法提取时仍会阻止生成。删除无法从增量需求正文可靠推断，必须明确填写 `change_set.deprecated`；CLI 不会因定义缺席而删除历史功能。
-- `05-review-release` 通过后，CLI 自动重建实例根 README 标记区域中的完整当前功能、当前版本变更和已知限制/假设。生成内容不增加单独人工审批；现有 Approved review-release 门禁保持不变。
+- 目标版本的 Approved 产品需求必须提供完整的 `README 模块摘要`，包括一段产品简介，以及完整当前模块目录；后续版本需携带未变更模块并更新/删除已变化模块。
+- 格式为 `产品简介：...`，其下每个模块使用 `### MOD-XXX | 模块名称`、`功能摘要：...`、`覆盖 ID：FR-XXX, BR-XXX` 三行。模块摘要需自然整合用户可见能力，不得复制逐条需求。
+- 每个当前有效 FR/BR 必须且只能由一个模块覆盖；不得引用已废弃或未知 ID。CLI 会将覆盖集合与 v1.0 至目标版本（含归档版本）的 Approved 需求重放结果比对；缺失/重复/无效覆盖会阻止生成且不会改写 README。
+- `05-review-release` 门禁通过后，CLI 原子重建实例根 `README.md` 全文，仅包含产品简介、当前版本、模块化系统功能及用户可见能力边界；不输出需求 ID、逐项需求、版本变更清单或工作流/开发/部署说明，也不增加 README 单独审批。
+- README 新鲜度校验比较完整文件。`init-instance` 只创建产品说明占位文案；工作流使用说明统一见 `.aw/README.md`，`workspace/README.md` 保持静态。
 
 ## 文档骨架
 

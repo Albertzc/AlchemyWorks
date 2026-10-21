@@ -477,9 +477,9 @@ class WorkflowTests(unittest.TestCase):
                 final_dir = root / "iteration" / "v1" / "05-review-release"
                 requirement = root / "iteration" / "v1" / "01-product" / "v1-requirement.md"
                 requirement.write_text(
-                    "---\nstatus: Approved\nprototype_required: true\n---\n"
+                    "---\nstatus: Approved\nproduct_name: Demo\nprototype_required: true\n---\n"
                     "## 6. 功能需求\n- **FR-100**：推送优化。\n- **FR-101**：校验补全。\n"
-                    "\n## 7. 业务规则\n- **BR-016**：术语统一。\n",
+                    "\n## 7. 业务规则\n- **BR-016**：术语统一。\n\n## README 模块摘要\n\n产品简介：提供推送、校验和术语统一能力。\n\n### MOD-001 | 项目能力\n功能摘要：推送数据并完成校验，统一产品术语。\n覆盖 ID：FR-100, FR-101, BR-016\n",
                     encoding="utf-8",
                 )
                 (final_dir / "v1-release-log.md").unlink()
@@ -541,18 +541,18 @@ class WorkflowTests(unittest.TestCase):
                 instance_readme = root / "README.md"
                 self.assertTrue(instance_readme.is_file())
                 instance_text = instance_readme.read_text(encoding="utf-8")
-                self.assertIn("<!-- workflow:current-system-functionality-version: v1.0 -->", instance_text)
-                self.assertIn("## 当前系统功能说明", instance_text)
-                self.assertIn("**FR-100**：推送优化", instance_text)
-                self.assertIn("**FR-101**：校验补全", instance_text)
-                self.assertIn("**BR-016**：术语统一", instance_text)
+                self.assertIn("> 当前版本：v1.0", instance_text)
+                self.assertIn("## 系统功能", instance_text)
+                self.assertNotIn("FR-100", instance_text)
+                self.assertNotIn("FR-101", instance_text)
+                self.assertNotIn("BR-016", instance_text)
                 self.assertNotIn("AC-100", instance_text)
                 self.assertNotIn("ISSUE-V1.0-01", instance_text)
                 self.assertNotIn("ISSUE-V1.0-02", instance_text)
-                self.assertIn("## 已知限制与假设", instance_text)
+                self.assertIn("## 当前能力边界", instance_text)
                 self.assertIn("单实例最多 100 并发", instance_text)
                 self.assertIn(
-                    "<!-- workflow:current-system-functionality-version: v1.0 -->",
+                    "> 当前版本：v1.0",
                     root_readme.read_text(encoding="utf-8"),
                 )
         finally:
@@ -568,7 +568,7 @@ class WorkflowTests(unittest.TestCase):
                 self.add_full_chain_after_fixture(root)
                 requirement = root / "iteration" / "v1" / "01-product" / "v1-requirement.md"
                 requirement.write_text(
-                    "---\nstatus: Approved\nprototype_required: true\n---\n## 6. 功能需求\n",
+                    "---\nstatus: Approved\nproduct_name: Demo\nprototype_required: true\n---\n## 6. 功能需求\n\n## README 模块摘要\n\n产品简介：Demo 产品。\n",
                     encoding="utf-8",
                 )
                 (root / "README.md").write_text(workflow.instance_readme_intro("Demo"), encoding="utf-8")
@@ -799,17 +799,15 @@ class WorkflowTests(unittest.TestCase):
         try:
             readme = root / "README.md"
             readme.write_text("# Instance\n", encoding="utf-8")
+            requirement = root / "iteration" / "v1" / "01-product" / "v1-requirement.md"
+            requirement.write_text("---\nstatus: Approved\nproduct_name: Demo\n---\n## 6. 功能需求\n\n## README 模块摘要\n\n产品简介：Demo。\n", encoding="utf-8")
+            release = root / "iteration" / "v1" / "05-review-release" / "v1-release-log.md"
+            release.parent.mkdir(parents=True, exist_ok=True)
+            release.write_text("## 7. 已知限制与假设\n", encoding="utf-8")
             with patch.object(workflow, "ROOT", root):
                 errors: list[str] = []
                 workflow.check_workspace_readme_freshness("v1", errors)
-            self.assertTrue(
-                any("README.md" in error and "marker pair" in error for error in errors),
-                msg=f"gate did not flag missing marker; errors={errors}",
-            )
-            self.assertTrue(
-                any("当前系统功能说明" in error for error in errors),
-                msg=f"gate did not flag missing heading; errors={errors}",
-            )
+            self.assertTrue(any("stale" in error for error in errors), msg=f"gate did not flag stale full README; errors={errors}")
         finally:
             temp.cleanup()
 
@@ -849,8 +847,8 @@ class WorkflowTests(unittest.TestCase):
                 self.add_approved(root, relative, "TASK-API-010\n")
             requirement = root / "iteration" / "v1.0" / "01-product" / "v1.0-requirement.md"
             requirement.write_text(
-                "---\nstatus: Approved\nprototype_required: true\n---\n# Workspace Req Body\n\n"
-                "## 6. 功能需求\n- **FR-100**：推送优化。\n",
+                "---\nstatus: Approved\nproduct_name: Demo\nprototype_required: true\n---\n# Workspace Req Body\n\n"
+                "## 6. 功能需求\n- **FR-100**：推送优化。\n\n## README 模块摘要\n\n产品简介：提供数据推送能力。\n\n### MOD-100 | 数据推送\n功能摘要：向系统推送业务数据并查看结果。\n覆盖 ID：FR-100\n",
                 encoding="utf-8",
             )
             plan = root / "iteration" / "v1.0" / "03-planning" / "v1.0-task-plan-dag.md"
@@ -877,10 +875,11 @@ class WorkflowTests(unittest.TestCase):
                 rc = workflow.validate("v1.0", "05-review-release")
             self.assertEqual(rc, 0, msg="validate --stage 05-review-release should pass for a complete chain")
             root_text = root_readme.read_text(encoding="utf-8")
-            self.assertIn("<!-- workflow:current-system-functionality-version: v1.0 -->", root_text)
-            self.assertIn("## 当前系统功能说明", root_text)
+            self.assertIn("> 当前版本：v1.0", root_text)
+            self.assertIn("## 系统功能", root_text)
             # Current functionality comes from the approved requirement.
-            self.assertIn("**FR-100**：推送优化", root_text)
+            self.assertIn("向系统推送业务数据", root_text)
+            self.assertNotIn("FR-100", root_text)
             self.assertNotIn("# Workspace Req Body", root_text)
             self.assertEqual(workspace_readme.read_text(encoding="utf-8"), "# Workspace\n\n静态说明\n")
         finally:
@@ -919,9 +918,12 @@ class WorkflowTests(unittest.TestCase):
             requirement = root / "iteration" / "v1.0" / "01-product" / "v1.0-requirement.md"
             requirement.parent.mkdir(parents=True, exist_ok=True)
             requirement.write_text(
-                "---\nstatus: Approved\nprototype_required: true\n---\n"
+                "---\nstatus: Approved\nproduct_name: Demo\nprototype_required: true\n---\n"
                 "## 6. 功能需求\n- **FR-200**：调度改进。\n- **FR-201**：主题切换。\n"
-                "\n## 7. 业务规则\n- **BR-050**：限速口径：单租户 25 rps。\n",
+                "\n## 7. 业务规则\n- **BR-050**：限速口径：单租户 25 rps。\n\n"
+                "## README 模块摘要\n\n产品简介：提供调度、主题及限速管理。\n\n"
+                "### MOD-200 | 调度与体验\n功能摘要：提供任务调度能力并支持主题切换。\n覆盖 ID：FR-200, FR-201\n\n"
+                "### MOD-201 | 限速管理\n功能摘要：按租户控制请求速率。\n覆盖 ID：BR-050\n",
                 encoding="utf-8",
             )
             (root / "README.md").write_text(workflow.instance_readme_intro("Demo"), encoding="utf-8")
@@ -929,15 +931,15 @@ class WorkflowTests(unittest.TestCase):
                 workflow.generate_workspace_readme("v1.0")
             text = (root / "README.md").read_text(encoding="utf-8")
             # Heading + marker present.
-            self.assertIn("<!-- workflow:current-system-functionality-version: v1.0 -->", text)
-            self.assertIn("## 当前系统功能说明", text)
-            self.assertIn("**FR-200**：调度改进", text)
-            self.assertIn("**FR-201**：主题切换", text)
-            self.assertIn("**BR-050**：限速口径：单租户 25 rps", text)
+            self.assertIn("> 当前版本：v1.0", text)
+            self.assertIn("## 产品简介", text)
+            self.assertIn("提供任务调度能力", text)
+            self.assertIn("主题切换", text)
+            self.assertNotIn("BR-050", text)
             self.assertNotIn("AC-200", text)
             self.assertNotIn("ISSUE-V1.0-10", text)
-            self.assertIn("## 已知限制与假设", text)
-            self.assertIn("假设：仅在 Ubuntu 22.04 验证", text)
+            self.assertNotIn("## 当前能力边界", text)
+            self.assertNotIn("Ubuntu", text)
         finally:
             temp.cleanup()
 
@@ -960,19 +962,21 @@ class WorkflowTests(unittest.TestCase):
             requirement = root / "iteration" / "v1.0" / "01-product" / "v1.0-requirement.md"
             requirement.parent.mkdir(parents=True, exist_ok=True)
             requirement.write_text(
-                "---\nstatus: Approved\nprototype_required: true\n---\n"
-                "## 6. 功能需求\n- **FR-300**：限流开关。\n",
+                "---\nstatus: Approved\nproduct_name: Demo\nprototype_required: true\n---\n"
+                "## 6. 功能需求\n- **FR-300**：限流开关。\n\n"
+                "## README 模块摘要\n\n产品简介：控制请求速率。\n\n"
+                "### MOD-300 | 限流管理\n功能摘要：提供限流能力配置。\n覆盖 ID：FR-300\n",
                 encoding="utf-8",
             )
             (root / "README.md").write_text(workflow.instance_readme_intro("Demo"), encoding="utf-8")
             with patch.object(workflow, "ROOT", root):
                 workflow.generate_workspace_readme("v1.0")
             text = (root / "README.md").read_text(encoding="utf-8")
-            self.assertIn("**FR-300**：限流开关", text)
+            self.assertIn("限流能力", text)
             self.assertNotIn("### 修复项", text)
             self.assertNotIn("验收标准", text)
-            self.assertIn("## 已知限制与假设", text)
-            self.assertIn("本版本暂无已登记的限制与假设。", text)
+            self.assertNotIn("## 当前能力边界", text)
+            self.assertNotIn("假设", text)
         finally:
             temp.cleanup()
 
@@ -995,7 +999,7 @@ class WorkflowTests(unittest.TestCase):
             requirement = root / "iteration" / "v1.0" / "01-product" / "v1.0-requirement.md"
             requirement.parent.mkdir(parents=True, exist_ok=True)
             requirement.write_text(
-                "---\nstatus: Approved\nprototype_required: true\n---\n## 6. 功能需求\n",
+                "---\nstatus: Approved\nproduct_name: Demo\nprototype_required: true\n---\n## 6. 功能需求\n\n## README 模块摘要\n\n产品简介：Demo 产品。\n",
                 encoding="utf-8",
             )
             (root / "README.md").write_text(workflow.instance_readme_intro("Demo"), encoding="utf-8")
@@ -1018,7 +1022,7 @@ class WorkflowTests(unittest.TestCase):
             requirement = root / "iteration" / "v1.0" / "01-product" / "v1.0-requirement.md"
             requirement.parent.mkdir(parents=True, exist_ok=True)
             requirement.write_text(
-                "---\nstatus: Approved\nprototype_required: true\n---\n## 6. 功能需求\n",
+                "---\nstatus: Approved\nproduct_name: Demo\nprototype_required: true\n---\n## 6. 功能需求\n\n## README 模块摘要\n\n产品简介：Demo 产品。\n",
                 encoding="utf-8",
             )
             (root / "README.md").write_text(workflow.instance_readme_intro("Demo"), encoding="utf-8")
@@ -1475,8 +1479,8 @@ class WorkflowTests(unittest.TestCase):
                 self.add_approved(root, relative, "TASK-API-010\n")
             requirement = root / "iteration" / "v1.0" / "01-product" / "v1.0-requirement.md"
             requirement.write_text(
-                "---\nstatus: Approved\nprototype_required: true\n---\n# Req\n"
-                "## 6. 功能需求\n- **FR-001**：已有功能。\n",
+                "---\nstatus: Approved\nproduct_name: Demo\nprototype_required: true\n---\n# Req\n"
+                "## 6. 功能需求\n- **FR-001**：已有功能。\n\n## README 模块摘要\n\n产品简介：已有产品。\n\n### MOD-001 | 基础功能\n功能摘要：提供已有功能。\n覆盖 ID：FR-001\n",
                 encoding="utf-8",
             )
             plan = root / "iteration" / "v1.0" / "03-planning" / "v1.0-task-plan-dag.md"
@@ -1512,8 +1516,8 @@ class WorkflowTests(unittest.TestCase):
                 self.add_approved(root, relative, "TASK-API-010\n")
             requirement = root / "iteration" / "v1.0" / "01-product" / "v1.0-requirement.md"
             requirement.write_text(
-                "---\nstatus: Approved\nprototype_required: true\n---\n# Req\n"
-                "## 6. 功能需求\n- **FR-400**：初始化推送。\n",
+                "---\nstatus: Approved\nproduct_name: Demo\nprototype_required: true\n---\n# Req\n"
+                "## 6. 功能需求\n- **FR-400**：初始化推送。\n\n## README 模块摘要\n\n产品简介：完成初始化推送。\n\n### MOD-400 | 推送能力\n功能摘要：支持初始化推送并查看状态。\n覆盖 ID：FR-400\n",
                 encoding="utf-8",
             )
             plan = root / "iteration" / "v1.0" / "03-planning" / "v1.0-task-plan-dag.md"
@@ -1536,10 +1540,11 @@ class WorkflowTests(unittest.TestCase):
             archived = root / "iteration" / "archive" / "v1.0"
             self.assertTrue(archived.is_dir())
             root_text = root_readme.read_text(encoding="utf-8")
-            self.assertIn("<!-- workflow:current-system-functionality-version: v1.0 -->", root_text)
-            self.assertIn("## 当前系统功能说明", root_text)
+            self.assertIn("> 当前版本：v1.0", root_text)
+            self.assertIn("## 系统功能", root_text)
             # Content sourced from the approved product requirement.
-            self.assertIn("**FR-400**：初始化推送", root_text)
+            self.assertIn("初始化推送", root_text)
+            self.assertNotIn("FR-400", root_text)
             self.assertNotIn("# Req", root_text)
         finally:
             temp.cleanup()
@@ -1615,7 +1620,7 @@ class FunctionalityHistoryTests(unittest.TestCase):
         path = root / "iteration" / version / "01-product" / f"{version}-requirement.md"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
-            "---\nstatus: Approved\nprototype_required: false\n"
+            "---\nstatus: Approved\nproduct_name: Demo\nprototype_required: false\n"
             + ("change_set:\n" + change_set if change_set else "")
             + "---\n# Requirements\n\n"
             + body,
@@ -1774,7 +1779,10 @@ class FunctionalityHistoryTests(unittest.TestCase):
             root,
             "v1.0",
             "## 6. 功能需求\n- **FR-001**：创建项目。\n- **FR-002**：查看运行。\n\n"
-            "## 7. 业务规则\n- **BR-001**：项目隔离。\n",
+            "## 7. 业务规则\n- **BR-001**：项目隔离。\n\n"
+            "## README 模块摘要\n\n产品简介：用于管理项目并查看执行情况。\n\n"
+            "### MOD-001 | 项目管理\n功能摘要：创建和管理项目，并确保项目数据相互隔离。\n覆盖 ID：FR-001, BR-001\n\n"
+            "### MOD-002 | 执行监控\n功能摘要：查看当前执行情况和运行详情。\n覆盖 ID：FR-002\n",
         )
         current_body = "## 6. 功能需求\n"
         change_set = "  added: []\n  modified: []\n  deprecated: []\n"
@@ -1782,6 +1790,12 @@ class FunctionalityHistoryTests(unittest.TestCase):
             current_body += "- **FR-001**：创建和管理项目。\n- **FR-003**：查看运行详情。\n"
             change_set = "  added: [FR-003]\n  modified: [FR-001]\n  deprecated: [FR-002]\n"
         current_body += "\n## 7. 业务规则\n"
+        current_body += "\n## README 模块摘要\n\n产品简介：用于管理项目并查看执行情况。\n\n"
+        current_body += "### MOD-001 | 项目管理\n功能摘要：创建和管理项目，并确保项目数据相互隔离。\n覆盖 ID：FR-001, BR-001\n\n"
+        if has_changes:
+            current_body += "### MOD-002 | 执行监控\n功能摘要：查看执行情况和运行详情，包括筛选及详情查看。\n覆盖 ID：FR-003\n"
+        else:
+            current_body += "### MOD-002 | 执行监控\n功能摘要：查看当前执行情况和运行详情。\n覆盖 ID：FR-002\n"
         self._write_requirement(root, "v1.1", current_body, change_set)
         release = root / "iteration" / "v1.1" / "05-review-release" / "v1.1-release-log.md"
         release.parent.mkdir(parents=True, exist_ok=True)
@@ -1793,20 +1807,20 @@ class FunctionalityHistoryTests(unittest.TestCase):
         readme.write_text(workflow.instance_readme_intro("Demo"), encoding="utf-8")
         return temp, root, readme
 
-    def test_instance_readme_renders_cumulative_catalog_and_current_delta(self):
+    def test_instance_readme_renders_product_only_module_summaries(self):
         temp, root, _ = self._setup_render_history()
         try:
             with patch.object(workflow, "ROOT", root):
                 generated, warnings = workflow.render_instance_readme_section("v1.1")
-            self.assertIn("**FR-001**：创建和管理项目", generated)
-            self.assertIn("**FR-003**：查看运行详情", generated)
-            self.assertIn("**BR-001**：项目隔离", generated)
-            self.assertNotIn("**FR-002**", generated.split("## 本版本变更", 1)[0])
-            self.assertIn("新增", generated)
-            self.assertIn("增强", generated)
-            self.assertIn("移除", generated)
+            self.assertIn("## 产品简介", generated)
+            self.assertIn("### 项目管理", generated)
+            self.assertIn("### 执行监控", generated)
+            self.assertNotIn("FR-", generated)
+            self.assertNotIn("BR-", generated)
+            self.assertNotIn("本版本变更", generated)
+            self.assertNotIn("工作流", generated)
             self.assertIn("仅支持单区域部署", generated)
-            self.assertIn("<!-- workflow:current-system-functionality-version: v1.1 -->", generated)
+            self.assertIn("> 当前版本：v1.1", generated)
             self.assertEqual(warnings, [])
         finally:
             temp.cleanup()
@@ -1816,10 +1830,9 @@ class FunctionalityHistoryTests(unittest.TestCase):
         try:
             with patch.object(workflow, "ROOT", root):
                 generated, _ = workflow.render_instance_readme_section("v1.1")
-            self.assertIn("**FR-001**：创建项目", generated)
-            self.assertIn("**FR-002**：查看运行", generated)
-            self.assertIn("**BR-001**：项目隔离", generated)
-            self.assertIn("本版本无功能变化", generated)
+            self.assertIn("创建和管理项目", generated)
+            self.assertIn("查看当前执行情况", generated)
+            self.assertNotIn("FR-", generated)
         finally:
             temp.cleanup()
 
@@ -1832,7 +1845,7 @@ class FunctionalityHistoryTests(unittest.TestCase):
                 workflow.check_instance_readme_freshness("v1.1", fresh_errors)
                 self.assertEqual(fresh_errors, [])
                 text = readme.read_text(encoding="utf-8")
-                text = text.replace("**FR-001**：创建和管理项目", "过期功能说明")
+                text = text.replace("创建和管理项目", "过期功能说明")
                 readme.write_text(text, encoding="utf-8")
                 errors: list[str] = []
                 workflow.check_instance_readme_freshness("v1.1", errors)
@@ -1840,20 +1853,22 @@ class FunctionalityHistoryTests(unittest.TestCase):
         finally:
             temp.cleanup()
 
-    def test_instance_readme_invalid_markers_do_not_modify_file(self):
-        for content in [
-            "# Demo\n\n## 当前系统功能说明\n",
-            "# Demo\n<!-- workflow:current-system-functionality:start -->\nA\n"
-            "<!-- workflow:current-system-functionality:end -->\n"
-            "<!-- workflow:current-system-functionality:start -->\nB\n"
-            "<!-- workflow:current-system-functionality:end -->\n",
-        ]:
+    def test_instance_readme_invalid_module_catalog_does_not_modify_file(self):
+        invalid_sections = [
+            ("覆盖 ID：FR-003", "覆盖 ID：FR-999", "FR-999"),
+            ("### MOD-002 | 执行监控\n功能摘要：查看执行情况和运行详情，包括筛选及详情查看。\n覆盖 ID：FR-003\n", "", "does not cover active ID"),
+            ("覆盖 ID：FR-003", "覆盖 ID：FR-003, FR-001", "duplicates FR-001"),
+            ("### MOD-002 | 执行监控", "### MOD-001 | 执行监控", "duplicate README module ID"),
+        ]
+        for old, new, expected in invalid_sections:
             temp, root, readme = self._setup_render_history()
             try:
-                readme.write_text(content, encoding="utf-8")
+                source = root / "iteration" / "v1.1" / "01-product" / "v1.1-requirement.md"
+                source.write_text(source.read_text(encoding="utf-8").replace(old, new), encoding="utf-8")
+                readme.write_text("# Existing content that must survive failure\n", encoding="utf-8")
                 before = readme.read_bytes()
                 with patch.object(workflow, "ROOT", root):
-                    with self.assertRaisesRegex(ValueError, "marker"):
+                    with self.assertRaisesRegex(ValueError, expected):
                         workflow.generate_instance_readme("v1.1")
                 self.assertEqual(readme.read_bytes(), before)
             finally:
@@ -1863,7 +1878,7 @@ class FunctionalityHistoryTests(unittest.TestCase):
         temp, root = self.make_repo()
         try:
             (root / "iteration" / "v1").rename(root / "iteration" / "v1.0")
-            self._write_requirement(root, "v1.0", "## 6. 功能需求\n- **FR-001**：完整功能。\n")
+            self._write_requirement(root, "v1.0", "## 6. 功能需求\n- **FR-001**：完整功能。\n\n## README 模块摘要\n\n产品简介：完整产品。\n\n### MOD-001 | 功能模块\n功能摘要：提供完整功能。\n覆盖 ID：FR-001\n")
             release = root / "iteration" / "v1.0" / "05-review-release" / "v1.0-release-log.md"
             release.parent.mkdir(parents=True, exist_ok=True)
             release.write_text("## 7. 已知限制与假设\n", encoding="utf-8")
@@ -1880,8 +1895,8 @@ class FunctionalityHistoryTests(unittest.TestCase):
                 self.assertEqual(workflow.init_version("v1.1"), 0)
             self.assertTrue((root / "iteration" / "archive" / "v1.0").exists())
             text = (root / "README.md").read_text(encoding="utf-8")
-            self.assertIn("**FR-001**：完整功能", text)
-            self.assertIn("<!-- workflow:current-system-functionality-version: v1.0 -->", text)
+            self.assertIn("### 功能模块", text)
+            self.assertNotIn("FR-001", text)
         finally:
             temp.cleanup()
 
@@ -2085,7 +2100,8 @@ class DiffVersionsTests(unittest.TestCase):
             requirement = root / "iteration" / "v1.0" / "01-product" / "v1.0-requirement.md"
             requirement.parent.mkdir(parents=True, exist_ok=True)
             requirement.write_text(
-                "---\nstatus: Approved\n---\n## 6. 功能需求\n- **FR-900**：实例功能。\n",
+                "---\nstatus: Approved\nproduct_name: Demo\n---\n## 6. 功能需求\n- **FR-900**：实例功能。\n\n"
+                "## README 模块摘要\n\n产品简介：提供实例功能。\n\n### MOD-900 | 实例模块\n功能摘要：帮助用户执行实例功能。\n覆盖 ID：FR-900\n",
                 encoding="utf-8",
             )
             (root / "README.md").write_text(
@@ -2100,9 +2116,14 @@ class DiffVersionsTests(unittest.TestCase):
             with patch.object(workflow, "ROOT", root):
                 workflow.generate_instance_readme("v1.0")
             root_text = (root / "README.md").read_text(encoding="utf-8")
-            self.assertIn("**FR-900**：实例功能", root_text)
-            self.assertIn("手工内容", root_text)
-            self.assertIn("<!-- workflow:current-system-functionality:start -->", root_text)
+            self.assertIn("### 实例模块", root_text)
+            self.assertNotIn("FR-900", root_text)
+            self.assertNotIn("手工内容", root_text)
+            self.assertNotIn("workflow:current-system-functionality", root_text)
+            first_render = (root / "README.md").read_bytes()
+            with patch.object(workflow, "ROOT", root):
+                workflow.generate_instance_readme("v1.0")
+            self.assertEqual((root / "README.md").read_bytes(), first_render)
             self.assertEqual(workspace_readme.read_text(encoding="utf-8"), "# Workspace\n\n静态说明\n")
 
     def test_init_instance_root_readme_is_instance_scaffold(self):
@@ -2116,7 +2137,7 @@ class DiffVersionsTests(unittest.TestCase):
             self.assertEqual(result, 0)
             text = (target / "README.md").read_text(encoding="utf-8")
             self.assertIn("# Owned Instance", text)
-            self.assertIn("## 当前系统功能说明", text)
+            self.assertIn("## 产品简介", text)
 
     def test_sync_preserves_instance_root_readme(self):
         """`sync` must preserve the project-owned root README."""
